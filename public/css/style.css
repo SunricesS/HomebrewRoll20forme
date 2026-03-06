@@ -1,0 +1,338 @@
+/* Ekranı tam boy kaplaması ve kaydırma çubuklarını kaldırmak için */
+body,
+html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: sans-serif;
+}
+
+/* Ana taşıyıcı: Flexbox ile bileşenleri yan yana dizecek */
+#app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Gizleme sınıfı */
+.hidden {
+    display: none !important;
+}
+
+/* ==== LOGIN VE SEÇİM OVERLAY STİLLERİ ==== */
+#login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(20, 20, 20, 0.95);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    background-image: url('https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?q=80&w=2070');
+    /* DnD temalı ahşap masa arka planı, dilediğinle değişebilirsin */
+    background-size: cover;
+    background-position: center;
+}
+
+.modal-box {
+    background: rgba(44, 62, 80, 0.9);
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid #7f8c8d;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    width: 400px;
+    max-width: 90%;
+    text-align: center;
+    color: #ecf0f1;
+    backdrop-filter: blur(10px);
+}
+
+.modal-box h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 24px;
+    border-bottom: 2px solid #e74c3c;
+    padding-bottom: 10px;
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.btn.primary {
+    background-color: #3498db;
+    color: white;
+}
+
+.btn.primary:hover {
+    background-color: #2980b9;
+}
+
+.btn.secondary {
+    background-color: #9b59b6;
+    color: white;
+}
+
+.btn.secondary:hover {
+    background-color: #8e44ad;
+}
+
+.btn.success {
+    background-color: #27ae60;
+    color: white;
+}
+
+.btn.success:hover {
+    background-color: #2ecc71;
+}
+
+.btn.back-btn {
+    background-color: #7f8c8d;
+    color: white;
+    margin-top: 15px;
+    width: 100%;
+}
+
+.btn.back-btn:hover {
+    background-color: #95a5a6;
+}
+
+.action-btn {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.list-container {
+    max-height: 250px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.list-item {
+    background: rgba(52, 73, 94, 0.8);
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.list-item:hover {
+    background: rgba(41, 128, 185, 0.6);
+    border-left: 4px solid #3498db;
+}
+
+.list-item span.role {
+    font-size: 12px;
+    background: #e67e22;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Form stilleri */
+.form-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #bdc3c7;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #7f8c8d;
+    background: rgba(236, 240, 241, 0.1);
+    color: white;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+/* Sol Taraf: Oyun Haritası */
+#game-map {
+    width: 75%;
+    /* Ekranın %75'i */
+    background-color: #2c3e50;
+    /* İleride harita görselinizi buraya verebilirsiniz */
+    position: relative;
+    /* DİKKAT: İçindeki token'ın (absolute) bu div'e göre yerleşmesi için ŞARTTIR */
+    overflow: hidden;
+    /* Token harita dışına taşarsa gizlensin */
+}
+
+/* Çizim Katmanı */
+#drawing-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+/* Sağ Taraf: Kontrol Paneli */
+#control-panel {
+    width: 25%;
+    /* Ekranın %25'i */
+    background-color: #ecf0f1;
+    border-left: 2px solid #bdc3c7;
+    /* Araya bir çizgi çekelim */
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    /* Loglar aşağı indikçe kaydırma çıksın */
+}
+
+/* 2. Token Sistemi: Sürüklenebilir Dairemiz */
+.token {
+    width: 50px;
+    height: 50px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+    /* Daire olması için */
+    position: absolute;
+    /* Harita (game-map) referans alınarak serbestçe yerleşecek */
+    top: 50px;
+    /* Başlangıç dikey konumu */
+    left: 50px;
+    /* Başlangıç yatay konumu */
+    user-select: none;
+    /* Yanlışlıkla imleçle seçilip mavi olmasını engeller */
+    border: 3px solid white;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+    transition: transform 0.1s;
+    z-index: 5;
+}
+
+.my-token {
+    cursor: grab;
+    z-index: 10;
+}
+
+.my-token:hover {
+    transform: scale(1.1);
+}
+
+.my-token:active {
+    cursor: grabbing;
+    transform: scale(1.2);
+}
+
+/* === OYUNCU BİLGİ PANELİ STİLLERİ === */
+.character-card {
+    background: rgba(44, 62, 80, 0.8);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    color: white;
+}
+
+.char-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.char-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #3498db;
+    background-color: #34495e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.char-name {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.char-hp {
+    font-size: 14px;
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.char-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 5px;
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-label {
+    font-size: 10px;
+    color: #bdc3c7;
+}
+
+.stat-value {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.other-player-item {
+    background: rgba(52, 73, 94, 0.6);
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.other-player-name {
+    font-weight: bold;
+    font-size: 14px;
+}

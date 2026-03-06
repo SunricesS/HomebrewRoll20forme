@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DnD Masaüstü - Oyun</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div id="app-container">
+        <!-- Sol Taraf (%75): Oyun Haritası -->
+        <div id="game-map">
+            <canvas id="drawing-layer"></canvas>
+            <!-- Token Sistemi -->
+        </div>
+
+        <!-- Sağ Taraf (%25): Kontrol Paneli -->
+        <div id="control-panel">
+            <h3>Kontrol Paneli</h3>
+            <p>Durum: <span id="status">Bağlanıyor...</span></p>
+            <ul id="logs">
+                <li>Odaya bekleniyor...</li>
+            </ul>
+
+            <!-- Sadece DM'ye görünecek Araçlar Bölümü -->
+            <div id="dm-tools" class="hidden" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+                <h4>DM Araçları</h4>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>İşaret/Token Adı (harf):</label>
+                    <input type="text" id="dm-marker-name" maxlength="2" placeholder="Ör: G"
+                        style="background:#fff; color:#000;">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Renk:</label>
+                    <input type="color" id="dm-marker-color" value="#f1c40f">
+                </div>
+                <button id="btn-add-marker" class="btn primary action-btn" style="margin-bottom: 20px;">İşaret
+                    Ekle</button>
+
+                <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-bottom: 10px;">
+
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Arka Plan URL:</label>
+                    <input type="text" id="dm-bg-url" placeholder="https://..." style="background:#fff; color:#000;">
+                </div>
+                <button id="btn-set-bg" class="btn secondary action-btn">Arka Planı Değiştir</button>
+                <button id="btn-clear-all-drawings" class="btn primary action-btn"
+                    style="margin-top: 10px; background-color: #c0392b;">Tüm Çizimleri Temizle</button>
+
+                <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-top: 15px; margin-bottom: 10px;">
+
+                <h4>Oyuncuları Yönet</h4>
+                <div id="dm-player-list" class="list-container" style="max-height: 150px; margin-bottom: 10px;">
+                    <p style="font-size: 12px; color:#bdc3c7;">Bağlı oyuncu yok.</p>
+                </div>
+
+                <div id="dm-player-editor" class="hidden character-card" style="background: rgba(30, 39, 46, 0.9);">
+                    <h4 id="dm-edit-name" style="margin-top:0; color:#3498db;">Seçilen Oyuncu</h4>
+                    <form id="dm-edit-form">
+                        <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 10px;">
+                            <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-edit-hp"></div>
+                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-edit-max-hp">
+                            </div>
+                        </div>
+                        <div class="stats-grid" style="margin-bottom: 10px;">
+                            <div class="form-group"><label>STR:</label><input type="number" id="dm-edit-str"></div>
+                            <div class="form-group"><label>DEX:</label><input type="number" id="dm-edit-dex"></div>
+                            <div class="form-group"><label>INT:</label><input type="number" id="dm-edit-int"></div>
+                            <div class="form-group"><label>CON:</label><input type="number" id="dm-edit-con"></div>
+                            <div class="form-group"><label>WIS:</label><input type="number" id="dm-edit-wis"></div>
+                        </div>
+                        <div class="button-group">
+                            <button type="submit" class="btn success action-btn" style="margin-top:0;">Kaydet</button>
+                            <button type="button" class="btn back-btn action-btn"
+                                onclick="document.getElementById('dm-player-editor').classList.add('hidden')">İptal</button>
+                        </div>
+                    </form>
+                </div>
+
+                <p style="font-size: 12px; color: #bdc3c7; margin-top: 15px;">
+                    * Bir işareti silmek için üzerine sağ tıklayın.
+                </p>
+            </div>
+
+            <!-- Yalnızca Oyunculara Görünecek Bilgi Paneli -->
+            <div id="player-info-panel" class="hidden"
+                style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+                <h4>Karakterim</h4>
+                <div id="my-character-card" class="character-card">
+                    <!-- JS ile doldurulacak -->
+                </div>
+
+                <button id="btn-clear-my-drawings" class="btn secondary action-btn"
+                    style="margin-top: 15px; background-color: #e67e22;">Sadece Benim Çizimlerimi Temizle</button>
+
+                <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-top: 15px; margin-bottom: 15px;">
+
+                <h4>Diğer Oyuncular</h4>
+                <div id="other-players-list">
+                    <!-- JS ile doldurulacak -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io istemci scripti -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/client.js?v=2"></script>
+</body>
+
+</html>
