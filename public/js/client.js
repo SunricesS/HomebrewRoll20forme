@@ -179,6 +179,17 @@ function addToken(playerData) {
       offsetX = e.clientX - rect.left;
       offsetY = e.clientY - rect.top;
     });
+
+    t.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      draggedToken = t;
+      draggedToken.dataset.id = playerData.id;
+
+      const rect = t.getBoundingClientRect();
+      const touch = e.touches[0];
+      offsetX = touch.clientX - rect.left;
+      offsetY = touch.clientY - rect.top;
+    }, { passive: true });
   }
 
   gameMap.appendChild(t);
@@ -198,7 +209,32 @@ document.addEventListener('mousemove', (e) => {
   socket.emit('playerMovement', { id: draggedToken.dataset.id, x: newX, y: newY });
 });
 
+document.addEventListener('touchmove', (e) => {
+  if (!isDragging || !draggedToken) return;
+  e.preventDefault();
+
+  const touch = e.touches[0];
+  const mapRect = gameMap.getBoundingClientRect();
+  let newX = touch.clientX - mapRect.left - offsetX;
+  let newY = touch.clientY - mapRect.top - offsetY;
+
+  draggedToken.style.left = newX + 'px';
+  draggedToken.style.top = newY + 'px';
+
+  socket.emit('playerMovement', { id: draggedToken.dataset.id, x: newX, y: newY });
+}, { passive: false });
+
 document.addEventListener('mouseup', () => {
+  isDragging = false;
+  draggedToken = null;
+});
+
+document.addEventListener('touchend', () => {
+  isDragging = false;
+  draggedToken = null;
+});
+
+document.addEventListener('touchcancel', () => {
   isDragging = false;
   draggedToken = null;
 });
@@ -402,6 +438,14 @@ if (canvas) {
     lastY = e.clientY - rect.top;
   });
 
+  canvas.addEventListener('touchstart', (e) => {
+    isDrawing = true;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    lastX = touch.clientX - rect.left;
+    lastY = touch.clientY - rect.top;
+  }, { passive: true });
+
   canvas.addEventListener('mousemove', (e) => {
     if (!isDrawing) return;
     const rect = canvas.getBoundingClientRect();
@@ -423,8 +467,34 @@ if (canvas) {
     lastY = currentY;
   });
 
+  canvas.addEventListener('touchmove', (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const currentX = touch.clientX - rect.left;
+    const currentY = touch.clientY - rect.top;
+
+    let myColor = '#e74c3c';
+    if (allPlayers[myId] && allPlayers[myId].color) {
+      myColor = allPlayers[myId].color;
+    }
+
+    const lineData = { playerId: myId, x0: lastX, y0: lastY, x1: currentX, y1: currentY, color: myColor };
+
+    drawLineOnCanvas(lastX, lastY, currentX, currentY, myColor);
+    localDrawHistory.push(lineData);
+    socket.emit('drawLine', lineData);
+
+    lastX = currentX;
+    lastY = currentY;
+  }, { passive: false });
+
   canvas.addEventListener('mouseup', () => isDrawing = false);
   canvas.addEventListener('mouseout', () => isDrawing = false);
+
+  canvas.addEventListener('touchend', () => isDrawing = false);
+  canvas.addEventListener('touchcancel', () => isDrawing = false);
 
   socket.on('draw', (data) => {
     localDrawHistory.push(data);

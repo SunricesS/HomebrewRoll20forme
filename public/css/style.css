@@ -190,6 +190,7 @@ html {
     /* DİKKAT: İçindeki token'ın (absolute) bu div'e göre yerleşmesi için ŞARTTIR */
     overflow: hidden;
     /* Token harita dışına taşarsa gizlensin */
+    touch-action: none;
 }
 
 /* Çizim Katmanı */
