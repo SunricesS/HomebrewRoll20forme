@@ -188,9 +188,19 @@ html {
     /* İleride harita görselinizi buraya verebilirsiniz */
     position: relative;
     /* DİKKAT: İçindeki token'ın (absolute) bu div'e göre yerleşmesi için ŞARTTIR */
-    overflow: hidden;
-    /* Token harita dışına taşarsa gizlensin */
-    touch-action: none;
+    overflow: auto;
+    /* Harita ekranı geçerse kaydırma çubukları çıksın */
+    touch-action: auto;
+}
+
+#map-content {
+    position: relative;
+    width: 2000px;
+    height: 1500px;
+    background-repeat: no-repeat;
+    background-position: top left;
+    background-size: 100% 100%;
+    transform-origin: top left;
 }
 
 /* Çizim Katmanı */
@@ -300,7 +310,7 @@ html {
 
 .char-stats-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 5px;
     text-align: center;
     background: rgba(0, 0, 0, 0.2);

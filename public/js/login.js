@@ -153,7 +153,8 @@ document.getElementById('form-create-character').addEventListener('submit', asyn
         dex: parseInt(document.getElementById('stat-dex').value),
         int: parseInt(document.getElementById('stat-int').value),
         con: parseInt(document.getElementById('stat-con').value),
-        wis: parseInt(document.getElementById('stat-wis').value)
+        wis: parseInt(document.getElementById('stat-wis').value),
+        chr: parseInt(document.getElementById('stat-chr').value)
     };
 
     const submitBtn = e.target.querySelector('button[type="submit"]');

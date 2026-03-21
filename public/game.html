@@ -12,8 +12,10 @@
     <div id="app-container">
         <!-- Sol Taraf (%75): Oyun Haritası -->
         <div id="game-map">
-            <canvas id="drawing-layer"></canvas>
-            <!-- Token Sistemi -->
+            <div id="map-content">
+                <canvas id="drawing-layer"></canvas>
+                <!-- Token Sistemi -->
+            </div>
         </div>
 
         <!-- Sağ Taraf (%25): Kontrol Paneli -->
@@ -70,6 +72,7 @@
                             <div class="form-group"><label>INT:</label><input type="number" id="dm-edit-int"></div>
                             <div class="form-group"><label>CON:</label><input type="number" id="dm-edit-con"></div>
                             <div class="form-group"><label>WIS:</label><input type="number" id="dm-edit-wis"></div>
+                            <div class="form-group"><label>CHR:</label><input type="number" id="dm-edit-chr"></div>
                         </div>
                         <div class="button-group">
                             <button type="submit" class="btn success action-btn" style="margin-top:0;">Kaydet</button>

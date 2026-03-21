@@ -13,7 +13,8 @@ const socket = io();
 let myId = null;
 const tokens = {};
 const allPlayers = {}; // Odaya bağlı tüm oyuncuları burada tutacağız
-const gameMap = document.getElementById('game-map');
+const gameMapContainer = document.getElementById('game-map');
+const gameMap = document.getElementById('map-content');
 
 let isDragging = false;
 let draggedToken = null;
@@ -82,11 +83,21 @@ socket.on('removeMarker', (markerId) => {
 
 socket.on('updateBg', (url) => {
   if (url) {
-    gameMap.style.backgroundImage = `url('${url}')`;
-    gameMap.style.backgroundSize = 'cover';
-    gameMap.style.backgroundPosition = 'center';
+    const img = new Image();
+    img.onload = () => {
+      gameMap.style.backgroundImage = `url('${url}')`;
+      gameMap.style.backgroundSize = '100% 100%';
+      gameMap.style.backgroundPosition = 'top left';
+      gameMap.style.width = Math.max(img.width, 800) + 'px';
+      gameMap.style.height = Math.max(img.height, 600) + 'px';
+      if (typeof resizeCanvas === 'function') resizeCanvas();
+    };
+    img.src = url;
   } else {
     gameMap.style.backgroundImage = 'none';
+    gameMap.style.width = '2000px';
+    gameMap.style.height = '1500px';
+    if (typeof resizeCanvas === 'function') resizeCanvas();
   }
 });
 
@@ -181,6 +192,7 @@ function addToken(playerData) {
     });
 
     t.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 1) return; // İki parmakla haritayı kaydırmaya izin ver
       isDragging = true;
       draggedToken = t;
       draggedToken.dataset.id = playerData.id;
@@ -210,7 +222,7 @@ document.addEventListener('mousemove', (e) => {
 });
 
 document.addEventListener('touchmove', (e) => {
-  if (!isDragging || !draggedToken) return;
+  if (!isDragging || !draggedToken || e.touches.length > 1) return;
   e.preventDefault();
 
   const touch = e.touches[0];
@@ -332,6 +344,7 @@ function renderPlayerInfo() {
               <div class="stat-box"><span class="stat-label">INT</span><span class="stat-value">${c.stats.int || 10}</span></div>
               <div class="stat-box"><span class="stat-label">CON</span><span class="stat-value">${c.stats.con || 10}</span></div>
               <div class="stat-box"><span class="stat-label">WIS</span><span class="stat-value">${c.stats.wis || 10}</span></div>
+              <div class="stat-box"><span class="stat-label">CHR</span><span class="stat-value">${c.stats.chr || 10}</span></div>
           </div>
         `;
     } else {
@@ -355,6 +368,7 @@ function showDmEditor(playerData) {
   document.getElementById('dm-edit-int').value = c.stats.int || 10;
   document.getElementById('dm-edit-con').value = c.stats.con || 10;
   document.getElementById('dm-edit-wis').value = c.stats.wis || 10;
+  document.getElementById('dm-edit-chr').value = c.stats.chr || 10;
 
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }
@@ -375,7 +389,8 @@ if (formDmEdit) {
         dex: parseInt(document.getElementById('dm-edit-dex').value),
         int: parseInt(document.getElementById('dm-edit-int').value),
         con: parseInt(document.getElementById('dm-edit-con').value),
-        wis: parseInt(document.getElementById('dm-edit-wis').value)
+        wis: parseInt(document.getElementById('dm-edit-wis').value),
+        chr: parseInt(document.getElementById('dm-edit-chr').value)
       }
     };
 
@@ -399,9 +414,8 @@ if (canvas) {
   // Harita boyutuna göre canvas boyutunu ayarla
   function resizeCanvas() {
     if (!canvas) return;
-    const rect = gameMap.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    canvas.width = gameMap.clientWidth || 2000;
+    canvas.height = gameMap.clientHeight || 1500;
     redrawHistory();
   }
 
@@ -439,6 +453,10 @@ if (canvas) {
   });
 
   canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) {
+      isDrawing = false;
+      return;
+    }
     isDrawing = true;
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
@@ -468,7 +486,7 @@ if (canvas) {
   });
 
   canvas.addEventListener('touchmove', (e) => {
-    if (!isDrawing) return;
+    if (!isDrawing || e.touches.length > 1) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
