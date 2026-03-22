@@ -60,6 +60,7 @@ io.on('connection', (socket) => {
         y: markerData.y,
         name: markerData.name,
         color: markerData.color,
+        imgUrl: markerData.imgUrl,
         isMarker: true
       };
       markers[markerId] = newMarker;
@@ -80,6 +81,18 @@ io.on('connection', (socket) => {
     if (players[socket.id] && players[socket.id].role === 'dm') {
       mapBgUrl = url;
       io.emit('updateBg', mapBgUrl);
+    }
+  });
+
+  socket.on('updateTokenAppearance', (data) => {
+    if (players[socket.id]) {
+      if (data.imgUrl !== undefined) players[socket.id].imgUrl = data.imgUrl;
+      if (data.color !== undefined) players[socket.id].color = data.color;
+      io.emit('tokenAppearanceUpdated', {
+        id: socket.id,
+        imgUrl: players[socket.id].imgUrl,
+        color: players[socket.id].color
+      });
     }
   });
 

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ed81fe2c-248b-448a-97b1-50d534b38fda",
+    "user_id": "f5ebacf8-9440-4327-a0fc-b18c914fb5c4",
+    "name": "Patos",
+    "hp_current": 180,
+    "hp_max": 180,
+    "stats": {
+      "chr": 0,
+      "con": 4,
+      "dex": 1,
+      "int": 0,
+      "str": 4,
+      "wis": 1
+    },
+    "avatar_url": "https://biresim.com.tr/upload/img_69bed7e104b08.png"
+  },
+  {
+    "id": "0f7bb871-bea7-4430-9d20-e52e891fda91",
+    "user_id": "98e3f693-f05a-4382-896b-b4809eb02bde",
+    "name": "Macbeth",
+    "hp_current": 120,
+    "hp_max": 120,
+    "stats": {
+      "chr": 3,
+      "con": 1,
+      "dex": 1,
+      "int": 1,
+      "str": 3,
+      "wis": 1
+    },
+    "avatar_url": null
+  },
+  {
+    "id": "1b07b8df-97aa-4a9f-9e63-61b1ef2f85f3",
+    "user_id": "5a5d3eb9-8c8a-4a69-ab25-aac6ab7f74e2",
+    "name": "Süperius Mükemmelius Maximus",
+    "hp_current": 180,
+    "hp_max": 180,
+    "stats": {
+      "chr": 0,
+      "con": 4,
+      "dex": 0,
+      "int": 0,
+      "str": 6,
+      "wis": 0
+    },
+    "avatar_url": null
+  }
+]

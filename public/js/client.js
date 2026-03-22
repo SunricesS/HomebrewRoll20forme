@@ -115,6 +115,32 @@ socket.on('playerDisconnected', (id) => {
   }
 });
 
+socket.on('tokenAppearanceUpdated', (data) => {
+  if (allPlayers[data.id]) {
+    allPlayers[data.id].imgUrl = data.imgUrl;
+    allPlayers[data.id].color = data.color;
+    
+    // UI token elementini güncelle
+    const t = tokens[data.id];
+    if (t) {
+      t.style.borderColor = data.color;
+      if (data.imgUrl) {
+        t.style.backgroundImage = `url('${data.imgUrl}')`;
+        t.style.backgroundSize = 'cover';
+        t.style.backgroundPosition = 'center';
+        t.style.backgroundColor = 'transparent';
+        t.innerText = '';
+      } else {
+        t.style.backgroundImage = 'none';
+        t.style.backgroundColor = data.color;
+        // Metni geri getir
+        let initial = allPlayers[data.id].role === 'dm' ? 'DM' : (allPlayers[data.id].character ? allPlayers[data.id].character.name.charAt(0).toUpperCase() : '?');
+        t.innerText = initial;
+      }
+    }
+  }
+});
+
 socket.on('characterUpdated', (data) => {
   if (allPlayers[data.id] && allPlayers[data.id].character) {
     Object.assign(allPlayers[data.id].character, data.updates);
@@ -152,7 +178,16 @@ function addToken(playerData) {
   // Pozisyon ve Renk
   t.style.left = playerData.x + 'px';
   t.style.top = playerData.y + 'px';
-  t.style.backgroundColor = playerData.color || '#e74c3c';
+  t.style.borderColor = playerData.color || '#e74c3c';
+
+  if (playerData.imgUrl) {
+    t.style.backgroundImage = `url('${playerData.imgUrl}')`;
+    t.style.backgroundSize = 'cover';
+    t.style.backgroundPosition = 'center';
+    t.style.backgroundColor = 'transparent';
+  } else {
+    t.style.backgroundColor = playerData.color || '#e74c3c';
+  }
 
   // İçine baş harf koyalım
   let initial = '?';
@@ -173,7 +208,9 @@ function addToken(playerData) {
     t.title = playerData.role === 'dm' ? 'DM' : (playerData.character ? playerData.character.name : 'Oyuncu');
   }
 
-  t.innerText = initial;
+  if (!playerData.imgUrl) {
+    t.innerText = initial;
+  }
 
   // Sürükleme yetkisi: Kendi token'ı VEYA kişi DM ise herhangi bir token.
   if (playerData.id === myId || role === 'dm') {
@@ -257,9 +294,26 @@ if (btnAddMarker) {
   btnAddMarker.addEventListener('click', () => {
     const name = document.getElementById('dm-marker-name').value || 'X';
     const color = document.getElementById('dm-marker-color').value || '#f1c40f';
+    const imgUrl = document.getElementById('dm-marker-img') ? document.getElementById('dm-marker-img').value : '';
     // Yeni markeri haritanın ortasına atalım
-    socket.emit('createMarker', { name: name.substring(0, 2), color: color, x: 200, y: 200 });
+    socket.emit('createMarker', { name: name.substring(0, 2), color: color, x: 200, y: 200, imgUrl: imgUrl });
     document.getElementById('dm-marker-name').value = '';
+    if (document.getElementById('dm-marker-img')) {
+        document.getElementById('dm-marker-img').value = '';
+    }
+  });
+}
+
+const btnUpdateDmPen = document.getElementById('btn-update-dm-pen');
+if (btnUpdateDmPen) {
+  btnUpdateDmPen.addEventListener('click', () => {
+    const color = document.getElementById('dm-pen-color').value;
+    socket.emit('updateTokenAppearance', { color: color });
+    
+    // Kendi değerlerimizi hemen önbelleğe alıp apply that color faster (optional)
+    if (allPlayers[myId]) {
+      allPlayers[myId].color = color;
+    }
   });
 }
 
@@ -269,6 +323,22 @@ if (btnSetBg) {
     const url = document.getElementById('dm-bg-url').value;
     socket.emit('updateBg', url);
     document.getElementById('dm-bg-url').value = '';
+  });
+}
+
+// Token Apperance update for players
+const btnUpdateToken = document.getElementById('btn-update-token');
+if (btnUpdateToken) {
+  btnUpdateToken.addEventListener('click', () => {
+    const imgUrl = document.getElementById('player-token-img').value;
+    const color = document.getElementById('player-token-color').value;
+    socket.emit('updateTokenAppearance', { imgUrl, color });
+    
+    // Kendi değerlerimizi hemen önbelleğe alıp apply that color faster (optional)
+    if (allPlayers[myId]) {
+      allPlayers[myId].imgUrl = imgUrl;
+      allPlayers[myId].color = color;
+    }
   });
 }
 
@@ -339,12 +409,12 @@ function renderPlayerInfo() {
               </div>
           </div>
           <div class="char-stats-grid">
-              <div class="stat-box"><span class="stat-label">STR</span><span class="stat-value">${c.stats.str || 10}</span></div>
-              <div class="stat-box"><span class="stat-label">DEX</span><span class="stat-value">${c.stats.dex || 10}</span></div>
-              <div class="stat-box"><span class="stat-label">INT</span><span class="stat-value">${c.stats.int || 10}</span></div>
-              <div class="stat-box"><span class="stat-label">CON</span><span class="stat-value">${c.stats.con || 10}</span></div>
-              <div class="stat-box"><span class="stat-label">WIS</span><span class="stat-value">${c.stats.wis || 10}</span></div>
-              <div class="stat-box"><span class="stat-label">CHR</span><span class="stat-value">${c.stats.chr || 10}</span></div>
+              <div class="stat-box"><span class="stat-label">STR</span><span class="stat-value">${c.stats.str ?? 10}</span></div>
+              <div class="stat-box"><span class="stat-label">DEX</span><span class="stat-value">${c.stats.dex ?? 10}</span></div>
+              <div class="stat-box"><span class="stat-label">INT</span><span class="stat-value">${c.stats.int ?? 10}</span></div>
+              <div class="stat-box"><span class="stat-label">CON</span><span class="stat-value">${c.stats.con ?? 10}</span></div>
+              <div class="stat-box"><span class="stat-label">WIS</span><span class="stat-value">${c.stats.wis ?? 10}</span></div>
+              <div class="stat-box"><span class="stat-label">CHR</span><span class="stat-value">${c.stats.chr ?? 10}</span></div>
           </div>
         `;
     } else {
@@ -363,12 +433,12 @@ function showDmEditor(playerData) {
   document.getElementById('dm-edit-name').innerText = c.name + " Düzenleniyor";
   document.getElementById('dm-edit-hp').value = c.hp_current;
   document.getElementById('dm-edit-max-hp').value = c.hp_max;
-  document.getElementById('dm-edit-str').value = c.stats.str || 10;
-  document.getElementById('dm-edit-dex').value = c.stats.dex || 10;
-  document.getElementById('dm-edit-int').value = c.stats.int || 10;
-  document.getElementById('dm-edit-con').value = c.stats.con || 10;
-  document.getElementById('dm-edit-wis').value = c.stats.wis || 10;
-  document.getElementById('dm-edit-chr').value = c.stats.chr || 10;
+  document.getElementById('dm-edit-str').value = c.stats.str ?? 10;
+  document.getElementById('dm-edit-dex').value = c.stats.dex ?? 10;
+  document.getElementById('dm-edit-int').value = c.stats.int ?? 10;
+  document.getElementById('dm-edit-con').value = c.stats.con ?? 10;
+  document.getElementById('dm-edit-wis').value = c.stats.wis ?? 10;
+  document.getElementById('dm-edit-chr').value = c.stats.chr ?? 10;
 
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }

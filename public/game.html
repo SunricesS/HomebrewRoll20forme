@@ -35,11 +35,23 @@
                         style="background:#fff; color:#000;">
                 </div>
                 <div class="form-group" style="margin-bottom: 10px;">
+                    <label>İşaret Resim URL (Opsiyonel):</label>
+                    <input type="text" id="dm-marker-img" placeholder="https://..." style="background:#fff; color:#000;">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
                     <label>Renk:</label>
                     <input type="color" id="dm-marker-color" value="#f1c40f">
                 </div>
-                <button id="btn-add-marker" class="btn primary action-btn" style="margin-bottom: 20px;">İşaret
-                    Ekle</button>
+                <button id="btn-add-marker" class="btn primary action-btn" style="margin-bottom: 20px;">İşaret Ekle</button>
+
+                <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-bottom: 10px;">
+                
+                <h4>DM Kalem Rengi</h4>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Çizim Rengi:</label>
+                    <input type="color" id="dm-pen-color" value="#8e44ad">
+                </div>
+                <button id="btn-update-dm-pen" class="btn primary action-btn" style="margin-bottom: 20px;">Rengi Güncelle</button>
 
                 <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-bottom: 10px;">
 
@@ -94,6 +106,19 @@
                 <div id="my-character-card" class="character-card">
                     <!-- JS ile doldurulacak -->
                 </div>
+
+                <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-top: 15px; margin-bottom: 15px;">
+                
+                <h4>Token Özelleştir</h4>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Token Resim URL:</label>
+                    <input type="text" id="player-token-img" placeholder="https://..." style="background:#fff; color:#000;">
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Çizim ve Token Rengi:</label>
+                    <input type="color" id="player-token-color" value="#3498db">
+                </div>
+                <button id="btn-update-token" class="btn primary action-btn">Uygula</button>
 
                 <button id="btn-clear-my-drawings" class="btn secondary action-btn"
                     style="margin-top: 15px; background-color: #e67e22;">Sadece Benim Çizimlerimi Temizle</button>
