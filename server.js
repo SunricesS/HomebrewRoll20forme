@@ -22,14 +22,45 @@ io.on('connection', (socket) => {
   console.log('Bir oyuncu bağlandı: ' + socket.id);
 
   socket.on('playerJoin', (data) => {
+    // Aynı session önceden var mı kontrol et (kısa süreli kopmalara karşı)
+    let existingPlayerId = null;
+    
+    if (data.sessionId) {
+      existingPlayerId = Object.keys(players).find(k => players[k].sessionId === data.sessionId);
+    } else {
+      existingPlayerId = Object.keys(players).find(k => {
+        if (data.character && players[k].character) return players[k].character.id === data.character.id;
+        if (data.role === 'dm' && players[k].role === 'dm') return true;
+        return false;
+      });
+    }
+
+    let startX = 50;
+    let startY = 50;
+    let color = data.role === 'dm' ? '#8e44ad' : '#3498db';
+    let imgUrl = null;
+
+    if (existingPlayerId && players[existingPlayerId]) {
+      startX = players[existingPlayerId].x;
+      startY = players[existingPlayerId].y;
+      color = players[existingPlayerId].color;
+      imgUrl = players[existingPlayerId].imgUrl;
+
+      // Eski ghost socket'i temizle ve koptuğunu yayınla (klonları engeller)
+      delete players[existingPlayerId];
+      socket.broadcast.emit('playerDisconnected', existingPlayerId);
+    }
+
     players[socket.id] = {
       id: socket.id,
-      x: 50,
-      y: 50,
+      sessionId: data.sessionId || socket.id,
+      x: startX,
+      y: startY,
       role: data.role,
       profile: data.profile,
       character: data.character,
-      color: data.role === 'dm' ? '#8e44ad' : '#3498db'
+      color: color,
+      imgUrl: imgUrl
     };
 
     // Yalnızca yeni bağlanan oyuncuya mevcut oyuncuları gönder
@@ -185,8 +216,10 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Oyuncu ayrıldı: ' + socket.id);
-    delete players[socket.id];
-    io.emit('playerDisconnected', socket.id);
+    if (players[socket.id]) {
+      delete players[socket.id];
+      io.emit('playerDisconnected', socket.id);
+    }
   });
 });
 

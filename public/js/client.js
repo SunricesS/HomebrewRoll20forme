@@ -10,6 +10,12 @@ const characterData = JSON.parse(sessionStorage.getItem('dnd_character') || 'nul
 
 const socket = io();
 
+let sessionId = sessionStorage.getItem('dnd_session_id');
+if (!sessionId) {
+  sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  sessionStorage.setItem('dnd_session_id', sessionId);
+}
+
 let myId = null;
 const tokens = {};
 const allPlayers = {}; // Odaya bağlı tüm oyuncuları burada tutacağız
@@ -27,8 +33,13 @@ socket.on('connect', () => {
   myId = socket.id;
   document.getElementById('status').innerText = "Bağlandı!";
 
+  // Bağlantı koptuğunda haritada kalan eski klonları temizle
+  Object.values(tokens).forEach(t => t.remove());
+  for (let key in tokens) delete tokens[key];
+  for (let key in allPlayers) delete allPlayers[key];
+
   // Sunucuya giriş bilgisini ilet
-  socket.emit('playerJoin', { role, profile: profileData, character: characterData });
+  socket.emit('playerJoin', { role, profile: profileData, character: characterData, sessionId });
 
   // Arayüze log ekle
   const logs = document.getElementById('logs');
@@ -167,6 +178,12 @@ socket.on('updateTokenPosition', (position) => {
 });
 
 function addToken(playerData) {
+  // Eğer zaten varsa var olanı temizle (klon engelleme)
+  if (tokens[playerData.id]) {
+    tokens[playerData.id].remove();
+    delete tokens[playerData.id];
+  }
+
   const t = document.createElement('div');
   t.className = 'token';
 
