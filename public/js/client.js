@@ -130,7 +130,7 @@ socket.on('tokenAppearanceUpdated', (data) => {
   if (allPlayers[data.id]) {
     allPlayers[data.id].imgUrl = data.imgUrl;
     allPlayers[data.id].color = data.color;
-    
+
     // UI token elementini güncelle
     const t = tokens[data.id];
     if (t) {
@@ -316,7 +316,7 @@ if (btnAddMarker) {
     socket.emit('createMarker', { name: name.substring(0, 2), color: color, x: 200, y: 200, imgUrl: imgUrl });
     document.getElementById('dm-marker-name').value = '';
     if (document.getElementById('dm-marker-img')) {
-        document.getElementById('dm-marker-img').value = '';
+      document.getElementById('dm-marker-img').value = '';
     }
   });
 }
@@ -326,7 +326,7 @@ if (btnUpdateDmPen) {
   btnUpdateDmPen.addEventListener('click', () => {
     const color = document.getElementById('dm-pen-color').value;
     socket.emit('updateTokenAppearance', { color: color });
-    
+
     // Kendi değerlerimizi hemen önbelleğe alıp apply that color faster (optional)
     if (allPlayers[myId]) {
       allPlayers[myId].color = color;
@@ -350,7 +350,7 @@ if (btnUpdateToken) {
     const imgUrl = document.getElementById('player-token-img').value;
     const color = document.getElementById('player-token-color').value;
     socket.emit('updateTokenAppearance', { imgUrl, color });
-    
+
     // Kendi değerlerimizi hemen önbelleğe alıp apply that color faster (optional)
     if (allPlayers[myId]) {
       allPlayers[myId].imgUrl = imgUrl;
@@ -630,3 +630,84 @@ if (canvas) {
     });
   }
 }
+
+// === RESİM SÜRÜKLE BIRAK YÜKLEME İŞLEMLERİ ===
+function setupImageDropZone(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    el.style.border = '2px dashed #e74c3c';
+    el.style.backgroundColor = 'rgba(231, 76, 60, 0.1)';
+  });
+
+  el.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    el.style.border = '';
+    el.style.backgroundColor = '';
+  });
+
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    el.style.border = '';
+    el.style.backgroundColor = '';
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (!file.type.startsWith('image/')) {
+        alert('Lütfen sadece resim dosyası sürükleyin.');
+        return;
+      }
+
+      const originalPlaceholder = el.placeholder;
+      el.value = '';
+      el.placeholder = 'Resim yükleniyor...';
+      el.disabled = true;
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64Image = reader.result;
+        try {
+          const response = await fetch('/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ image: base64Image, name: file.name })
+          });
+
+          const data = await response.json();
+          if (data.url) {
+            el.value = data.url;
+          } else {
+            alert('Resim yüklenemedi: ' + (data.error || 'Bilinmeyen hata'));
+          }
+        } catch (err) {
+          console.error('Yükleme hatası:', err);
+          alert('Resim yüklenirken bir hata oluştu.');
+        } finally {
+          el.disabled = false;
+          el.placeholder = originalPlaceholder;
+        }
+      };
+      reader.onerror = () => {
+        alert('Dosya okunamadı!');
+        el.disabled = false;
+        el.placeholder = originalPlaceholder;
+      };
+    }
+  });
+}
+
+setupImageDropZone('dm-marker-img');
+setupImageDropZone('dm-bg-url');
+setupImageDropZone('player-token-img');
+
+// Sunucuyu uyanık tutmak için her 10 dakikada bir (600.000 ms) ping at
+setInterval(() => {
+  fetch('/ping')
+    .then(response => console.log('Sunucu uyanık tutuluyor...'))
+    .catch(err => console.error('Ping hatası:', err));
+}, 10 * 60 * 1000);

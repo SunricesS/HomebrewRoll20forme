@@ -1,5 +1,7 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
+const axios = require('axios');
 const http = require('http');
 const server = http.createServer(app);
 const { Server } = require("socket.io");
@@ -13,6 +15,69 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 app.use(express.static('public'));
 
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
+app.use(express.json({ limit: '10mb' }));
+
+// === IMGBB RESİM YÜKLEME ===
+app.post('/upload', async (req, res) => {
+  try {
+    const base64Image = req.body.image;
+    const fileName = req.body.name || 'İsimsiz Resim';
+    if (!base64Image) {
+      return res.status(400).json({ error: 'Resim verisi bulunamadı.' });
+    }
+
+    // Remove the data URI scheme if present e.g. "data:image/png;base64,"
+    const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
+
+    const formData = new URLSearchParams();
+    formData.append('image', base64Data);
+
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    if (response.data && response.data.data && response.data.data.url) {
+      const imgUrl = response.data.data.url;
+
+      // Supabase'e kaydet
+      const { error: dbError } = await supabase
+        .from('images')
+        .insert([{ name: fileName, url: imgUrl }]);
+
+      if (dbError) {
+        console.error('Supabase resim kaydetme hatası:', dbError);
+      }
+
+      res.json({ url: imgUrl });
+    } else {
+      res.status(500).json({ error: 'Resim yüklenemedi.' });
+    }
+  } catch (error) {
+    console.error('ImgBB yükleme hatası:', error.response ? error.response.data : error.message);
+    res.status(500).json({ error: 'Resim yüklenirken hata oluştu.' });
+  }
+});
+
+app.get('/api/gallery-images', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('images')
+      .select('id, name, url');
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Galeri çekme hatası:', err);
+    res.status(500).json({ error: 'Resimler getirilemedi.' });
+  }
+});
+
 const players = {};
 const markers = {};
 let mapBgUrl = '';
@@ -24,7 +89,7 @@ io.on('connection', (socket) => {
   socket.on('playerJoin', (data) => {
     // Aynı session önceden var mı kontrol et (kısa süreli kopmalara karşı)
     let existingPlayerId = null;
-    
+
     if (data.sessionId) {
       existingPlayerId = Object.keys(players).find(k => players[k].sessionId === data.sessionId);
     } else {
