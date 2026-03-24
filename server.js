@@ -80,6 +80,7 @@ app.get('/api/gallery-images', async (req, res) => {
 
 const players = {};
 const markers = {};
+const sessionCache = {};
 let mapBgUrl = '';
 let drawHistory = [];
 
@@ -114,6 +115,11 @@ io.on('connection', (socket) => {
       // Eski ghost socket'i temizle ve koptuğunu yayınla (klonları engeller)
       delete players[existingPlayerId];
       socket.broadcast.emit('playerDisconnected', existingPlayerId);
+    } else if (data.sessionId && sessionCache[data.sessionId]) {
+      startX = sessionCache[data.sessionId].x;
+      startY = sessionCache[data.sessionId].y;
+      color = sessionCache[data.sessionId].color;
+      imgUrl = sessionCache[data.sessionId].imgUrl;
     }
 
     players[socket.id] = {
@@ -242,6 +248,11 @@ io.on('connection', (socket) => {
     io.emit('drawHistory', drawHistory);
   });
 
+  // --- ZAR ATMA EVENTİ ---
+  socket.on('rollDice', (data) => {
+    io.emit('diceRolled', data);
+  });
+
   // İstemciden 'playerMovement' veya DM'den başkasının hareketi geldiğinde çalışır
   socket.on('playerMovement', (movementData) => {
     const sender = players[socket.id];
@@ -282,6 +293,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Oyuncu ayrıldı: ' + socket.id);
     if (players[socket.id]) {
+      const p = players[socket.id];
+      sessionCache[p.sessionId] = {
+        x: p.x,
+        y: p.y,
+        color: p.color,
+        imgUrl: p.imgUrl
+      };
+
       delete players[socket.id];
       io.emit('playerDisconnected', socket.id);
     }

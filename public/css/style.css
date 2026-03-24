@@ -347,3 +347,52 @@ html {
     font-weight: bold;
     font-size: 14px;
 }
+
+/* ==== ZAR BUTONLARI VE BİLDİRİMLERİ ==== */
+.dice-btn {
+    background: #e67e22;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    flex: 1;
+}
+
+.dice-btn:hover {
+    background: #d35400;
+    transform: scale(1.05);
+}
+
+.dice-btn:active {
+    background: #e74c3c;
+    transform: scale(0.95);
+}
+
+.dice-toast {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 1000;
+    pointer-events: none;
+    border: 2px solid #e67e22;
+    box-shadow: 0 0 20px rgba(230, 126, 34, 0.5);
+    animation: fadeOut 4s forwards;
+}
+
+@keyframes fadeOut {
+    0% { opacity: 0; transform: translate(-50%, -40%); }
+    10% { opacity: 1; transform: translate(-50%, -50%); }
+    80% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, -60%); }
+}
