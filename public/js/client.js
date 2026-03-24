@@ -712,7 +712,7 @@ document.querySelectorAll('.dice-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const diceType = parseInt(btn.getAttribute('data-dice'));
     const result = Math.floor(Math.random() * diceType) + 1;
-    
+
     let rollerName = "Bilinmiyor";
     if (role === 'dm') {
       rollerName = "DM";
@@ -732,9 +732,9 @@ socket.on('diceRolled', (data) => {
   // Loglara ekle
   const logs = document.getElementById('logs');
   const li = document.createElement('li');
-  
+
   let resultText = `<span style="font-weight: bold;">${data.rollerName}</span> d${data.diceType} attı: <strong>${data.result}</strong>`;
-  
+
   // D20 Kritik Başarı/Başarısızlık renklendirmesi
   if (data.diceType === 20) {
     if (data.result === 20) {
@@ -743,11 +743,11 @@ socket.on('diceRolled', (data) => {
       resultText = `<span style="font-weight: bold;">${data.rollerName}</span> d20 attı: <strong style="color: #e74c3c;">1 (Kritik Başarısızlık!)</strong>`;
     }
   }
-  
+
   li.innerHTML = resultText;
   logs.appendChild(li);
   if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
-  
+
   // Log divini en aşağı kaydır
   const controlPanel = document.getElementById('control-panel');
   controlPanel.scrollTop = controlPanel.scrollHeight;
@@ -755,25 +755,25 @@ socket.on('diceRolled', (data) => {
   // Harita üzerinde Toast Gösterimi
   const toast = document.createElement('div');
   toast.className = 'dice-toast';
-  
+
   let toastHtml = `${data.rollerName}: d${data.diceType} 🎲 <strong>${data.result}</strong>`;
   if (data.diceType === 20) {
     if (data.result === 20) toastHtml = `${data.rollerName}: 🎲 <span style="color: #2ecc71;">20 (Kritik!)</span>`;
     if (data.result === 1) toastHtml = `${data.rollerName}: 🎲 <span style="color: #e74c3c;">1 (Kritik!)</span>`;
   }
-  
+
   toast.innerHTML = toastHtml;
-  
+
   // Toastu game-map'in içine ekliyoruz
   const mapContainer = document.getElementById('game-map');
   mapContainer.appendChild(toast);
-  
-  // 4 saniye sonra temizle
+
+  // 2 saniye sonra temizle
   setTimeout(() => {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast);
     }
-  }, 4000);
+  }, 2000);
 });
 
 // Sunucuyu uyanık tutmak için her 10 dakikada bir (600.000 ms) ping at
