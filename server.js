@@ -19,7 +19,7 @@ app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '80mb' }));
 
 // === IMGBB RESİM YÜKLEME ===
 app.post('/upload', async (req, res) => {
