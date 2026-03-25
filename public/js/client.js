@@ -94,6 +94,10 @@ socket.on('removeMarker', (markerId) => {
   }
 });
 
+socket.on('updateMarkerData', (markerData) => {
+  addToken(markerData);
+});
+
 socket.on('updateBg', (url) => {
   if (url) {
     const img = new Image();
@@ -159,10 +163,33 @@ socket.on('characterUpdated', (data) => {
     Object.assign(allPlayers[data.id].character, data.updates);
     renderPlayerInfo();
 
+    // Dinamik HP göstergesini güncelle
+    let t = tokens[data.id];
+    if (t) {
+      let hpBadge = t.querySelector('.token-hp-badge');
+      let newHp = allPlayers[data.id].character.hp_current;
+      let newMax = allPlayers[data.id].character.hp_max;
+      
+      if (!hpBadge && newHp !== undefined && newHp !== null) {
+          hpBadge = document.createElement('div');
+          hpBadge.className = 'token-hp-badge';
+          t.appendChild(hpBadge);
+      }
+      if (hpBadge) {
+          hpBadge.innerText = `${newHp} / ${newMax}`;
+          const ratio = newMax > 0 ? newHp / newMax : 0;
+          if (ratio <= 0.25) hpBadge.style.backgroundColor = '#c0392b';
+          else if (ratio <= 0.5) hpBadge.style.backgroundColor = '#d35400';
+          else hpBadge.style.backgroundColor = '#27ae60';
+      }
+    }
+
     if (document.getElementById('dm-edit-form')) {
-      const btn = document.getElementById('dm-edit-form').querySelector('button[type="submit"]');
-      btn.innerText = "Kaydet";
-      btn.disabled = false;
+      const btn = document.getElementById('dm-edit-save-btn');
+      if (btn && typeof dmEditTimeout !== 'undefined' && !dmEditTimeout) {
+          btn.innerText = "Kayıtlı";
+          btn.style.backgroundColor = '#27ae60';
+      }
     }
 
     // Kendi hesabıysa SessionStorage da güncelleyelim.
@@ -198,6 +225,9 @@ function addToken(playerData) {
   t.style.left = playerData.x + 'px';
   t.style.top = playerData.y + 'px';
   t.style.borderColor = playerData.color || '#e74c3c';
+  const size = playerData.size || 50;
+  t.style.width = size + 'px';
+  t.style.height = size + 'px';
 
   if (playerData.imgUrl) {
     t.style.backgroundImage = `url('${playerData.imgUrl}')`;
@@ -260,6 +290,37 @@ function addToken(playerData) {
     }, { passive: true });
   }
 
+  // Çift tıklama olayı - Eğer canı olan bir markersa ve kullanıcı DM ise
+  if (role === 'dm' && playerData.isMarker && playerData.hp !== undefined && playerData.hp !== null) {
+      t.addEventListener('dblclick', () => {
+          openMarkerEditor(playerData);
+      });
+  }
+
+  let hpCurrent = null;
+  let hpMax = null;
+
+  if (playerData.isMarker && playerData.hp !== undefined && playerData.hp !== null && !isNaN(playerData.hp)) {
+      hpCurrent = playerData.hp;
+      hpMax = playerData.maxHp;
+  } else if (!playerData.isMarker && playerData.character && playerData.character.hp_current !== undefined) {
+      hpCurrent = playerData.character.hp_current;
+      hpMax = playerData.character.hp_max;
+  }
+
+  if (hpCurrent !== null && hpMax !== null && !isNaN(hpCurrent)) {
+    const hpBadge = document.createElement('div');
+    hpBadge.className = 'token-hp-badge';
+    hpBadge.innerText = `${hpCurrent} / ${hpMax}`;
+    
+    const ratio = hpMax > 0 ? hpCurrent / hpMax : 0;
+    if (ratio <= 0.25) hpBadge.style.backgroundColor = '#c0392b';
+    else if (ratio <= 0.5) hpBadge.style.backgroundColor = '#d35400';
+    else hpBadge.style.backgroundColor = '#27ae60';
+
+    t.appendChild(hpBadge);
+  }
+
   gameMap.appendChild(t);
   tokens[playerData.id] = t;
 }
@@ -314,13 +375,60 @@ if (btnAddMarker) {
     const name = document.getElementById('dm-marker-name').value || 'X';
     const color = document.getElementById('dm-marker-color').value || '#f1c40f';
     const imgUrl = document.getElementById('dm-marker-img') ? document.getElementById('dm-marker-img').value : '';
+    const hp = document.getElementById('dm-marker-hp') && document.getElementById('dm-marker-hp').value !== '' ? parseInt(document.getElementById('dm-marker-hp').value) : null;
+    const maxHp = document.getElementById('dm-marker-max-hp') && document.getElementById('dm-marker-max-hp').value !== '' ? parseInt(document.getElementById('dm-marker-max-hp').value) : null;
+    const size = document.getElementById('dm-marker-size') && document.getElementById('dm-marker-size').value !== '' ? parseInt(document.getElementById('dm-marker-size').value) : 50;
+
     // Yeni markeri haritanın ortasına atalım
-    socket.emit('createMarker', { name: name.substring(0, 2), color: color, x: 200, y: 200, imgUrl: imgUrl });
+    socket.emit('createMarker', { name: name.substring(0, 2), color: color, x: 200, y: 200, imgUrl: imgUrl, hp: hp, maxHp: maxHp, size: size });
     document.getElementById('dm-marker-name').value = '';
     if (document.getElementById('dm-marker-img')) {
       document.getElementById('dm-marker-img').value = '';
     }
+    if (document.getElementById('dm-marker-hp')) document.getElementById('dm-marker-hp').value = '';
+    if (document.getElementById('dm-marker-max-hp')) document.getElementById('dm-marker-max-hp').value = '';
+    if (document.getElementById('dm-marker-size')) document.getElementById('dm-marker-size').value = '50';
   });
+}
+
+// ==== MARKER DÜZENLEME MODALI ====
+let editingMarkerId = null;
+
+function openMarkerEditor(markerData) {
+    editingMarkerId = markerData.id;
+    document.getElementById('dm-marker-edit-title').innerText = `"${markerData.name}" Düzenle`;
+    document.getElementById('dm-marker-edit-hp').value = markerData.hp;
+    document.getElementById('dm-marker-edit-size').value = markerData.size || 50;
+    document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
+}
+
+const btnCancelMarkerEdit = document.getElementById('btn-cancel-marker-edit');
+if (btnCancelMarkerEdit) {
+    btnCancelMarkerEdit.addEventListener('click', () => {
+        document.getElementById('dm-marker-editor-modal').classList.add('hidden');
+        editingMarkerId = null;
+    });
+}
+
+const btnSaveMarkerEdit = document.getElementById('btn-save-marker-edit');
+if (btnSaveMarkerEdit) {
+    btnSaveMarkerEdit.addEventListener('click', () => {
+        if (!editingMarkerId) return;
+        const newHp = parseInt(document.getElementById('dm-marker-edit-hp').value);
+        const newSize = parseInt(document.getElementById('dm-marker-edit-size').value);
+        
+        if (!isNaN(newHp) && !isNaN(newSize)) {
+            socket.emit('editMarker', {
+                id: editingMarkerId,
+                hp: newHp,
+                size: newSize
+            });
+            document.getElementById('dm-marker-editor-modal').classList.add('hidden');
+            editingMarkerId = null;
+        } else {
+            alert('Lütfen geçerli sayılar girin.');
+        }
+    });
 }
 
 const btnUpdateDmPen = document.getElementById('btn-update-dm-pen');
@@ -446,6 +554,8 @@ function renderPlayerInfo() {
 let editingPlayerId = null;
 
 function showDmEditor(playerData) {
+  if (typeof flushDmEdit === 'function') flushDmEdit();
+
   editingPlayerId = playerData.id;
   const c = playerData.character;
 
@@ -462,15 +572,13 @@ function showDmEditor(playerData) {
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }
 
-const formDmEdit = document.getElementById('dm-edit-form');
-if (formDmEdit) {
-  formDmEdit.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (!editingPlayerId || !allPlayers[editingPlayerId]) return;
+let dmEditTimeout = null;
 
+function saveDmEditorState(playerId) {
+    if (!playerId || !allPlayers[playerId] || !allPlayers[playerId].character) return;
     const updatedData = {
-      id: editingPlayerId,
-      characterId: allPlayers[editingPlayerId].character.id, // Supabase için
+      id: playerId,
+      characterId: allPlayers[playerId].character.id,
       hp_current: parseInt(document.getElementById('dm-edit-hp').value),
       hp_max: parseInt(document.getElementById('dm-edit-max-hp').value),
       stats: {
@@ -482,12 +590,45 @@ if (formDmEdit) {
         chr: parseInt(document.getElementById('dm-edit-chr').value)
       }
     };
-
-    const btn = formDmEdit.querySelector('button[type="submit"]');
-    btn.innerText = "Kaydediliyor...";
-    btn.disabled = true;
-
+    
+    const btn = document.getElementById('dm-edit-save-btn');
+    if (btn) {
+      btn.innerText = "Kaydediliyor...";
+      btn.style.backgroundColor = '#3498db';
+    }
+    
     socket.emit('updateCharacter', updatedData);
+}
+
+function flushDmEdit() {
+    if (dmEditTimeout) {
+        clearTimeout(dmEditTimeout);
+        dmEditTimeout = null;
+        saveDmEditorState(editingPlayerId);
+    }
+}
+
+const formDmEdit = document.getElementById('dm-edit-form');
+if (formDmEdit) {
+  formDmEdit.addEventListener('submit', (e) => e.preventDefault());
+  
+  const inputs = formDmEdit.querySelectorAll('input[type="number"]');
+  inputs.forEach(input => {
+    input.addEventListener('input', () => {
+      const btn = document.getElementById('dm-edit-save-btn');
+      if (btn) {
+         btn.innerText = "Bekleniyor...";
+         btn.style.backgroundColor = '#f39c12';
+      }
+
+      if (dmEditTimeout) clearTimeout(dmEditTimeout);
+      
+      const currentEditId = editingPlayerId;
+      dmEditTimeout = setTimeout(() => {
+        dmEditTimeout = null;
+        saveDmEditorState(currentEditId);
+      }, 3000);
+    });
   });
 }
 

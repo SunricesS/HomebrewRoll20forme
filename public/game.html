@@ -42,22 +42,31 @@
                     <button class="btn secondary" style="padding: 5px 10px; font-size: 12px; background-color: #27ae60;"
                         onclick="window.open('/gallery.html', '_blank')"> Resim Galerisi</button>
                 </div>
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label>İşaret/Token Adı (harf):</label>
-                    <input type="text" id="dm-marker-name" maxlength="2" placeholder="Ör: G"
-                        style="background:#fff; color:#000;">
-                </div>
-                <div class="form-group" style="margin-bottom: 10px; position: relative;">
-                    <label>İşaret Resim URL (Opsiyonel):</label>
-                    <input type="text" id="dm-marker-img" placeholder="URL girin veya resim sürükleyin..."
-                        style="background:#fff; color:#000;">
-                </div>
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label>Renk:</label>
-                    <input type="color" id="dm-marker-color" value="#f1c40f">
-                </div>
-                <button id="btn-add-marker" class="btn primary action-btn" style="margin-bottom: 20px;">İşaret
-                    Ekle</button>
+                <details class="dm-collapsible" style="margin-bottom: 20px;">
+                    <summary>Yeni Token Oluştur</summary>
+                    <div style="padding-top: 10px;">
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label>İşaret/Token Adı (harf):</label>
+                            <input type="text" id="dm-marker-name" maxlength="2" placeholder="Ör: G"
+                                style="background:#fff; color:#000;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px; position: relative;">
+                            <label>İşaret Resim URL (Opsiyonel):</label>
+                            <input type="text" id="dm-marker-img" placeholder="URL girin veya resim sürükleyin..."
+                                style="background:#fff; color:#000;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label>Renk:</label>
+                            <input type="color" id="dm-marker-color" value="#f1c40f">
+                        </div>
+                        <div class="stats-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 10px;">
+                            <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-hp" placeholder="örn: 10"></div>
+                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-marker-max-hp" placeholder="örn: 10"></div>
+                            <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-marker-size" value="50"></div>
+                        </div>
+                        <button id="btn-add-marker" class="btn primary action-btn">İşaret Ekle</button>
+                    </div>
+                </details>
 
                 <hr style="border: 0; border-top: 1px solid #7f8c8d; margin-bottom: 10px;">
 
@@ -103,10 +112,10 @@
                             <div class="form-group"><label>WIS:</label><input type="number" id="dm-edit-wis"></div>
                             <div class="form-group"><label>CHR:</label><input type="number" id="dm-edit-chr"></div>
                         </div>
-                        <div class="button-group">
-                            <button type="submit" class="btn success action-btn" style="margin-top:0;">Kaydet</button>
+                        <div class="button-group" style="flex-direction:row; display:flex; gap:10px;">
+                            <button type="button" id="dm-edit-save-btn" class="btn success action-btn" style="margin-top:0; flex:1;" disabled>Kayıtlı</button>
                             <button type="button" class="btn back-btn action-btn"
-                                onclick="document.getElementById('dm-player-editor').classList.add('hidden')">İptal</button>
+                                onclick="if(typeof flushDmEdit === 'function') flushDmEdit(); document.getElementById('dm-player-editor').classList.add('hidden')" style="margin-top:0; flex:1;">Kapat</button>
                         </div>
                     </form>
                 </div>
@@ -147,6 +156,25 @@
                 <div id="other-players-list">
                     <!-- JS ile doldurulacak -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DM Marker Düzenleme Modalı -->
+    <div id="dm-marker-editor-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 2000;">
+        <div class="modal-box" style="width: 300px;">
+            <h3 id="dm-marker-edit-title" style="margin-top: 0; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Token Düzenle</h3>
+            <div class="form-group">
+                <label>Mevcut HP:</label>
+                <input type="number" id="dm-marker-edit-hp">
+            </div>
+            <div class="form-group">
+                <label>Boyut (px):</label>
+                <input type="number" id="dm-marker-edit-size">
+            </div>
+            <div class="button-group" style="flex-direction: row; display: flex; gap: 10px;">
+                <button id="btn-save-marker-edit" class="btn success action-btn" style="flex: 1; margin-top: 0;">Kaydet</button>
+                <button id="btn-cancel-marker-edit" class="btn back-btn action-btn" style="flex: 1; margin-top: 0;">İptal</button>
             </div>
         </div>
     </div>

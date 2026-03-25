@@ -163,6 +163,9 @@ io.on('connection', (socket) => {
         name: markerData.name,
         color: markerData.color,
         imgUrl: markerData.imgUrl,
+        hp: markerData.hp,
+        maxHp: markerData.maxHp,
+        size: markerData.size || 50,
         isMarker: true
       };
       markers[markerId] = newMarker;
@@ -175,6 +178,16 @@ io.on('connection', (socket) => {
       if (markers[markerId]) {
         delete markers[markerId];
         io.emit('removeMarker', markerId);
+      }
+    }
+  });
+
+  socket.on('editMarker', (data) => {
+    if (players[socket.id] && players[socket.id].role === 'dm') {
+      if (markers[data.id]) {
+        if (data.hp !== undefined) markers[data.id].hp = data.hp;
+        if (data.size !== undefined) markers[data.id].size = data.size;
+        io.emit('updateMarkerData', markers[data.id]);
       }
     }
   });

@@ -394,5 +394,59 @@ html {
     0% { opacity: 0; transform: translate(-50%, -40%); }
     10% { opacity: 1; transform: translate(-50%, -50%); }
     80% { opacity: 1; transform: translate(-50%, -50%); }
-    100% { opacity: 0; transform: translate(-50%, -60%); }
+}
+
+/* ==== YENI TOKEN OLUŞTURMA & HP BAR ==== */
+.dm-collapsible {
+    background: rgba(52, 73, 94, 0.6);
+    border-radius: 6px;
+    padding: 10px;
+    border: 1px solid #7f8c8d;
+}
+
+.dm-collapsible summary {
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 16px;
+    color: #3498db;
+    outline: none;
+    list-style: none;
+}
+
+.dm-collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+.dm-collapsible summary::before {
+    content: "▶ ";
+    display: inline-block;
+    width: 20px;
+    transition: transform 0.2s;
+}
+
+.dm-collapsible[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.token-hp-badge {
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #27ae60;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 3px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    box-shadow: 0 0 3px rgba(0,0,0,0.8);
+    z-index: 20;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: default;
+}
+
+.token-hp-badge:hover {
+    transform: translateX(-50%) scale(1.8);
+    z-index: 100;
 }
