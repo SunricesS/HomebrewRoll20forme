@@ -453,6 +453,33 @@ if (btnSetBg) {
   });
 }
 
+const btnForceSave = document.getElementById('btn-force-save');
+if (btnForceSave) {
+  btnForceSave.addEventListener('click', () => {
+    socket.emit('forceSave');
+    btnForceSave.innerText = 'Bekleniyor...';
+    btnForceSave.style.backgroundColor = '#f39c12';
+  });
+}
+
+socket.on('saveComplete', () => {
+  const btn = document.getElementById('btn-force-save');
+  if (btn) {
+    btn.innerText = 'Harita Kaydet';
+    btn.style.backgroundColor = '#e67e22';
+  }
+  
+  // Basit bir uyarı mesajı (isteğe bağlı)
+  const logs = document.getElementById('logs');
+  if (logs) {
+      const li = document.createElement('li');
+      li.innerText = 'Harita manuel olarak kaydedildi.';
+      li.style.color = '#27ae60';
+      logs.appendChild(li);
+      if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
+  }
+});
+
 // Token Apperance update for players
 const btnUpdateToken = document.getElementById('btn-update-token');
 if (btnUpdateToken) {

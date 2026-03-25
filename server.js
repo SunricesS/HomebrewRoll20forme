@@ -122,11 +122,25 @@ io.on('connection', (socket) => {
       // Eski ghost socket'i temizle ve koptuğunu yayınla (klonları engeller)
       delete players[existingPlayerId];
       socket.broadcast.emit('playerDisconnected', existingPlayerId);
-    } else if (data.sessionId && sessionCache[data.sessionId]) {
-      startX = sessionCache[data.sessionId].x;
-      startY = sessionCache[data.sessionId].y;
-      color = sessionCache[data.sessionId].color;
-      imgUrl = sessionCache[data.sessionId].imgUrl;
+    } else {
+      let cacheMatch = null;
+      if (data.sessionId && sessionCache[data.sessionId]) {
+        cacheMatch = sessionCache[data.sessionId];
+      } else {
+        // Tarayıcı kapanıp açılmışsa ve sessionId değişmişse rol / karakter id'den bulmayı dene
+        cacheMatch = Object.values(sessionCache).find(c => {
+          if (data.character && c.character) return c.character.id === data.character.id;
+          if (data.role === 'dm' && c.role === 'dm') return true;
+          return false;
+        });
+      }
+
+      if (cacheMatch) {
+         startX = cacheMatch.x;
+         startY = cacheMatch.y;
+         if (cacheMatch.color) color = cacheMatch.color;
+         if (cacheMatch.imgUrl) imgUrl = cacheMatch.imgUrl;
+      }
     }
 
     players[socket.id] = {
@@ -310,6 +324,13 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('forceSave', async () => {
+    if (players[socket.id] && players[socket.id].role === 'dm') {
+      await backupMapState();
+      socket.emit('saveComplete');
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Oyuncu ayrıldı: ' + socket.id);
     if (players[socket.id]) {
@@ -318,7 +339,9 @@ io.on('connection', (socket) => {
         x: p.x,
         y: p.y,
         color: p.color,
-        imgUrl: p.imgUrl
+        imgUrl: p.imgUrl,
+        role: p.role,
+        character: p.character
       };
 
       delete players[socket.id];
@@ -327,8 +350,80 @@ io.on('connection', (socket) => {
   });
 });
 
+// === MAP STATE RESTORE VE BACKUP ===
+async function restoreMapState() {
+  try {
+    const { data, error } = await supabase
+      .from('map_state')
+      .select('data')
+      .eq('id', 1)
+      .single();
+
+    // PGRST116 kodu kayıt bulunamadığında döner, bu beklenen bir durum olabilir o yüzden uyarıyı gizleyebiliriz veya yakalayabiliriz.
+    if (error && error.code !== 'PGRST116') {
+      console.error('Map state yüklenirken Supabase hatası:', error.message);
+      return;
+    }
+
+    if (data && data.data) {
+      const savedState = data.data;
+      if (savedState.players) {
+        // Eski oyuncuları doğrudan haritaya `players` olarak değil, `sessionCache` üzerinden
+        // geri döndüklerinde pozisyonlarını alacakları şekilde belleğe alıyoruz.
+        Object.values(savedState.players).forEach(p => {
+          if (p.sessionId) {
+            sessionCache[p.sessionId] = {
+              x: p.x,
+              y: p.y,
+              color: p.color,
+              imgUrl: p.imgUrl,
+              role: p.role,
+              character: p.character
+            };
+          }
+        });
+      }
+      if (savedState.markers) {
+        Object.assign(markers, savedState.markers);
+      }
+      console.log('Map durumu başarıyla geri yüklendi.');
+    } else {
+      console.log('Geri yüklenecek map durumu bulunamadı veya tablo boş.');
+    }
+  } catch (err) {
+    console.error('Map state geri yüklenirken beklenmeyen hata:', err.message);
+  }
+}
+
+async function backupMapState() {
+  try {
+    const currentState = {
+      players: players,
+      markers: markers
+    };
+    
+    const { error } = await supabase
+      .from('map_state')
+      .upsert({ id: 1, data: currentState });
+      
+    if (error) {
+      console.error('Map state yedekleme hatası:', error.message);
+    } else {
+      console.log('Manuel map kaydı yapıldı.');
+    }
+  } catch (err) {
+    console.error('Map state yedekleme sırasında beklenmeyen hata:', err.message);
+  }
+}
+
+// 30 saniyede bir o anki anlık görüntüyü kaydet (State Backup Loop)
+setInterval(backupMapState, 30000);
+
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log(`Sunucu ${PORT} portunda aktif!`);
+// Sunucu başlamadan önce durumu geri yükle
+restoreMapState().then(() => {
+  server.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda aktif!`);
+  });
 });

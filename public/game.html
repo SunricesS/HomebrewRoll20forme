@@ -37,10 +37,13 @@
 
             <!-- Sadece DM'ye görünecek Araçlar Bölümü -->
             <div id="dm-tools" class="hidden" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 5px;">
                     <h4 style="margin: 0;">DM Araçları</h4>
-                    <button class="btn secondary" style="padding: 5px 10px; font-size: 12px; background-color: #27ae60;"
-                        onclick="window.open('/gallery.html', '_blank')"> Resim Galerisi</button>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn primary action-btn" id="btn-force-save" style="padding: 5px 10px; font-size: 12px; background-color: #e67e22; margin-top: 0;">Harita Kaydet</button>
+                        <button class="btn secondary" style="padding: 5px 10px; font-size: 12px; background-color: #27ae60;"
+                            onclick="window.open('/gallery.html', '_blank')"> Galeriyi Aç</button>
+                    </div>
                 </div>
                 <details class="dm-collapsible" style="margin-bottom: 20px;">
                     <summary>Yeni Token Oluştur</summary>
