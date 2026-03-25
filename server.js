@@ -31,14 +31,16 @@ app.post('/upload', async (req, res) => {
     }
 
     // Remove the data URI scheme if present e.g. "data:image/png;base64,"
-    const base64Data = base64Image.replace(/^data:image\/\w+;base64,/, '');
+    const base64Data = base64Image.replace(/^data:.*?;base64,/, '');
 
-    const formData = new URLSearchParams();
-    formData.append('image', base64Data);
+    const payload = { image: base64Data };
+    if (fileName && fileName !== 'İsimsiz Resim') {
+        payload.name = fileName;
+    }
 
-    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, formData, {
+    const response = await axios.post(`https://api.imgbb.com/1/upload?key=${process.env.IMGBB_API_KEY}`, payload, {
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'multipart/form-data'
       }
     });
 
@@ -59,8 +61,12 @@ app.post('/upload', async (req, res) => {
       res.status(500).json({ error: 'Resim yüklenemedi.' });
     }
   } catch (error) {
-    console.error('ImgBB yükleme hatası:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Resim yüklenirken hata oluştu.' });
+    let errMessage = error.message;
+    if (error.response && error.response.data) {
+        errMessage = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
+    }
+    console.error('ImgBB yükleme hatası:', errMessage);
+    res.status(500).json({ error: `Resim yüklenirken hata oluştu: ${errMessage}` });
   }
 });
 
