@@ -1,7 +1,10 @@
-// Kullanıcı giriş yapmış mı kontrol et
+// ============================================================
+// WebDND Client — v3 (Refactored)
+// ============================================================
+
+// === Giriş Kontrolü ===
 const role = sessionStorage.getItem('dnd_role');
 if (!role) {
-  // Giriş yapmadan bu sayfaya geldiyse, login ekranına at
   window.location.href = '/index.html';
 }
 
@@ -16,9 +19,10 @@ if (!sessionId) {
   sessionStorage.setItem('dnd_session_id', sessionId);
 }
 
+// === State ===
 let myId = null;
 const tokens = {};
-const allPlayers = {}; // Odaya bağlı tüm oyuncuları burada tutacağız
+const allPlayers = {};
 const gameMapContainer = document.getElementById('game-map');
 const gameMap = document.getElementById('map-content');
 
@@ -27,7 +31,116 @@ let draggedToken = null;
 let offsetX = 0;
 let offsetY = 0;
 
-// Bağlandığını anlamak için basit bir kontrol
+// ============================================================
+// YARDIMCI FONKSİYONLAR (DRY)
+// ============================================================
+
+/**
+ * XSS koruması — kullanıcı girdilerini güvenli hale getirir.
+ */
+function escapeHtml(str) {
+  if (str == null) return '';
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
+/**
+ * Log paneline yeni bir mesaj ekler, maksimum 7 satır tutar.
+ */
+function addLog(message, color) {
+  const logs = document.getElementById('logs');
+  if (!logs) return;
+  const li = document.createElement('li');
+  if (color) li.style.color = color;
+  li.textContent = message;
+  logs.appendChild(li);
+  if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
+}
+
+/**
+ * Log paneline HTML içerikli mesaj ekler (zar sonuçları için).
+ */
+function addLogHtml(html) {
+  const logs = document.getElementById('logs');
+  if (!logs) return;
+  const li = document.createElement('li');
+  li.innerHTML = html;
+  logs.appendChild(li);
+  if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
+}
+
+/**
+ * HP oranına göre badge rengi döndürür.
+ */
+function getHpColor(current, max) {
+  const ratio = max > 0 ? current / max : 0;
+  if (ratio <= 0.25) return '#c0392b';
+  if (ratio <= 0.5) return '#d35400';
+  return '#27ae60';
+}
+
+/**
+ * Token üzerindeki HP badge'ini oluşturur veya günceller.
+ */
+function updateHpBadge(tokenEl, hpCurrent, hpMax) {
+  if (hpCurrent == null || hpMax == null || isNaN(hpCurrent)) return;
+
+  let hpBadge = tokenEl.querySelector('.token-hp-badge');
+  if (!hpBadge) {
+    hpBadge = document.createElement('div');
+    hpBadge.className = 'token-hp-badge';
+    tokenEl.appendChild(hpBadge);
+  }
+  hpBadge.textContent = `${hpCurrent} / ${hpMax}`;
+  hpBadge.style.backgroundColor = getHpColor(hpCurrent, hpMax);
+}
+
+/**
+ * Bir fonksiyonu belirli bir aralıkla sınırlar (throttle).
+ */
+function throttle(fn, delay) {
+  let lastCall = 0;
+  let pending = null;
+  return function (...args) {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      fn.apply(this, args);
+    } else {
+      // Son hareketi kaçırmamak için pending olarak kaydet
+      clearTimeout(pending);
+      pending = setTimeout(() => {
+        lastCall = Date.now();
+        fn.apply(this, args);
+      }, delay - (now - lastCall));
+    }
+  };
+}
+
+/**
+ * Oyuncu adını güvenli şekilde döndürür.
+ */
+function getPlayerDisplayName(playerData) {
+  if (playerData.role === 'dm') return 'DM';
+  if (playerData.character && playerData.character.name) return playerData.character.name;
+  return 'Bir Oyuncu';
+}
+
+/**
+ * Token üzerindeki baş harfi döndürür.
+ */
+function getTokenInitial(playerData) {
+  if (playerData.isMarker) return playerData.name || '?';
+  if (playerData.role === 'dm') return 'DM';
+  if (playerData.character && playerData.character.name) return playerData.character.name.charAt(0).toUpperCase();
+  return '?';
+}
+
+// ============================================================
+// SOCKET BAĞLANTI YÖNETİMİ
+// ============================================================
+
 socket.on('connect', () => {
   console.log("Sunucuya bağlandım!");
   myId = socket.id;
@@ -41,12 +154,9 @@ socket.on('connect', () => {
   // Sunucuya giriş bilgisini ilet
   socket.emit('playerJoin', { role, profile: profileData, character: characterData, sessionId });
 
-  // Arayüze log ekle
-  const logs = document.getElementById('logs');
-  const li = document.createElement('li');
-  li.innerText = role === 'dm' ? "DM Olarak giriş yaptınız." : `${characterData.name} olarak giriş yaptınız.`;
-  logs.appendChild(li);
-  if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
+  // Log
+  const logName = role === 'dm' ? "DM Olarak giriş yaptınız." : `${characterData?.name || 'Oyuncu'} olarak giriş yaptınız.`;
+  addLog(logName);
 
   if (role === 'dm') {
     document.getElementById('dm-tools').classList.remove('hidden');
@@ -55,32 +165,25 @@ socket.on('connect', () => {
   }
 });
 
+// ============================================================
+// SOCKET EVENT HANDLER'LARI
+// ============================================================
+
 socket.on('currentPlayers', (players) => {
   Object.assign(allPlayers, players);
-  Object.values(players).forEach(player => {
-    addToken(player);
-  });
+  Object.values(players).forEach(player => addToken(player));
   renderPlayerInfo();
 });
 
 socket.on('newPlayer', (playerData) => {
   allPlayers[playerData.id] = playerData;
   addToken(playerData);
-
-  const logs = document.getElementById('logs');
-  const li = document.createElement('li');
-  let nameStr = playerData.role === 'dm' ? "DM" : (playerData.character ? playerData.character.name : "Bir Oyuncu");
-  li.innerText = `${nameStr} katıldı.`;
-  logs.appendChild(li);
-  if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
-
+  addLog(`${getPlayerDisplayName(playerData)} katıldı.`);
   renderPlayerInfo();
 });
 
 socket.on('currentMarkers', (markers) => {
-  Object.values(markers).forEach(marker => {
-    addToken(marker);
-  });
+  Object.values(markers).forEach(marker => addToken(marker));
 });
 
 socket.on('newMarker', (markerData) => {
@@ -95,19 +198,22 @@ socket.on('removeMarker', (markerId) => {
 });
 
 socket.on('updateMarkerData', (markerData) => {
-  addToken(markerData);
+  updateToken(markerData);
 });
 
 socket.on('updateBg', (url) => {
   if (url) {
     const img = new Image();
     img.onload = () => {
-      gameMap.style.backgroundImage = `url('${url}')`;
+      gameMap.style.backgroundImage = `url('${encodeURI(url)}')`;
       gameMap.style.backgroundSize = '100% 100%';
       gameMap.style.backgroundPosition = 'top left';
       gameMap.style.width = Math.max(img.width, 800) + 'px';
       gameMap.style.height = Math.max(img.height, 600) + 'px';
       if (typeof resizeCanvas === 'function') resizeCanvas();
+    };
+    img.onerror = () => {
+      console.error('Arka plan resmi yüklenemedi:', url);
     };
     img.src = url;
   } else {
@@ -133,69 +239,58 @@ socket.on('playerDisconnected', (id) => {
 });
 
 socket.on('tokenAppearanceUpdated', (data) => {
-  if (allPlayers[data.id]) {
-    allPlayers[data.id].imgUrl = data.imgUrl;
-    allPlayers[data.id].color = data.color;
+  if (!allPlayers[data.id]) return;
 
-    // UI token elementini güncelle
-    const t = tokens[data.id];
-    if (t) {
-      t.style.borderColor = data.color;
-      if (data.imgUrl) {
-        t.style.backgroundImage = `url('${data.imgUrl}')`;
-        t.style.backgroundSize = 'cover';
-        t.style.backgroundPosition = 'center';
-        t.style.backgroundColor = 'transparent';
-        t.innerText = '';
-      } else {
-        t.style.backgroundImage = 'none';
-        t.style.backgroundColor = data.color;
-        // Metni geri getir
-        let initial = allPlayers[data.id].role === 'dm' ? 'DM' : (allPlayers[data.id].character ? allPlayers[data.id].character.name.charAt(0).toUpperCase() : '?');
-        t.innerText = initial;
-      }
+  allPlayers[data.id].imgUrl = data.imgUrl;
+  allPlayers[data.id].color = data.color;
+
+  const t = tokens[data.id];
+  if (!t) return;
+
+  t.style.borderColor = data.color;
+  if (data.imgUrl) {
+    t.style.backgroundImage = `url('${encodeURI(data.imgUrl)}')`;
+    t.style.backgroundSize = 'cover';
+    t.style.backgroundPosition = 'center';
+    t.style.backgroundColor = 'transparent';
+    // Text child'ını temizle
+    Array.from(t.childNodes).forEach(n => {
+      if (n.nodeType === Node.TEXT_NODE) n.remove();
+    });
+  } else {
+    t.style.backgroundImage = 'none';
+    t.style.backgroundColor = data.color;
+    // Text yoksa ekle
+    const hasText = Array.from(t.childNodes).some(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+    if (!hasText) {
+      const initial = getTokenInitial(allPlayers[data.id]);
+      t.insertBefore(document.createTextNode(initial), t.firstChild);
     }
   }
 });
 
 socket.on('characterUpdated', (data) => {
-  if (allPlayers[data.id] && allPlayers[data.id].character) {
-    Object.assign(allPlayers[data.id].character, data.updates);
-    renderPlayerInfo();
+  if (!allPlayers[data.id] || !allPlayers[data.id].character) return;
 
-    // Dinamik HP göstergesini güncelle
-    let t = tokens[data.id];
-    if (t) {
-      let hpBadge = t.querySelector('.token-hp-badge');
-      let newHp = allPlayers[data.id].character.hp_current;
-      let newMax = allPlayers[data.id].character.hp_max;
-      
-      if (!hpBadge && newHp !== undefined && newHp !== null) {
-          hpBadge = document.createElement('div');
-          hpBadge.className = 'token-hp-badge';
-          t.appendChild(hpBadge);
-      }
-      if (hpBadge) {
-          hpBadge.innerText = `${newHp} / ${newMax}`;
-          const ratio = newMax > 0 ? newHp / newMax : 0;
-          if (ratio <= 0.25) hpBadge.style.backgroundColor = '#c0392b';
-          else if (ratio <= 0.5) hpBadge.style.backgroundColor = '#d35400';
-          else hpBadge.style.backgroundColor = '#27ae60';
-      }
-    }
+  Object.assign(allPlayers[data.id].character, data.updates);
+  renderPlayerInfo();
 
-    if (document.getElementById('dm-edit-form')) {
-      const btn = document.getElementById('dm-edit-save-btn');
-      if (btn && typeof dmEditTimeout !== 'undefined' && !dmEditTimeout) {
-          btn.innerText = "Kayıtlı";
-          btn.style.backgroundColor = '#27ae60';
-      }
-    }
+  // HP Badge güncelle
+  const t = tokens[data.id];
+  if (t) {
+    updateHpBadge(t, allPlayers[data.id].character.hp_current, allPlayers[data.id].character.hp_max);
+  }
 
-    // Kendi hesabıysa SessionStorage da güncelleyelim.
-    if (data.id === myId) {
-      sessionStorage.setItem('dnd_character', JSON.stringify(allPlayers[myId].character));
-    }
+  // DM editör kayıt butonu güncelle
+  const btn = document.getElementById('dm-edit-save-btn');
+  if (btn && !dmEditTimeout) {
+    btn.innerText = "Kayıtlı";
+    btn.style.backgroundColor = '#27ae60';
+  }
+
+  // Kendi hesabıysa SessionStorage da güncelleyelim.
+  if (data.id === myId) {
+    sessionStorage.setItem('dnd_character', JSON.stringify(allPlayers[myId].character));
   }
 });
 
@@ -206,6 +301,13 @@ socket.on('updateTokenPosition', (position) => {
   }
 });
 
+// ============================================================
+// TOKEN YÖNETİMİ
+// ============================================================
+
+/**
+ * Yeni bir token DOM elemanı oluşturur ve haritaya ekler.
+ */
 function addToken(playerData) {
   // Eğer zaten varsa var olanı temizle (klon engelleme)
   if (tokens[playerData.id]) {
@@ -215,127 +317,161 @@ function addToken(playerData) {
 
   const t = document.createElement('div');
   t.className = 'token';
+  t.dataset.id = playerData.id;
 
   // Eğer bu token bize aitse
   if (playerData.id === myId) {
     t.classList.add('my-token');
   }
 
-  // Pozisyon ve Renk
-  t.style.left = playerData.x + 'px';
-  t.style.top = playerData.y + 'px';
-  t.style.borderColor = playerData.color || '#e74c3c';
-  const size = playerData.size || 50;
-  t.style.width = size + 'px';
-  t.style.height = size + 'px';
-
-  if (playerData.imgUrl) {
-    t.style.backgroundImage = `url('${playerData.imgUrl}')`;
-    t.style.backgroundSize = 'cover';
-    t.style.backgroundPosition = 'center';
-    t.style.backgroundColor = 'transparent';
-  } else {
-    t.style.backgroundColor = playerData.color || '#e74c3c';
-  }
+  // Pozisyon, Renk, Boyut
+  applyTokenStyles(t, playerData);
 
   // İçine baş harf koyalım
-  let initial = '?';
+  const initial = getTokenInitial(playerData);
+
   if (playerData.isMarker) {
-    initial = playerData.name;
-    t.title = 'İşaret: ' + playerData.name;
-    t.style.borderRadius = '10%'; // Markerlar biraz farklı görünsün (karemsi)
+    t.title = 'İşaret: ' + escapeHtml(playerData.name);
+    t.style.borderRadius = '10%';
 
     // DM eklediği işareti sağ tık ile silebilir
     if (role === 'dm') {
       t.addEventListener('contextmenu', (e) => {
-        e.preventDefault(); // Varsayılan sağ tık menüsünü engelle
+        e.preventDefault();
         socket.emit('deleteMarker', playerData.id);
       });
     }
   } else {
-    initial = playerData.role === 'dm' ? 'DM' : (playerData.character ? playerData.character.name.charAt(0).toUpperCase() : '?');
-    t.title = playerData.role === 'dm' ? 'DM' : (playerData.character ? playerData.character.name : 'Oyuncu');
+    t.title = escapeHtml(getPlayerDisplayName(playerData));
   }
 
   if (!playerData.imgUrl) {
-    t.innerText = initial;
+    t.textContent = initial;
   }
 
   // Sürükleme yetkisi: Kendi token'ı VEYA kişi DM ise herhangi bir token.
   if (playerData.id === myId || role === 'dm') {
-    // Sürüklenebilir görünüm ekleyelim (zaten DM ise hepsini grab yapabilirizi .my-token sağlar)
     t.classList.add('my-token');
-
-    t.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      draggedToken = t;
-      // Hangi token'ı sürüklediğimizi kaydet
-      draggedToken.dataset.id = playerData.id;
-
-      const rect = t.getBoundingClientRect();
-      offsetX = e.clientX - rect.left;
-      offsetY = e.clientY - rect.top;
-    });
-
-    t.addEventListener('touchstart', (e) => {
-      if (e.touches.length > 1) return; // İki parmakla haritayı kaydırmaya izin ver
-      isDragging = true;
-      draggedToken = t;
-      draggedToken.dataset.id = playerData.id;
-
-      const rect = t.getBoundingClientRect();
-      const touch = e.touches[0];
-      offsetX = touch.clientX - rect.left;
-      offsetY = touch.clientY - rect.top;
-    }, { passive: true });
+    setupDragHandlers(t, playerData.id);
   }
 
-  // Çift tıklama olayı - Eğer canı olan bir markersa ve kullanıcı DM ise
-  if (role === 'dm' && playerData.isMarker && playerData.hp !== undefined && playerData.hp !== null) {
-      t.addEventListener('dblclick', () => {
-          openMarkerEditor(playerData);
-      });
+  // Çift tıklama — Eğer canı olan bir marker ve kullanıcı DM ise
+  if (role === 'dm' && playerData.isMarker && playerData.hp != null) {
+    t.addEventListener('dblclick', () => openMarkerEditor(playerData));
   }
 
-  let hpCurrent = null;
-  let hpMax = null;
-
-  if (playerData.isMarker && playerData.hp !== undefined && playerData.hp !== null && !isNaN(playerData.hp)) {
-      hpCurrent = playerData.hp;
-      hpMax = playerData.maxHp;
-  } else if (!playerData.isMarker && playerData.character && playerData.character.hp_current !== undefined) {
-      hpCurrent = playerData.character.hp_current;
-      hpMax = playerData.character.hp_max;
-  }
-
-  if (hpCurrent !== null && hpMax !== null && !isNaN(hpCurrent)) {
-    const hpBadge = document.createElement('div');
-    hpBadge.className = 'token-hp-badge';
-    hpBadge.innerText = `${hpCurrent} / ${hpMax}`;
-    
-    const ratio = hpMax > 0 ? hpCurrent / hpMax : 0;
-    if (ratio <= 0.25) hpBadge.style.backgroundColor = '#c0392b';
-    else if (ratio <= 0.5) hpBadge.style.backgroundColor = '#d35400';
-    else hpBadge.style.backgroundColor = '#27ae60';
-
-    t.appendChild(hpBadge);
+  // HP Badge
+  const { hpCurrent, hpMax } = extractHp(playerData);
+  if (hpCurrent !== null && hpMax !== null) {
+    updateHpBadge(t, hpCurrent, hpMax);
   }
 
   gameMap.appendChild(t);
   tokens[playerData.id] = t;
 }
 
+/**
+ * Mevcut token'ı DOM'dan kaldırmadan günceller (performans için).
+ */
+function updateToken(playerData) {
+  const t = tokens[playerData.id];
+  if (!t) {
+    // Token yoksa yeni oluştur
+    addToken(playerData);
+    return;
+  }
+
+  // Stil güncelle
+  applyTokenStyles(t, playerData);
+
+  // HP Badge güncelle
+  const { hpCurrent, hpMax } = extractHp(playerData);
+  if (hpCurrent !== null && hpMax !== null) {
+    updateHpBadge(t, hpCurrent, hpMax);
+  }
+}
+
+/**
+ * Token DOM elemanına pozisyon, renk ve boyut stillerini uygular.
+ */
+function applyTokenStyles(t, data) {
+  t.style.left = data.x + 'px';
+  t.style.top = data.y + 'px';
+  t.style.borderColor = data.color || '#e74c3c';
+
+  const size = data.size || 50;
+  t.style.width = size + 'px';
+  t.style.height = size + 'px';
+
+  if (data.imgUrl) {
+    t.style.backgroundImage = `url('${encodeURI(data.imgUrl)}')`;
+    t.style.backgroundSize = 'cover';
+    t.style.backgroundPosition = 'center';
+    t.style.backgroundColor = 'transparent';
+  } else {
+    t.style.backgroundColor = data.color || '#e74c3c';
+  }
+}
+
+/**
+ * Bir playerData'dan HP bilgisini çıkartır.
+ */
+function extractHp(playerData) {
+  let hpCurrent = null;
+  let hpMax = null;
+
+  if (playerData.isMarker && playerData.hp != null && !isNaN(playerData.hp)) {
+    hpCurrent = playerData.hp;
+    hpMax = playerData.maxHp;
+  } else if (!playerData.isMarker && playerData.character && playerData.character.hp_current !== undefined) {
+    hpCurrent = playerData.character.hp_current;
+    hpMax = playerData.character.hp_max;
+  }
+
+  return { hpCurrent, hpMax };
+}
+
+/**
+ * Token'a sürükleme (drag) event handler'larını ekler.
+ */
+function setupDragHandlers(tokenEl, tokenId) {
+  tokenEl.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    draggedToken = tokenEl;
+    draggedToken.dataset.id = tokenId;
+    const rect = tokenEl.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+  });
+
+  tokenEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) return;
+    isDragging = true;
+    draggedToken = tokenEl;
+    draggedToken.dataset.id = tokenId;
+    const rect = tokenEl.getBoundingClientRect();
+    const touch = e.touches[0];
+    offsetX = touch.clientX - rect.left;
+    offsetY = touch.clientY - rect.top;
+  }, { passive: true });
+}
+
+// === Throttled Hareket Emit ===
+const throttledMovementEmit = throttle((id, x, y) => {
+  socket.emit('playerMovement', { id, x, y });
+}, 16); // ~60fps
+
 document.addEventListener('mousemove', (e) => {
   if (!isDragging || !draggedToken) return;
 
   const mapRect = gameMap.getBoundingClientRect();
-  let newX = e.clientX - mapRect.left - offsetX;
-  let newY = e.clientY - mapRect.top - offsetY;
+  const newX = e.clientX - mapRect.left - offsetX;
+  const newY = e.clientY - mapRect.top - offsetY;
 
   draggedToken.style.left = newX + 'px';
   draggedToken.style.top = newY + 'px';
 
-  socket.emit('playerMovement', { id: draggedToken.dataset.id, x: newX, y: newY });
+  throttledMovementEmit(draggedToken.dataset.id, newX, newY);
 });
 
 document.addEventListener('touchmove', (e) => {
@@ -344,13 +480,13 @@ document.addEventListener('touchmove', (e) => {
 
   const touch = e.touches[0];
   const mapRect = gameMap.getBoundingClientRect();
-  let newX = touch.clientX - mapRect.left - offsetX;
-  let newY = touch.clientY - mapRect.top - offsetY;
+  const newX = touch.clientX - mapRect.left - offsetX;
+  const newY = touch.clientY - mapRect.top - offsetY;
 
   draggedToken.style.left = newX + 'px';
   draggedToken.style.top = newY + 'px';
 
-  socket.emit('playerMovement', { id: draggedToken.dataset.id, x: newX, y: newY });
+  throttledMovementEmit(draggedToken.dataset.id, newX, newY);
 }, { passive: false });
 
 document.addEventListener('mouseup', () => {
@@ -368,82 +504,86 @@ document.addEventListener('touchcancel', () => {
   draggedToken = null;
 });
 
-// DM Araçları Dinleyicisi
+// ============================================================
+// DM ARAÇLARI
+// ============================================================
+
+// ---- Marker Ekleme ----
 const btnAddMarker = document.getElementById('btn-add-marker');
 if (btnAddMarker) {
   btnAddMarker.addEventListener('click', () => {
-    const name = document.getElementById('dm-marker-name').value || 'X';
-    const color = document.getElementById('dm-marker-color').value || '#f1c40f';
-    const imgUrl = document.getElementById('dm-marker-img') ? document.getElementById('dm-marker-img').value : '';
-    const hp = document.getElementById('dm-marker-hp') && document.getElementById('dm-marker-hp').value !== '' ? parseInt(document.getElementById('dm-marker-hp').value) : null;
-    const maxHp = document.getElementById('dm-marker-max-hp') && document.getElementById('dm-marker-max-hp').value !== '' ? parseInt(document.getElementById('dm-marker-max-hp').value) : null;
-    const size = document.getElementById('dm-marker-size') && document.getElementById('dm-marker-size').value !== '' ? parseInt(document.getElementById('dm-marker-size').value) : 50;
+    const nameEl = document.getElementById('dm-marker-name');
+    const colorEl = document.getElementById('dm-marker-color');
+    const imgEl = document.getElementById('dm-marker-img');
+    const hpEl = document.getElementById('dm-marker-hp');
+    const maxHpEl = document.getElementById('dm-marker-max-hp');
+    const sizeEl = document.getElementById('dm-marker-size');
 
-    // Yeni markeri haritanın ortasına atalım
-    socket.emit('createMarker', { name: name.substring(0, 2), color: color, x: 200, y: 200, imgUrl: imgUrl, hp: hp, maxHp: maxHp, size: size });
-    document.getElementById('dm-marker-name').value = '';
-    if (document.getElementById('dm-marker-img')) {
-      document.getElementById('dm-marker-img').value = '';
-    }
-    if (document.getElementById('dm-marker-hp')) document.getElementById('dm-marker-hp').value = '';
-    if (document.getElementById('dm-marker-max-hp')) document.getElementById('dm-marker-max-hp').value = '';
-    if (document.getElementById('dm-marker-size')) document.getElementById('dm-marker-size').value = '50';
+    const name = (nameEl.value || 'X').substring(0, 2);
+    const color = colorEl.value || '#f1c40f';
+    const imgUrl = imgEl ? imgEl.value : '';
+    const hp = hpEl && hpEl.value !== '' ? parseInt(hpEl.value) : null;
+    const maxHp = maxHpEl && maxHpEl.value !== '' ? parseInt(maxHpEl.value) : null;
+    const size = sizeEl && sizeEl.value !== '' ? parseInt(sizeEl.value) : 50;
+
+    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size });
+
+    // Formu Temizle
+    nameEl.value = '';
+    if (imgEl) imgEl.value = '';
+    if (hpEl) hpEl.value = '';
+    if (maxHpEl) maxHpEl.value = '';
+    if (sizeEl) sizeEl.value = '50';
   });
 }
 
-// ==== MARKER DÜZENLEME MODALI ====
+// ---- Marker Düzenleme Modalı ----
 let editingMarkerId = null;
 
 function openMarkerEditor(markerData) {
-    editingMarkerId = markerData.id;
-    document.getElementById('dm-marker-edit-title').innerText = `"${markerData.name}" Düzenle`;
-    document.getElementById('dm-marker-edit-hp').value = markerData.hp;
-    document.getElementById('dm-marker-edit-size').value = markerData.size || 50;
-    document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
+  editingMarkerId = markerData.id;
+  document.getElementById('dm-marker-edit-title').textContent = `"${markerData.name}" Düzenle`;
+  document.getElementById('dm-marker-edit-hp').value = markerData.hp;
+  document.getElementById('dm-marker-edit-size').value = markerData.size || 50;
+  document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
 }
 
 const btnCancelMarkerEdit = document.getElementById('btn-cancel-marker-edit');
 if (btnCancelMarkerEdit) {
-    btnCancelMarkerEdit.addEventListener('click', () => {
-        document.getElementById('dm-marker-editor-modal').classList.add('hidden');
-        editingMarkerId = null;
-    });
+  btnCancelMarkerEdit.addEventListener('click', () => {
+    document.getElementById('dm-marker-editor-modal').classList.add('hidden');
+    editingMarkerId = null;
+  });
 }
 
 const btnSaveMarkerEdit = document.getElementById('btn-save-marker-edit');
 if (btnSaveMarkerEdit) {
-    btnSaveMarkerEdit.addEventListener('click', () => {
-        if (!editingMarkerId) return;
-        const newHp = parseInt(document.getElementById('dm-marker-edit-hp').value);
-        const newSize = parseInt(document.getElementById('dm-marker-edit-size').value);
-        
-        if (!isNaN(newHp) && !isNaN(newSize)) {
-            socket.emit('editMarker', {
-                id: editingMarkerId,
-                hp: newHp,
-                size: newSize
-            });
-            document.getElementById('dm-marker-editor-modal').classList.add('hidden');
-            editingMarkerId = null;
-        } else {
-            alert('Lütfen geçerli sayılar girin.');
-        }
-    });
-}
+  btnSaveMarkerEdit.addEventListener('click', () => {
+    if (!editingMarkerId) return;
+    const newHp = parseInt(document.getElementById('dm-marker-edit-hp').value);
+    const newSize = parseInt(document.getElementById('dm-marker-edit-size').value);
 
-const btnUpdateDmPen = document.getElementById('btn-update-dm-pen');
-if (btnUpdateDmPen) {
-  btnUpdateDmPen.addEventListener('click', () => {
-    const color = document.getElementById('dm-pen-color').value;
-    socket.emit('updateTokenAppearance', { color: color });
-
-    // Kendi değerlerimizi hemen önbelleğe alıp apply that color faster (optional)
-    if (allPlayers[myId]) {
-      allPlayers[myId].color = color;
+    if (!isNaN(newHp) && !isNaN(newSize)) {
+      socket.emit('editMarker', { id: editingMarkerId, hp: newHp, size: newSize });
+      document.getElementById('dm-marker-editor-modal').classList.add('hidden');
+      editingMarkerId = null;
+    } else {
+      alert('Lütfen geçerli sayılar girin.');
     }
   });
 }
 
+// ---- DM Kalem Rengi ----
+const btnUpdateDmPen = document.getElementById('btn-update-dm-pen');
+if (btnUpdateDmPen) {
+  btnUpdateDmPen.addEventListener('click', () => {
+    const color = document.getElementById('dm-pen-color').value;
+    socket.emit('updateTokenAppearance', { color });
+    if (allPlayers[myId]) allPlayers[myId].color = color;
+  });
+}
+
+// ---- Arka Plan ----
 const btnSetBg = document.getElementById('btn-set-bg');
 if (btnSetBg) {
   btnSetBg.addEventListener('click', () => {
@@ -453,6 +593,7 @@ if (btnSetBg) {
   });
 }
 
+// ---- Manuel Kaydet ----
 const btnForceSave = document.getElementById('btn-force-save');
 if (btnForceSave) {
   btnForceSave.addEventListener('click', () => {
@@ -468,27 +609,16 @@ socket.on('saveComplete', () => {
     btn.innerText = 'Harita Kaydet';
     btn.style.backgroundColor = '#e67e22';
   }
-  
-  // Basit bir uyarı mesajı (isteğe bağlı)
-  const logs = document.getElementById('logs');
-  if (logs) {
-      const li = document.createElement('li');
-      li.innerText = 'Harita manuel olarak kaydedildi.';
-      li.style.color = '#27ae60';
-      logs.appendChild(li);
-      if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
-  }
+  addLog('Harita manuel olarak kaydedildi.', '#27ae60');
 });
 
-// Token Apperance update for players
+// ---- Token Görünüm (Oyuncu) ----
 const btnUpdateToken = document.getElementById('btn-update-token');
 if (btnUpdateToken) {
   btnUpdateToken.addEventListener('click', () => {
     const imgUrl = document.getElementById('player-token-img').value;
     const color = document.getElementById('player-token-color').value;
     socket.emit('updateTokenAppearance', { imgUrl, color });
-
-    // Kendi değerlerimizi hemen önbelleğe alıp apply that color faster (optional)
     if (allPlayers[myId]) {
       allPlayers[myId].imgUrl = imgUrl;
       allPlayers[myId].color = color;
@@ -496,7 +626,10 @@ if (btnUpdateToken) {
   });
 }
 
-// === OYUNCU BİLGİ PANELİ RENDER===
+// ============================================================
+// OYUNCU BİLGİ PANELİ RENDER
+// ============================================================
+
 function renderPlayerInfo() {
   const othersList = document.getElementById('other-players-list');
   const dmPlayerList = document.getElementById('dm-player-list');
@@ -507,78 +640,141 @@ function renderPlayerInfo() {
   let hasOthers = false;
 
   Object.values(allPlayers).forEach(p => {
-    if (p.role !== 'dm' && p.character) {
+    if (p.role === 'dm' || !p.character) return;
 
-      // DM Görünümündeki Editör Listesi
-      if (role === 'dm' && p.id !== myId) {
-        hasOthers = true;
-        const c = p.character;
-        const listBtn = document.createElement('div');
-        listBtn.className = 'list-item';
-        listBtn.innerHTML = `
-                <span><strong>${c.name}</strong></span>
-                <span style="font-size: 12px; background: rgba(0,0,0,0.3); padding: 3px 6px; border-radius: 4px;">HP: ${c.hp_current}/${c.hp_max}</span>
-            `;
-        listBtn.onclick = () => showDmEditor(p);
-        dmPlayerList.appendChild(listBtn);
-      }
+    const c = p.character;
 
-      // Oyuncu Görünümündeki "Diğer Oyuncular"
-      if (role !== 'dm' && p.id !== myId) {
-        hasOthers = true;
-        const c = p.character;
-        const div = document.createElement('div');
-        div.className = 'other-player-item';
-        div.innerHTML = `
-                <span class="other-player-name">${c.name}</span>
-                <span class="char-hp">${c.hp_current} / ${c.hp_max}</span>
-            `;
-        othersList.appendChild(div);
-      }
+    // DM Görünümündeki Editör Listesi
+    if (role === 'dm' && p.id !== myId) {
+      hasOthers = true;
+      const listBtn = document.createElement('div');
+      listBtn.className = 'list-item';
+
+      const nameSpan = document.createElement('span');
+      const strong = document.createElement('strong');
+      strong.textContent = c.name;
+      nameSpan.appendChild(strong);
+
+      const hpSpan = document.createElement('span');
+      hpSpan.className = 'dm-player-hp-tag';
+      hpSpan.textContent = `HP: ${c.hp_current}/${c.hp_max}`;
+
+      listBtn.appendChild(nameSpan);
+      listBtn.appendChild(hpSpan);
+      listBtn.addEventListener('click', () => showDmEditor(p));
+      dmPlayerList.appendChild(listBtn);
+    }
+
+    // Oyuncu Görünümündeki "Diğer Oyuncular"
+    if (role !== 'dm' && p.id !== myId) {
+      hasOthers = true;
+      const div = document.createElement('div');
+      div.className = 'other-player-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'other-player-name';
+      nameSpan.textContent = c.name;
+
+      const hpSpan = document.createElement('span');
+      hpSpan.className = 'char-hp';
+      hpSpan.textContent = `${c.hp_current} / ${c.hp_max}`;
+
+      div.appendChild(nameSpan);
+      div.appendChild(hpSpan);
+      othersList.appendChild(div);
     }
   });
 
   if (!hasOthers) {
-    if (role === 'dm') dmPlayerList.innerHTML = '<p style="font-size: 12px; color:#bdc3c7;">Bağlı oyuncu yok.</p>';
-    else othersList.innerHTML = '<p style="font-size:12px; color:#bdc3c7;">Odada başka oyuncu yok.</p>';
+    if (role === 'dm' && dmPlayerList) {
+      dmPlayerList.innerHTML = '<p class="empty-state-text">Bağlı oyuncu yok.</p>';
+    } else if (othersList) {
+      othersList.innerHTML = '<p class="empty-state-text">Odada başka oyuncu yok.</p>';
+    }
   }
 
-  // Oyuncunun kendi kartını render etmesi sadece DM değilse çalışır
+  // Oyuncunun kendi kartını render et
   if (role !== 'dm') {
-    const myCard = document.getElementById('my-character-card');
-    myCard.innerHTML = '';
-    const me = allPlayers[myId];
-    if (me && me.character) {
-      const c = me.character;
-      const avatarHtml = c.avatar_url
-        ? `<img src="${c.avatar_url}" class="char-avatar" alt="Avatar">`
-        : `<div class="char-avatar">${c.name.charAt(0).toUpperCase()}</div>`;
-
-      myCard.innerHTML = `
-          <div class="char-header">
-              ${avatarHtml}
-              <div>
-                  <h3 class="char-name">${c.name}</h3>
-                  <div class="char-hp">HP: ${c.hp_current} / ${c.hp_max}</div>
-              </div>
-          </div>
-          <div class="char-stats-grid">
-              <div class="stat-box"><span class="stat-label">STR</span><span class="stat-value">${c.stats.str ?? 10}</span></div>
-              <div class="stat-box"><span class="stat-label">DEX</span><span class="stat-value">${c.stats.dex ?? 10}</span></div>
-              <div class="stat-box"><span class="stat-label">INT</span><span class="stat-value">${c.stats.int ?? 10}</span></div>
-              <div class="stat-box"><span class="stat-label">CON</span><span class="stat-value">${c.stats.con ?? 10}</span></div>
-              <div class="stat-box"><span class="stat-label">WIS</span><span class="stat-value">${c.stats.wis ?? 10}</span></div>
-              <div class="stat-box"><span class="stat-label">CHR</span><span class="stat-value">${c.stats.chr ?? 10}</span></div>
-          </div>
-        `;
-    } else {
-      myCard.innerHTML = '<p>Karakter bilgisi yüklenemedi.</p>';
-    }
+    renderMyCharacterCard();
   }
 }
 
-// === DM OYUNCU EDİTÖRÜ ===
+function renderMyCharacterCard() {
+  const myCard = document.getElementById('my-character-card');
+  if (!myCard) return;
+  myCard.innerHTML = '';
+
+  const me = allPlayers[myId];
+  if (!me || !me.character) {
+    myCard.innerHTML = '<p>Karakter bilgisi yüklenemedi.</p>';
+    return;
+  }
+
+  const c = me.character;
+
+  // Avatar
+  const header = document.createElement('div');
+  header.className = 'char-header';
+
+  if (c.avatar_url) {
+    const avatarImg = document.createElement('img');
+    avatarImg.src = c.avatar_url;
+    avatarImg.className = 'char-avatar';
+    avatarImg.alt = 'Avatar';
+    header.appendChild(avatarImg);
+  } else {
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'char-avatar';
+    avatarDiv.textContent = c.name.charAt(0).toUpperCase();
+    header.appendChild(avatarDiv);
+  }
+
+  const infoDiv = document.createElement('div');
+  const nameH3 = document.createElement('h3');
+  nameH3.className = 'char-name';
+  nameH3.textContent = c.name;
+  infoDiv.appendChild(nameH3);
+
+  const hpDiv = document.createElement('div');
+  hpDiv.className = 'char-hp';
+  hpDiv.textContent = `HP: ${c.hp_current} / ${c.hp_max}`;
+  infoDiv.appendChild(hpDiv);
+  header.appendChild(infoDiv);
+  myCard.appendChild(header);
+
+  // Stats Grid
+  const statsGrid = document.createElement('div');
+  statsGrid.className = 'char-stats-grid';
+
+  const statNames = ['STR', 'DEX', 'INT', 'CON', 'WIS', 'CHR'];
+  const statKeys = ['str', 'dex', 'int', 'con', 'wis', 'chr'];
+
+  statNames.forEach((label, i) => {
+    const box = document.createElement('div');
+    box.className = 'stat-box';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'stat-label';
+    labelSpan.textContent = label;
+
+    const valueSpan = document.createElement('span');
+    valueSpan.className = 'stat-value';
+    valueSpan.textContent = c.stats[statKeys[i]] ?? 10;
+
+    box.appendChild(labelSpan);
+    box.appendChild(valueSpan);
+    statsGrid.appendChild(box);
+  });
+
+  myCard.appendChild(statsGrid);
+}
+
+// ============================================================
+// DM OYUNCU EDİTÖRÜ
+// ============================================================
+
 let editingPlayerId = null;
+let dmEditTimeout = null;
 
 function showDmEditor(playerData) {
   if (typeof flushDmEdit === 'function') flushDmEdit();
@@ -586,7 +782,7 @@ function showDmEditor(playerData) {
   editingPlayerId = playerData.id;
   const c = playerData.character;
 
-  document.getElementById('dm-edit-name').innerText = c.name + " Düzenleniyor";
+  document.getElementById('dm-edit-name').textContent = c.name + " Düzenleniyor";
   document.getElementById('dm-edit-hp').value = c.hp_current;
   document.getElementById('dm-edit-max-hp').value = c.hp_max;
   document.getElementById('dm-edit-str').value = c.stats.str ?? 10;
@@ -599,57 +795,56 @@ function showDmEditor(playerData) {
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }
 
-let dmEditTimeout = null;
-
 function saveDmEditorState(playerId) {
-    if (!playerId || !allPlayers[playerId] || !allPlayers[playerId].character) return;
-    const updatedData = {
-      id: playerId,
-      characterId: allPlayers[playerId].character.id,
-      hp_current: parseInt(document.getElementById('dm-edit-hp').value),
-      hp_max: parseInt(document.getElementById('dm-edit-max-hp').value),
-      stats: {
-        str: parseInt(document.getElementById('dm-edit-str').value),
-        dex: parseInt(document.getElementById('dm-edit-dex').value),
-        int: parseInt(document.getElementById('dm-edit-int').value),
-        con: parseInt(document.getElementById('dm-edit-con').value),
-        wis: parseInt(document.getElementById('dm-edit-wis').value),
-        chr: parseInt(document.getElementById('dm-edit-chr').value)
-      }
-    };
-    
-    const btn = document.getElementById('dm-edit-save-btn');
-    if (btn) {
-      btn.innerText = "Kaydediliyor...";
-      btn.style.backgroundColor = '#3498db';
+  if (!playerId || !allPlayers[playerId] || !allPlayers[playerId].character) return;
+
+  const updatedData = {
+    id: playerId,
+    characterId: allPlayers[playerId].character.id,
+    hp_current: parseInt(document.getElementById('dm-edit-hp').value),
+    hp_max: parseInt(document.getElementById('dm-edit-max-hp').value),
+    stats: {
+      str: parseInt(document.getElementById('dm-edit-str').value),
+      dex: parseInt(document.getElementById('dm-edit-dex').value),
+      int: parseInt(document.getElementById('dm-edit-int').value),
+      con: parseInt(document.getElementById('dm-edit-con').value),
+      wis: parseInt(document.getElementById('dm-edit-wis').value),
+      chr: parseInt(document.getElementById('dm-edit-chr').value)
     }
-    
-    socket.emit('updateCharacter', updatedData);
+  };
+
+  const btn = document.getElementById('dm-edit-save-btn');
+  if (btn) {
+    btn.innerText = "Kaydediliyor...";
+    btn.style.backgroundColor = '#3498db';
+  }
+
+  socket.emit('updateCharacter', updatedData);
 }
 
 function flushDmEdit() {
-    if (dmEditTimeout) {
-        clearTimeout(dmEditTimeout);
-        dmEditTimeout = null;
-        saveDmEditorState(editingPlayerId);
-    }
+  if (dmEditTimeout) {
+    clearTimeout(dmEditTimeout);
+    dmEditTimeout = null;
+    saveDmEditorState(editingPlayerId);
+  }
 }
 
 const formDmEdit = document.getElementById('dm-edit-form');
 if (formDmEdit) {
   formDmEdit.addEventListener('submit', (e) => e.preventDefault());
-  
+
   const inputs = formDmEdit.querySelectorAll('input[type="number"]');
   inputs.forEach(input => {
     input.addEventListener('input', () => {
       const btn = document.getElementById('dm-edit-save-btn');
       if (btn) {
-         btn.innerText = "Bekleniyor...";
-         btn.style.backgroundColor = '#f39c12';
+        btn.innerText = "Bekleniyor...";
+        btn.style.backgroundColor = '#f39c12';
       }
 
       if (dmEditTimeout) clearTimeout(dmEditTimeout);
-      
+
       const currentEditId = editingPlayerId;
       dmEditTimeout = setTimeout(() => {
         dmEditTimeout = null;
@@ -659,7 +854,10 @@ if (formDmEdit) {
   });
 }
 
-// === ÇİZİM KATMANI (DRAWING LAYER) ===
+// ============================================================
+// ÇİZİM KATMANI (DRAWING LAYER)
+// ============================================================
+
 const canvas = document.getElementById('drawing-layer');
 const ctx = canvas ? canvas.getContext('2d') : null;
 let isDrawing = false;
@@ -667,23 +865,17 @@ let lastX = 0;
 let lastY = 0;
 let localDrawHistory = [];
 
-if (canvas) {
-  // Harita boyutuna göre canvas boyutunu ayarla
+if (canvas && ctx) {
   function resizeCanvas() {
-    if (!canvas) return;
     canvas.width = gameMap.clientWidth || 2000;
     canvas.height = gameMap.clientHeight || 1500;
     redrawHistory();
   }
 
-  // Boyut değiştiğinde yeniden boyutlandır
   window.addEventListener('resize', resizeCanvas);
-
-  // İlk boyutlandırmayı biraz bekleyerek yapalım (CSS tam yüklendiğinde)
   setTimeout(resizeCanvas, 100);
 
   function redrawHistory() {
-    if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     localDrawHistory.forEach(line => {
       drawLineOnCanvas(line.x0, line.y0, line.x1, line.y1, line.color);
@@ -691,7 +883,6 @@ if (canvas) {
   }
 
   function drawLineOnCanvas(x0, y0, x1, y1, color) {
-    if (!ctx) return;
     ctx.beginPath();
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
@@ -702,6 +893,11 @@ if (canvas) {
     ctx.closePath();
   }
 
+  // Throttled çizim emit
+  const throttledDrawEmit = throttle((lineData) => {
+    socket.emit('drawLine', lineData);
+  }, 16);
+
   canvas.addEventListener('mousedown', (e) => {
     isDrawing = true;
     const rect = canvas.getBoundingClientRect();
@@ -710,10 +906,7 @@ if (canvas) {
   });
 
   canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length > 1) {
-      isDrawing = false;
-      return;
-    }
+    if (e.touches.length > 1) { isDrawing = false; return; }
     isDrawing = true;
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
@@ -721,11 +914,8 @@ if (canvas) {
     lastY = touch.clientY - rect.top;
   }, { passive: true });
 
-  canvas.addEventListener('mousemove', (e) => {
+  function handleDrawMove(currentX, currentY) {
     if (!isDrawing) return;
-    const rect = canvas.getBoundingClientRect();
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
 
     let myColor = '#e74c3c';
     if (allPlayers[myId] && allPlayers[myId].color) {
@@ -736,10 +926,16 @@ if (canvas) {
 
     drawLineOnCanvas(lastX, lastY, currentX, currentY, myColor);
     localDrawHistory.push(lineData);
-    socket.emit('drawLine', lineData);
+    throttledDrawEmit(lineData);
 
     lastX = currentX;
     lastY = currentY;
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDrawing) return;
+    const rect = canvas.getBoundingClientRect();
+    handleDrawMove(e.clientX - rect.left, e.clientY - rect.top);
   });
 
   canvas.addEventListener('touchmove', (e) => {
@@ -747,27 +943,11 @@ if (canvas) {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
-    const currentX = touch.clientX - rect.left;
-    const currentY = touch.clientY - rect.top;
-
-    let myColor = '#e74c3c';
-    if (allPlayers[myId] && allPlayers[myId].color) {
-      myColor = allPlayers[myId].color;
-    }
-
-    const lineData = { playerId: myId, x0: lastX, y0: lastY, x1: currentX, y1: currentY, color: myColor };
-
-    drawLineOnCanvas(lastX, lastY, currentX, currentY, myColor);
-    localDrawHistory.push(lineData);
-    socket.emit('drawLine', lineData);
-
-    lastX = currentX;
-    lastY = currentY;
+    handleDrawMove(touch.clientX - rect.left, touch.clientY - rect.top);
   }, { passive: false });
 
   canvas.addEventListener('mouseup', () => isDrawing = false);
   canvas.addEventListener('mouseout', () => isDrawing = false);
-
   canvas.addEventListener('touchend', () => isDrawing = false);
   canvas.addEventListener('touchcancel', () => isDrawing = false);
 
@@ -801,7 +981,10 @@ if (canvas) {
   }
 }
 
-// === RESİM SÜRÜKLE BIRAK YÜKLEME İŞLEMLERİ ===
+// ============================================================
+// RESİM SÜRÜKLE-BIRAK YÜKLEME
+// ============================================================
+
 function setupImageDropZone(elementId) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -823,51 +1006,50 @@ function setupImageDropZone(elementId) {
     el.style.border = '';
     el.style.backgroundColor = '';
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      if (!file.type.startsWith('image/')) {
-        alert('Lütfen sadece resim dosyası sürükleyin.');
-        return;
-      }
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
 
-      const originalPlaceholder = el.placeholder;
-      el.value = '';
-      el.placeholder = 'Resim yükleniyor...';
-      el.disabled = true;
+    const file = e.dataTransfer.files[0];
+    if (!file.type.startsWith('image/')) {
+      alert('Lütfen sadece resim dosyası sürükleyin.');
+      return;
+    }
 
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64Image = reader.result;
-        try {
-          const response = await fetch('/upload', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ image: base64Image, name: file.name })
-          });
+    const originalPlaceholder = el.placeholder;
+    el.value = '';
+    el.placeholder = 'Resim yükleniyor...';
+    el.disabled = true;
 
-          const data = await response.json();
-          if (data.url) {
-            el.value = data.url;
-          } else {
-            alert('Resim yüklenemedi: ' + (data.error || 'Bilinmeyen hata'));
-          }
-        } catch (err) {
-          console.error('Yükleme hatası:', err);
-          alert('Resim yüklenirken bir hata oluştu.');
-        } finally {
-          el.disabled = false;
-          el.placeholder = originalPlaceholder;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+
+    reader.onload = async () => {
+      try {
+        const response = await fetch('/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: reader.result, name: file.name })
+        });
+
+        const data = await response.json();
+        if (data.url) {
+          el.value = data.url;
+        } else {
+          alert('Resim yüklenemedi: ' + (data.error || 'Bilinmeyen hata'));
         }
-      };
-      reader.onerror = () => {
-        alert('Dosya okunamadı!');
+      } catch (err) {
+        console.error('Yükleme hatası:', err);
+        alert('Resim yüklenirken bir hata oluştu.');
+      } finally {
         el.disabled = false;
         el.placeholder = originalPlaceholder;
-      };
-    }
+      }
+    };
+
+    reader.onerror = () => {
+      alert('Dosya okunamadı!');
+      el.disabled = false;
+      el.placeholder = originalPlaceholder;
+    };
   });
 }
 
@@ -875,11 +1057,13 @@ setupImageDropZone('dm-marker-img');
 setupImageDropZone('dm-bg-url');
 setupImageDropZone('player-token-img');
 
-// === ZAR ATMA İŞLEMLERİ ===
+// ============================================================
+// ZAR ATMA (Sonuç sunucu tarafında üretilir)
+// ============================================================
+
 document.querySelectorAll('.dice-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const diceType = parseInt(btn.getAttribute('data-dice'));
-    const result = Math.floor(Math.random() * diceType) + 1;
 
     let rollerName = "Bilinmiyor";
     if (role === 'dm') {
@@ -888,65 +1072,57 @@ document.querySelectorAll('.dice-btn').forEach(btn => {
       rollerName = characterData.name;
     }
 
-    socket.emit('rollDice', {
-      rollerName: rollerName,
-      diceType: diceType,
-      result: result
-    });
+    // Sadece diceType ve rollerName gönder; sonuç sunucuda üretilecek
+    socket.emit('rollDice', { rollerName, diceType });
   });
 });
 
 socket.on('diceRolled', (data) => {
-  // Loglara ekle
-  const logs = document.getElementById('logs');
-  const li = document.createElement('li');
+  const safeRollerName = escapeHtml(data.rollerName);
 
-  let resultText = `<span style="font-weight: bold;">${data.rollerName}</span> d${data.diceType} attı: <strong>${data.result}</strong>`;
+  let resultText = `<span style="font-weight: bold;">${safeRollerName}</span> d${data.diceType} attı: <strong>${data.result}</strong>`;
 
   // D20 Kritik Başarı/Başarısızlık renklendirmesi
   if (data.diceType === 20) {
     if (data.result === 20) {
-      resultText = `<span style="font-weight: bold;">${data.rollerName}</span> d20 attı: <strong style="color: #2ecc71;">20 (Kritik Başarı!)</strong>`;
+      resultText = `<span style="font-weight: bold;">${safeRollerName}</span> d20 attı: <strong style="color: #2ecc71;">20 (Kritik Başarı!)</strong>`;
     } else if (data.result === 1) {
-      resultText = `<span style="font-weight: bold;">${data.rollerName}</span> d20 attı: <strong style="color: #e74c3c;">1 (Kritik Başarısızlık!)</strong>`;
+      resultText = `<span style="font-weight: bold;">${safeRollerName}</span> d20 attı: <strong style="color: #e74c3c;">1 (Kritik Başarısızlık!)</strong>`;
     }
   }
 
-  li.innerHTML = resultText;
-  logs.appendChild(li);
-  if (logs.children.length > 7) logs.removeChild(logs.firstElementChild);
+  addLogHtml(resultText);
 
   // Log divini en aşağı kaydır
   const controlPanel = document.getElementById('control-panel');
-  controlPanel.scrollTop = controlPanel.scrollHeight;
+  if (controlPanel) controlPanel.scrollTop = controlPanel.scrollHeight;
 
   // Harita üzerinde Toast Gösterimi
   const toast = document.createElement('div');
   toast.className = 'dice-toast';
 
-  let toastHtml = `${data.rollerName}: d${data.diceType} 🎲 <strong>${data.result}</strong>`;
+  let toastText = `${escapeHtml(data.rollerName)}: d${data.diceType} 🎲 ${data.result}`;
   if (data.diceType === 20) {
-    if (data.result === 20) toastHtml = `${data.rollerName}: 🎲 <span style="color: #2ecc71;">20 (Kritik!)</span>`;
-    if (data.result === 1) toastHtml = `${data.rollerName}: 🎲 <span style="color: #e74c3c;">1 (Kritik!)</span>`;
+    if (data.result === 20) toastText = `${escapeHtml(data.rollerName)}: 🎲 20 (Kritik!)`;
+    if (data.result === 1) toastText = `${escapeHtml(data.rollerName)}: 🎲 1 (Kritik!)`;
   }
+  toast.textContent = toastText;
 
-  toast.innerHTML = toastHtml;
-
-  // Toastu game-map'in içine ekliyoruz
   const mapContainer = document.getElementById('game-map');
-  mapContainer.appendChild(toast);
-
-  // 2 saniye sonra temizle
-  setTimeout(() => {
-    if (toast.parentNode) {
-      toast.parentNode.removeChild(toast);
-    }
-  }, 2000);
+  if (mapContainer) {
+    mapContainer.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 2000);
+  }
 });
 
-// Sunucuyu uyanık tutmak için her 10 dakikada bir (600.000 ms) ping at
+// ============================================================
+// KEEP-ALIVE PING (Render.com free plan için)
+// ============================================================
+
 setInterval(() => {
   fetch('/ping')
-    .then(response => console.log('Sunucu uyanık tutuluyor...'))
+    .then(() => console.log('Sunucu uyanık tutuluyor...'))
     .catch(err => console.error('Ping hatası:', err));
 }, 10 * 60 * 1000);

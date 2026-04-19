@@ -1,11 +1,18 @@
-/* Ekranı tam boy kaplaması ve kaydırma çubuklarını kaldırmak için */
+/* ============================================================
+   WebDND — Ana Stil Dosyası (v3 - Refactored)
+   ============================================================ */
+
+/* === RESET & TEMEL === */
 body,
 html {
     margin: 0;
     padding: 0;
     height: 100%;
-    font-family: sans-serif;
+    font-family: 'Roboto', sans-serif;
 }
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
 /* Ana taşıyıcı: Flexbox ile bileşenleri yan yana dizecek */
 #app-container {
@@ -19,7 +26,10 @@ html {
     display: none !important;
 }
 
-/* ==== LOGIN VE SEÇİM OVERLAY STİLLERİ ==== */
+/* ============================================================
+   LOGIN & SEÇİM OVERLAY
+   ============================================================ */
+
 #login-overlay {
     position: fixed;
     top: 0;
@@ -32,7 +42,6 @@ html {
     align-items: center;
     z-index: 1000;
     background-image: url('https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?q=80&w=2070');
-    /* DnD temalı ahşap masa arka planı, dilediğinle değişebilirsin */
     background-size: cover;
     background-position: center;
 }
@@ -58,11 +67,20 @@ html {
     padding-bottom: 10px;
 }
 
+/* ============================================================
+   BUTONLAR
+   ============================================================ */
+
 .button-group {
     display: flex;
     flex-direction: column;
     gap: 15px;
     margin-top: 20px;
+}
+
+.button-group-row {
+    flex-direction: row;
+    gap: 10px;
 }
 
 .btn {
@@ -103,6 +121,24 @@ html {
     background-color: #2ecc71;
 }
 
+.btn.danger {
+    background-color: #c0392b;
+    color: white;
+}
+
+.btn.danger:hover {
+    background-color: #e74c3c;
+}
+
+.btn.warning {
+    background-color: #e67e22;
+    color: white;
+}
+
+.btn.warning:hover {
+    background-color: #d35400;
+}
+
 .btn.back-btn {
     background-color: #7f8c8d;
     color: white;
@@ -118,6 +154,10 @@ html {
     width: 100%;
     margin-top: 10px;
 }
+
+/* ============================================================
+   LİSTE & FORM BİLEŞENLERİ
+   ============================================================ */
 
 .list-container {
     max-height: 250px;
@@ -151,10 +191,13 @@ html {
     border-radius: 4px;
 }
 
-/* Form stilleri */
 .form-group {
     margin-bottom: 15px;
     text-align: left;
+}
+
+.form-group-relative {
+    position: relative;
 }
 
 .form-group label {
@@ -174,22 +217,40 @@ html {
     box-sizing: border-box;
 }
 
+.input-light {
+    background: #fff !important;
+    color: #000 !important;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+    margin-bottom: 10px;
 }
 
-/* Sol Taraf: Oyun Haritası */
+.stats-grid-2col {
+    grid-template-columns: 1fr 1fr;
+}
+
+.stats-grid-3col {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.empty-state-text {
+    font-size: 12px;
+    color: #bdc3c7;
+}
+
+/* ============================================================
+   OYUN HARİTASI
+   ============================================================ */
+
 #game-map {
     width: 75%;
-    /* Ekranın %75'i */
     background-color: #2c3e50;
-    /* İleride harita görselinizi buraya verebilirsiniz */
     position: relative;
-    /* DİKKAT: İçindeki token'ın (absolute) bu div'e göre yerleşmesi için ŞARTTIR */
     overflow: auto;
-    /* Harita ekranı geçerse kaydırma çubukları çıksın */
     touch-action: auto;
 }
 
@@ -212,34 +273,32 @@ html {
     pointer-events: auto;
 }
 
-/* Sağ Taraf: Kontrol Paneli */
+/* ============================================================
+   KONTROL PANELİ
+   ============================================================ */
+
 #control-panel {
     width: 25%;
-    /* Ekranın %25'i */
     background-color: #ecf0f1;
     border-left: 2px solid #bdc3c7;
-    /* Araya bir çizgi çekelim */
     padding: 20px;
     box-sizing: border-box;
     overflow-y: auto;
-    /* Loglar aşağı indikçe kaydırma çıksın */
 }
 
-/* 2. Token Sistemi: Sürüklenebilir Dairemiz */
+/* ============================================================
+   TOKEN SİSTEMİ
+   ============================================================ */
+
 .token {
     width: 50px;
     height: 50px;
     background-color: #e74c3c;
     border-radius: 50%;
-    /* Daire olması için */
     position: absolute;
-    /* Harita (game-map) referans alınarak serbestçe yerleşecek */
     top: 50px;
-    /* Başlangıç dikey konumu */
     left: 50px;
-    /* Başlangıç yatay konumu */
     user-select: none;
-    /* Yanlışlıkla imleçle seçilip mavi olmasını engeller */
     border: 3px solid white;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
     display: flex;
@@ -266,7 +325,10 @@ html {
     transform: scale(1.2);
 }
 
-/* === OYUNCU BİLGİ PANELİ STİLLERİ === */
+/* ============================================================
+   OYUNCU BİLGİ PANELİ
+   ============================================================ */
+
 .character-card {
     background: rgba(44, 62, 80, 0.8);
     border-radius: 8px;
@@ -348,7 +410,17 @@ html {
     font-size: 14px;
 }
 
-/* ==== ZAR BUTONLARI VE BİLDİRİMLERİ ==== */
+/* ============================================================
+   ZAR BUTONLARI & BİLDİRİMLERİ
+   ============================================================ */
+
+.dice-panel {
+    margin-bottom: 15px;
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
 .dice-btn {
     background: #e67e22;
     color: white;
@@ -394,9 +466,49 @@ html {
     0% { opacity: 0; transform: translate(-50%, -40%); }
     10% { opacity: 1; transform: translate(-50%, -50%); }
     80% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, -60%); }
 }
 
-/* ==== YENI TOKEN OLUŞTURMA & HP BAR ==== */
+/* ============================================================
+   DM ARAÇLARI
+   ============================================================ */
+
+.dm-tools-section {
+    margin-top: 20px;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+.dm-tools-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 5px;
+}
+
+.dm-tools-header h4 {
+    margin: 0;
+}
+
+.dm-tools-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.dm-save-btn {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+    background-color: #e67e22 !important;
+    margin-top: 0 !important;
+}
+
+.dm-gallery-btn {
+    padding: 5px 10px !important;
+    font-size: 12px !important;
+    background-color: #27ae60 !important;
+}
+
 .dm-collapsible {
     background: rgba(52, 73, 94, 0.6);
     border-radius: 6px;
@@ -428,6 +540,101 @@ html {
     transform: rotate(90deg);
 }
 
+.dm-create-token-section {
+    margin-bottom: 20px;
+}
+
+.dm-collapsible-body {
+    padding-top: 10px;
+}
+
+.dm-divider {
+    border: 0;
+    border-top: 1px solid #7f8c8d;
+    margin-bottom: 10px;
+}
+
+.dm-divider-spaced {
+    margin-top: 15px;
+}
+
+.dm-pen-btn {
+    margin-bottom: 20px;
+}
+
+.dm-player-list {
+    max-height: 150px;
+    margin-bottom: 10px;
+}
+
+.dm-player-hp-tag {
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.dm-player-editor {
+    background: rgba(30, 39, 46, 0.9) !important;
+}
+
+.dm-edit-name {
+    margin-top: 0;
+    color: #3498db;
+}
+
+.dm-edit-action-btn {
+    margin-top: 0 !important;
+    flex: 1;
+}
+
+.dm-hint-text {
+    font-size: 12px;
+    color: #bdc3c7;
+    margin-top: 15px;
+}
+
+/* ============================================================
+   OYUNCU BİLGİ BÖLÜMÜ
+   ============================================================ */
+
+.player-info-section {
+    margin-top: 20px;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+/* ============================================================
+   DM MARKER DÜZENLEME MODALI
+   ============================================================ */
+
+.dm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.dm-modal-box {
+    width: 300px;
+}
+
+.dm-modal-title {
+    margin-top: 0;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+}
+
+/* ============================================================
+   HP BADGE (Token üzerindeki can göstergesi)
+   ============================================================ */
+
 .token-hp-badge {
     position: absolute;
     bottom: -22px;
@@ -440,7 +647,7 @@ html {
     padding: 3px 6px;
     border-radius: 4px;
     white-space: nowrap;
-    box-shadow: 0 0 3px rgba(0,0,0,0.8);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
     z-index: 20;
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     cursor: default;
@@ -449,4 +656,128 @@ html {
 .token-hp-badge:hover {
     transform: translateX(-50%) scale(1.8);
     z-index: 100;
+}
+
+/* ============================================================
+   GALERİ SAYFASI
+   ============================================================ */
+
+.gallery-body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #1e272e;
+    color: #ecf0f1;
+    margin: 0;
+    padding: 20px;
+}
+
+.gallery-title {
+    color: #3498db;
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.search-container {
+    max-width: 600px;
+    margin: 0 auto 30px auto;
+    position: relative;
+}
+
+.search-container input {
+    width: 100%;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: 2px solid #34495e;
+    border-radius: 8px;
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.search-container input:focus {
+    border-color: #3498db;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.gallery-item {
+    background: #2c3e50;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+}
+
+.gallery-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-item img {
+    width: 100%;
+    height: 150px;
+    object-fit: contain;
+    background: #1e272e;
+    display: block;
+}
+
+.gallery-item-title {
+    padding: 10px;
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #34495e;
+}
+
+/* ============================================================
+   TOAST BİLDİRİMLERİ
+   ============================================================ */
+
+.toast {
+    visibility: hidden;
+    min-width: 250px;
+    margin-left: -125px;
+    background-color: #27ae60;
+    color: #fff;
+    text-align: center;
+    border-radius: 4px;
+    padding: 16px;
+    position: fixed;
+    z-index: 1000;
+    left: 50%;
+    bottom: 30px;
+    font-size: 17px;
+}
+
+.toast.show {
+    visibility: visible;
+    animation: toastFadeIn 0.5s, toastFadeOut 0.5s 2.5s;
+}
+
+@keyframes toastFadeIn {
+    from { bottom: 0; opacity: 0; }
+    to { bottom: 30px; opacity: 1; }
+}
+
+@keyframes toastFadeOut {
+    from { bottom: 30px; opacity: 1; }
+    to { bottom: 0; opacity: 0; }
+}
+
+.loading {
+    text-align: center;
+    color: #bdc3c7;
+    grid-column: 1 / -1;
+    padding: 40px;
 }
