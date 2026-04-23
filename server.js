@@ -150,10 +150,312 @@ app.get('/api/characters/:userId', async (req, res) => {
   }
 });
 
+// ---- Tüm Karakterler (DM Saldırı Paneli için) ----
+app.get('/api/characters', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('characters').select('*');
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    console.error('Tüm karakter çekme hatası:', err);
+    res.status(500).json({ error: 'Karakterler getirilemedi.' });
+  }
+});
+
+// === SAVAŞ SİSTEMİ (COMBAT) ===
+
+/**
+ * Sunucu tarafında güvenli zar atma
+ */
+function rollDie(min, max) {
+  if (max <= 0 || min > max) return 0;
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function rollAdvantage(min, max) {
+  return Math.max(rollDie(min, max), rollDie(min, max));
+}
+
+function rollDisadvantage(min, max) {
+  return Math.min(rollDie(min, max), rollDie(min, max));
+}
+
+// ---- Saldırı Hesapla ----
+app.post('/api/combat/attack', (req, res) => {
+  try {
+    const {
+      attackerStats,     // { stat, bonus } — seçilen yetenek değeri ve bonusu
+      targetAC,          // hedef AC değeri
+      attackType,        // 'physical' | 'spell'
+      advantage,         // bool
+      disadvantage,      // bool
+      attackCount,       // saldırı adedi
+      extraDamage,       // manuel ek hasar
+      // Fiziksel saldırı parametreleri
+      physical,          // { min, max, extraMin, extraMax }
+      element1,          // { min, max, extraMin, extraMax, weakness, resistance }
+      element2,          // { min, max, extraMin, extraMax, weakness, resistance }
+      // Büyü saldırı parametreleri
+      spell,             // { min, max, extraMin, extraMax, level }
+    } = req.body;
+
+    const safeAC = clampNumber(targetAC, 0, 50);
+    const safeCount = clampNumber(attackCount, 1, 20);
+    const safeStat = clampNumber(attackerStats?.stat, 0, 30);
+    const safeBonus = clampNumber(attackerStats?.bonus, 0, 30);
+    const safeExtra = clampNumber(extraDamage, 0, 1000);
+
+    const attacks = [];
+    let totalDamage = 0;
+
+    for (let i = 0; i < safeCount; i++) {
+      // 1. Vuruş zarı (d20)
+      let hitRoll = 0;
+      if (advantage && !disadvantage) {
+        hitRoll = rollAdvantage(1, 20);
+      } else if (disadvantage && !advantage) {
+        hitRoll = rollDisadvantage(1, 20);
+      } else {
+        hitRoll = rollDie(1, 20);
+      }
+
+      // 2. Bonuslu zar = hitRoll + floor((stat + bonus) / 2)
+      const modifiedRoll = hitRoll + Math.floor((safeStat + safeBonus) / 2);
+
+      // 3. Vuruş kontrolü
+      const isCritical = hitRoll === 20;
+      const isCritFail = hitRoll === 1;
+      const isHit = isCritical || (!isCritFail && modifiedRoll >= safeAC);
+
+      if (!isHit) {
+        attacks.push({
+          index: i + 1,
+          hit: false,
+          hitRoll,
+          modifiedRoll,
+          isCritical: false,
+          isCritFail,
+          damage: 0
+        });
+        continue;
+      }
+
+      // 4. Hasar hesaplama
+      let damage = 0;
+
+      if (attackType === 'physical') {
+        // Fiziksel kanal
+        let physDmg = 0;
+        const pMin = clampNumber(physical?.min, 0, 1000);
+        const pMax = clampNumber(physical?.max, 0, 1000);
+        const peMin = clampNumber(physical?.extraMin, 0, 1000);
+        const peMax = clampNumber(physical?.extraMax, 0, 1000);
+        if (pMax > 0) physDmg = rollDie(pMin, pMax) + (peMax > 0 ? rollDie(peMin, peMax) : 0);
+
+        // Element 1 kanalı
+        let elem1Dmg = 0;
+        const e1Min = clampNumber(element1?.min, 0, 1000);
+        const e1Max = clampNumber(element1?.max, 0, 1000);
+        const e1eMin = clampNumber(element1?.extraMin, 0, 1000);
+        const e1eMax = clampNumber(element1?.extraMax, 0, 1000);
+        if (e1Max > 0) elem1Dmg = rollDie(e1Min, e1Max) + (e1eMax > 0 ? rollDie(e1eMin, e1eMax) : 0);
+
+        // Element 2 kanalı
+        let elem2Dmg = 0;
+        const e2Min = clampNumber(element2?.min, 0, 1000);
+        const e2Max = clampNumber(element2?.max, 0, 1000);
+        const e2eMin = clampNumber(element2?.extraMin, 0, 1000);
+        const e2eMax = clampNumber(element2?.extraMax, 0, 1000);
+        if (e2Max > 0) elem2Dmg = rollDie(e2Min, e2Max) + (e2eMax > 0 ? rollDie(e2eMin, e2eMax) : 0);
+
+        // Zayıflık / Direnç çarpanları
+        if (physical?.weakness) physDmg *= 2;
+        else if (physical?.resistance) physDmg = Math.floor(physDmg / 2);
+
+        if (element1?.weakness) elem1Dmg *= 2;
+        else if (element1?.resistance) elem1Dmg = Math.floor(elem1Dmg / 2);
+
+        if (element2?.weakness) elem2Dmg *= 2;
+        else if (element2?.resistance) elem2Dmg = Math.floor(elem2Dmg / 2);
+
+        damage = physDmg + elem1Dmg + elem2Dmg + safeExtra;
+      } else {
+        // Büyü saldırısı
+        const slotMultipliers = { 1: 1, 2: 1.5, 3: 2, 4: 2.5 };
+        const sLevel = clampNumber(spell?.level, 1, 4);
+        const mult = slotMultipliers[sLevel] || 1;
+
+        const sMin = clampNumber(spell?.min, 0, 1000);
+        const sMax = clampNumber(spell?.max, 0, 1000);
+        const seMin = clampNumber(spell?.extraMin, 0, 1000);
+        const seMax = clampNumber(spell?.extraMax, 0, 1000);
+
+        let spellDmg = 0;
+        if (sMax > 0) {
+          spellDmg = rollDie(
+            Math.floor(sMin * mult),
+            Math.floor(sMax * mult)
+          ) + (seMax > 0 ? rollDie(
+            Math.floor(seMin * mult),
+            Math.floor(seMax * mult)
+          ) : 0);
+        }
+
+        damage = spellDmg + safeExtra;
+      }
+
+      // 5. Kritik vuruş çarpanı (1.5x)
+      if (isCritical) {
+        damage = Math.floor(damage * 1.5);
+      }
+
+      totalDamage += damage;
+
+      attacks.push({
+        index: i + 1,
+        hit: true,
+        hitRoll,
+        modifiedRoll,
+        isCritical,
+        isCritFail: false,
+        damage
+      });
+    }
+
+    res.json({ attacks, totalDamage, attackType });
+  } catch (err) {
+    console.error('Saldırı hesaplama hatası:', err);
+    res.status(500).json({ error: 'Saldırı hesaplanamadı.' });
+  }
+});
+
+// ---- Hasar Uygula ----
+app.post('/api/combat/apply-damage', async (req, res) => {
+  try {
+    const { targetType, targetId, damage } = req.body;
+    const safeDamage = clampNumber(damage, 0, 99999);
+
+    if (targetType === 'character') {
+      // Veritabanından mevcut HP'yi çek
+      const { data: charData, error: fetchErr } = await supabase
+        .from('characters')
+        .select('hp_current, hp_max')
+        .eq('id', targetId)
+        .single();
+
+      if (fetchErr) throw fetchErr;
+
+      const newHp = Math.max(0, (charData.hp_current || 0) - safeDamage);
+
+      const { error: updateErr } = await supabase
+        .from('characters')
+        .update({ hp_current: newHp })
+        .eq('id', targetId);
+
+      if (updateErr) throw updateErr;
+
+      // Socket üzerinden tüm istemcilere bildir
+      // Bağlı oyuncunun socket id'sini bul
+      const playerEntry = Object.entries(players).find(
+        ([, p]) => p.character && p.character.id === targetId
+      );
+      if (playerEntry) {
+        const [socketId, playerData] = playerEntry;
+        playerData.character.hp_current = newHp;
+        io.emit('characterUpdated', {
+          id: socketId,
+          updates: { hp_current: newHp, hp_max: charData.hp_max }
+        });
+      }
+
+      res.json({ success: true, newHp, targetType: 'character' });
+    } else if (targetType === 'marker') {
+      // Marker hasar (in-memory)
+      if (markers[targetId] && markers[targetId].hp != null) {
+        markers[targetId].hp = Math.max(0, markers[targetId].hp - safeDamage);
+        io.emit('updateMarkerData', markers[targetId]);
+        res.json({ success: true, newHp: markers[targetId].hp, targetType: 'marker' });
+      } else {
+        res.status(404).json({ error: 'Marker bulunamadı veya HP yok.' });
+      }
+    } else {
+      res.status(400).json({ error: 'Geçersiz hedef tipi.' });
+    }
+  } catch (err) {
+    console.error('Hasar uygulama hatası:', err);
+    res.status(500).json({ error: 'Hasar uygulanamadı.' });
+  }
+});
+
+// ---- Karakter Güncelle (REST — Saldırı paneli stat güncellemesi) ----
+app.put('/api/characters/:charId', async (req, res) => {
+  try {
+    const charId = req.params.charId;
+    const { hp_current, hp_max, ac, ac_bonus, corruption, spell_slots, stats } = req.body;
+
+    const updates = {};
+    if (hp_current !== undefined) updates.hp_current = clampNumber(hp_current, 0, 99999);
+    if (hp_max !== undefined) updates.hp_max = clampNumber(hp_max, 1, 99999);
+    if (ac !== undefined) updates.ac = clampNumber(ac, 0, 50);
+    if (ac_bonus !== undefined) updates.ac_bonus = clampNumber(ac_bonus, 0, 50);
+    if (corruption !== undefined) updates.corruption = clampNumber(corruption, 0, 100);
+    if (spell_slots !== undefined) {
+      updates.spell_slots = {
+        lvl1: clampNumber(spell_slots?.lvl1, 0, 20),
+        lvl2: clampNumber(spell_slots?.lvl2, 0, 20),
+        lvl3: clampNumber(spell_slots?.lvl3, 0, 20),
+        lvl4: clampNumber(spell_slots?.lvl4, 0, 20),
+      };
+    }
+    if (stats) {
+      updates.stats = {
+        str: clampNumber(stats.str, 0, 30),
+        str_bonus: clampNumber(stats.str_bonus, 0, 30),
+        dex: clampNumber(stats.dex, 0, 30),
+        dex_bonus: clampNumber(stats.dex_bonus, 0, 30),
+        int: clampNumber(stats.int, 0, 30),
+        int_bonus: clampNumber(stats.int_bonus, 0, 30),
+        con: clampNumber(stats.con, 0, 30),
+        con_bonus: clampNumber(stats.con_bonus, 0, 30),
+        wis: clampNumber(stats.wis, 0, 30),
+        wis_bonus: clampNumber(stats.wis_bonus, 0, 30),
+        chr: clampNumber(stats.chr, 0, 30),
+        chr_bonus: clampNumber(stats.chr_bonus, 0, 30),
+      };
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Güncellenecek alan yok.' });
+    }
+
+    const { error } = await supabase
+      .from('characters')
+      .update(updates)
+      .eq('id', charId);
+
+    if (error) throw error;
+
+    // Bağlı oyuncuyu sync et
+    const playerEntry = Object.entries(players).find(
+      ([, p]) => p.character && p.character.id === charId
+    );
+    if (playerEntry) {
+      const [socketId, playerData] = playerEntry;
+      Object.assign(playerData.character, updates);
+      io.emit('characterUpdated', { id: socketId, updates });
+    }
+
+    res.json({ success: true, updates });
+  } catch (err) {
+    console.error('Karakter güncelleme hatası:', err);
+    res.status(500).json({ error: 'Karakter güncellenemedi.' });
+  }
+});
+
 // ---- Yeni Karakter Oluşturma ----
 app.post('/api/characters', async (req, res) => {
   try {
-    const { user_id, name, hp_max, stats, avatar_url } = req.body;
+    const { user_id, name, hp_max, stats, avatar_url, ac, ac_bonus } = req.body;
 
     if (!user_id || !name || !hp_max) {
       return res.status(400).json({ error: 'user_id, name ve hp_max zorunludur.' });
@@ -164,11 +466,17 @@ app.post('/api/characters', async (req, res) => {
 
     const sanitizedStats = {
       str: clampNumber(stats?.str, 0, 30),
+      str_bonus: clampNumber(stats?.str_bonus, 0, 30),
       dex: clampNumber(stats?.dex, 0, 30),
+      dex_bonus: clampNumber(stats?.dex_bonus, 0, 30),
       int: clampNumber(stats?.int, 0, 30),
+      int_bonus: clampNumber(stats?.int_bonus, 0, 30),
       con: clampNumber(stats?.con, 0, 30),
+      con_bonus: clampNumber(stats?.con_bonus, 0, 30),
       wis: clampNumber(stats?.wis, 0, 30),
-      chr: clampNumber(stats?.chr, 0, 30)
+      wis_bonus: clampNumber(stats?.wis_bonus, 0, 30),
+      chr: clampNumber(stats?.chr, 0, 30),
+      chr_bonus: clampNumber(stats?.chr_bonus, 0, 30)
     };
 
     const insertData = {
@@ -176,6 +484,10 @@ app.post('/api/characters', async (req, res) => {
       name: sanitizedName,
       hp_current: sanitizedHpMax,
       hp_max: sanitizedHpMax,
+      ac: clampNumber(ac, 0, 50) || 10,
+      ac_bonus: clampNumber(ac_bonus, 0, 50) || 0,
+      corruption: 0,
+      spell_slots: { lvl1: 0, lvl2: 0, lvl3: 0, lvl4: 0 },
       stats: sanitizedStats,
       avatar_url: avatar_url && isValidUrl(avatar_url) ? avatar_url : null
     };
@@ -300,6 +612,21 @@ io.on('connection', (socket) => {
       imgUrl: isValidUrl(markerData.imgUrl) ? markerData.imgUrl : null,
       hp: markerData.hp != null ? clampNumber(markerData.hp, 0, 99999) : null,
       maxHp: markerData.maxHp != null ? clampNumber(markerData.maxHp, 0, 99999) : null,
+      ac: markerData.ac != null ? clampNumber(markerData.ac, 0, 50) : 10,
+      stats: markerData.stats ? {
+        str: clampNumber(markerData.stats?.str, 0, 30),
+        str_bonus: clampNumber(markerData.stats?.str_bonus, 0, 30),
+        dex: clampNumber(markerData.stats?.dex, 0, 30),
+        dex_bonus: clampNumber(markerData.stats?.dex_bonus, 0, 30),
+        int: clampNumber(markerData.stats?.int, 0, 30),
+        int_bonus: clampNumber(markerData.stats?.int_bonus, 0, 30),
+        con: clampNumber(markerData.stats?.con, 0, 30),
+        con_bonus: clampNumber(markerData.stats?.con_bonus, 0, 30),
+        wis: clampNumber(markerData.stats?.wis, 0, 30),
+        wis_bonus: clampNumber(markerData.stats?.wis_bonus, 0, 30),
+        chr: clampNumber(markerData.stats?.chr, 0, 30),
+        chr_bonus: clampNumber(markerData.stats?.chr_bonus, 0, 30),
+      } : null,
       size: clampNumber(markerData.size || 50, 10, 500),
       isMarker: true
     };
@@ -362,13 +689,32 @@ io.on('connection', (socket) => {
       hp_max: clampNumber(data.hp_max, 1, 99999),
       stats: {
         str: clampNumber(data.stats?.str, 0, 30),
+        str_bonus: clampNumber(data.stats?.str_bonus, 0, 30),
         dex: clampNumber(data.stats?.dex, 0, 30),
+        dex_bonus: clampNumber(data.stats?.dex_bonus, 0, 30),
         int: clampNumber(data.stats?.int, 0, 30),
+        int_bonus: clampNumber(data.stats?.int_bonus, 0, 30),
         con: clampNumber(data.stats?.con, 0, 30),
+        con_bonus: clampNumber(data.stats?.con_bonus, 0, 30),
         wis: clampNumber(data.stats?.wis, 0, 30),
-        chr: clampNumber(data.stats?.chr, 0, 30)
+        wis_bonus: clampNumber(data.stats?.wis_bonus, 0, 30),
+        chr: clampNumber(data.stats?.chr, 0, 30),
+        chr_bonus: clampNumber(data.stats?.chr_bonus, 0, 30)
       }
     };
+
+    // Opsiyonel alanlar
+    if (data.ac !== undefined) updates.ac = clampNumber(data.ac, 0, 50);
+    if (data.ac_bonus !== undefined) updates.ac_bonus = clampNumber(data.ac_bonus, 0, 50);
+    if (data.corruption !== undefined) updates.corruption = clampNumber(data.corruption, 0, 100);
+    if (data.spell_slots) {
+      updates.spell_slots = {
+        lvl1: clampNumber(data.spell_slots.lvl1, 0, 20),
+        lvl2: clampNumber(data.spell_slots.lvl2, 0, 20),
+        lvl3: clampNumber(data.spell_slots.lvl3, 0, 20),
+        lvl4: clampNumber(data.spell_slots.lvl4, 0, 20),
+      };
+    }
 
     const { error } = await supabase
       .from('characters')
