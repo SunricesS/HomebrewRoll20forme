@@ -781,3 +781,479 @@ html {
     grid-column: 1 / -1;
     padding: 40px;
 }
+
+/* ============================================================
+   4-COLUMN STATS GRID (Spell Slots)
+   ============================================================ */
+
+.stats-grid-4col {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+/* ============================================================
+   SALDIRI PANELİ (ATTACK PANEL)
+   ============================================================ */
+
+.atk-panel-collapsible {
+    margin-top: 10px;
+    background: rgba(30, 30, 36, 0.95) !important;
+    border: 1px solid #D90429 !important;
+}
+
+.atk-panel-collapsible summary {
+    color: #D90429 !important;
+    font-size: 15px;
+}
+
+.attack-panel {
+    padding: 8px 0;
+}
+
+.atk-section {
+    background: rgba(43, 45, 66, 0.6);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-left: 3px solid #444;
+}
+
+.atk-section h5 {
+    margin: 0 0 8px 0;
+    color: #ecf0f1;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.atk-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.atk-section-header h5 {
+    margin-bottom: 0;
+}
+
+/* --- Hedef Seçici --- */
+.atk-select {
+    width: 100%;
+    padding: 6px 8px;
+    background: #2B2D42;
+    color: #ecf0f1;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+}
+
+.atk-select optgroup {
+    color: #bdc3c7;
+    font-style: normal;
+}
+
+.atk-target-info {
+    min-height: 30px;
+    margin-top: 4px;
+}
+
+.atk-hint {
+    font-size: 11px;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.atk-target-card {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    padding: 8px;
+    border-left: 3px solid #3498db;
+}
+
+.atk-card-attacker {
+    border-left-color: #e67e22;
+}
+
+.atk-card-target {
+    border-left-color: #e74c3c;
+}
+
+.atk-field-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #bdc3c7;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.atk-target-name {
+    font-weight: 700;
+    color: #fff;
+    font-size: 14px;
+    margin-bottom: 3px;
+}
+
+.atk-target-hp {
+    font-size: 13px;
+    color: #e74c3c;
+    font-weight: 600;
+}
+
+.atk-target-ac {
+    font-size: 12px;
+    color: #3498db;
+    font-weight: 600;
+}
+
+.atk-target-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: #bdc3c7;
+}
+
+.atk-target-stats span {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+/* --- Grid & Alanlar --- */
+.atk-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.atk-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.atk-field label {
+    font-size: 11px;
+    color: #bdc3c7;
+    font-weight: 600;
+}
+
+.atk-input {
+    padding: 5px 6px;
+    background: #2B2D42;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.atk-input-sm {
+    padding: 4px 5px;
+    background: #2B2D42;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 11px;
+    width: 38px;
+    text-align: center;
+}
+
+/* --- Avantaj / Dezavantaj --- */
+.atk-check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.atk-check {
+    font-size: 12px;
+    color: #ecf0f1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.atk-check input[type="checkbox"] {
+    accent-color: #D90429;
+}
+
+/* --- Hasar Kanalları --- */
+.atk-damage-channel {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+}
+
+.atk-channel-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #e67e22;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.atk-range-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-bottom: 3px;
+}
+
+.atk-sep {
+    color: #7f8c8d;
+    font-size: 11px;
+}
+
+.atk-resist-row {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    color: #bdc3c7;
+}
+
+.atk-resist-row label {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+}
+
+.atk-resist-row input[type="radio"] {
+    accent-color: #9b59b6;
+}
+
+/* --- Büyü Slotları --- */
+.atk-spell-slots {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.atk-slot {
+    background: rgba(67, 97, 238, 0.2);
+    border: 1px solid #4361EE;
+    border-radius: 6px;
+    padding: 4px 8px;
+    text-align: center;
+    flex: 1;
+    font-size: 11px;
+    color: #bdc3c7;
+}
+
+.atk-slot-count {
+    font-weight: 700;
+    color: #4361EE;
+    font-size: 14px;
+}
+
+.atk-spell-level-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #ecf0f1;
+}
+
+.atk-spell-level-row label {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.atk-spell-level-row input[type="radio"] {
+    accent-color: #4361EE;
+}
+
+.atk-spell-range {
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.atk-spell-range span {
+    color: #bdc3c7;
+    font-size: 11px;
+}
+
+/* --- Butonlar --- */
+.atk-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.atk-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.atk-btn:active {
+    transform: translateY(0);
+}
+
+.atk-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.atk-btn-physical {
+    background: linear-gradient(135deg, #D90429, #a3021f);
+    color: white;
+}
+
+.atk-btn-physical:hover {
+    background: linear-gradient(135deg, #ff0537, #D90429);
+}
+
+.atk-btn-spell {
+    background: linear-gradient(135deg, #4361EE, #2843c7);
+    color: white;
+}
+
+.atk-btn-spell:hover {
+    background: linear-gradient(135deg, #5a7aff, #4361EE);
+}
+
+.atk-btn-damage {
+    background: linear-gradient(135deg, #c0392b, #962d23);
+    color: white;
+    animation: atk-pulse 1.5s infinite;
+}
+
+.atk-btn-damage:hover {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+@keyframes atk-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(192, 57, 43, 0); }
+}
+
+.atk-mini-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid #555;
+    color: #bdc3c7;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s;
+}
+
+.atk-mini-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.atk-clear-resist-btn {
+    margin-left: auto;
+    background: rgba(90, 24, 154, 0.4);
+    border-color: #5A189A;
+}
+
+.atk-clear-resist-btn:hover {
+    background: rgba(90, 24, 154, 0.6);
+}
+
+/* --- Savaş Logu --- */
+.atk-combat-log {
+    background: #0a0a0d;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    min-height: 60px;
+}
+
+.atk-log-entry {
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    line-height: 1.5;
+}
+
+.atk-log-header .atk-log-header {
+    color: #f39c12;
+    font-weight: 700;
+}
+
+.atk-log-hit .atk-log-hit {
+    color: #2ecc71;
+}
+
+.atk-log-miss .atk-log-miss {
+    color: #e74c3c;
+}
+
+.atk-log-crit {
+    border-left: 3px solid #f1c40f;
+    padding-left: 5px;
+}
+
+.atk-log-critfail {
+    border-left: 3px solid #e74c3c;
+    padding-left: 5px;
+}
+
+.atk-log-total .atk-log-total {
+    color: #f1c40f;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.atk-log-apply .atk-log-apply {
+    color: #e74c3c;
+    font-weight: 700;
+}
+
+.atk-log-error .atk-log-error {
+    color: #e74c3c;
+    font-style: italic;
+}
+
+.atk-log-roll {
+    color: #7f8c8d;
+    font-size: 10px;
+}
+
+.atk-crit {
+    color: #f1c40f !important;
+    font-weight: 900;
+    text-shadow: 0 0 6px rgba(241, 196, 15, 0.5);
+    animation: atk-crit-flash 0.5s ease;
+}
+
+.atk-critfail {
+    color: #e74c3c !important;
+    font-weight: 900;
+}
+
+@keyframes atk-crit-flash {
+    0% { opacity: 0; transform: scale(1.3); }
+    50% { opacity: 1; transform: scale(1); }
+    100% { opacity: 1; }
+}

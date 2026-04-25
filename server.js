@@ -22,7 +22,7 @@ const SESSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 saat
 // === YARDIMCI FONKSİYONLAR ===
 
 /**
- * URL'nin geçerli bir http/https URL olup olmadığını kontrol eder.
+ * URL'nin geçerli bir http/https URL olup olmadığını kontrol edr.
  */
 function isValidUrl(str) {
   if (!str || typeof str !== 'string') return false;

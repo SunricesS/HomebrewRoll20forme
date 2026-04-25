@@ -107,16 +107,28 @@
                     <form id="dm-edit-form">
                         <div class="stats-grid stats-grid-2col">
                             <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-edit-hp"></div>
-                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-edit-max-hp">
-                            </div>
+                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-edit-max-hp"></div>
                         </div>
+                        <div class="stats-grid stats-grid-3col">
+                            <div class="form-group"><label>AC:</label><input type="number" id="dm-edit-ac"></div>
+                            <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-edit-ac-bonus"></div>
+                            <div class="form-group"><label>Yozlaşma:</label><input type="number" id="dm-edit-corruption"></div>
+                        </div>
+                        <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;">Stat / Bonus</p>
                         <div class="stats-grid">
-                            <div class="form-group"><label>STR:</label><input type="number" id="dm-edit-str"></div>
-                            <div class="form-group"><label>DEX:</label><input type="number" id="dm-edit-dex"></div>
-                            <div class="form-group"><label>INT:</label><input type="number" id="dm-edit-int"></div>
-                            <div class="form-group"><label>CON:</label><input type="number" id="dm-edit-con"></div>
-                            <div class="form-group"><label>WIS:</label><input type="number" id="dm-edit-wis"></div>
-                            <div class="form-group"><label>CHR:</label><input type="number" id="dm-edit-chr"></div>
+                            <div class="form-group"><label>STR:</label><input type="number" id="dm-edit-str"><input type="number" id="dm-edit-str-bonus" placeholder="B" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>DEX:</label><input type="number" id="dm-edit-dex"><input type="number" id="dm-edit-dex-bonus" placeholder="B" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>INT:</label><input type="number" id="dm-edit-int"><input type="number" id="dm-edit-int-bonus" placeholder="B" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>CON:</label><input type="number" id="dm-edit-con"><input type="number" id="dm-edit-con-bonus" placeholder="B" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>WIS:</label><input type="number" id="dm-edit-wis"><input type="number" id="dm-edit-wis-bonus" placeholder="B" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>CHR:</label><input type="number" id="dm-edit-chr"><input type="number" id="dm-edit-chr-bonus" placeholder="B" style="margin-top:2px;"></div>
+                        </div>
+                        <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;">Büyü Slotları</p>
+                        <div class="stats-grid stats-grid-4col">
+                            <div class="form-group"><label>Lvl1:</label><input type="number" id="dm-edit-spell-lvl1" min="0"></div>
+                            <div class="form-group"><label>Lvl2:</label><input type="number" id="dm-edit-spell-lvl2" min="0"></div>
+                            <div class="form-group"><label>Lvl3:</label><input type="number" id="dm-edit-spell-lvl3" min="0"></div>
+                            <div class="form-group"><label>Lvl4:</label><input type="number" id="dm-edit-spell-lvl4" min="0"></div>
                         </div>
                         <div class="button-group button-group-row">
                             <button type="button" id="dm-edit-save-btn" class="btn success action-btn dm-edit-action-btn" disabled>Kayıtlı</button>
@@ -129,6 +141,171 @@
                 <p class="dm-hint-text">
                     * Bir işareti silmek için üzerine sağ tıklayın.
                 </p>
+
+                <hr class="dm-divider dm-divider-spaced">
+
+                <!-- ============ SALDIRI PANELİ ============ -->
+                <details class="dm-collapsible atk-panel-collapsible" id="attack-panel-container">
+                    <summary>⚔️ Saldırı / Hasar Paneli</summary>
+                    <div class="dm-collapsible-body attack-panel">
+
+                        <!-- Saldıran & Hedef Seçimi -->
+                        <div class="atk-section">
+                            <div class="atk-section-header">
+                                <h5>🗡️ Saldıran & 🎯 Hedef</h5>
+                                <button id="atk-btn-refresh" class="atk-mini-btn" title="Listeyi yenile">🔄</button>
+                            </div>
+
+                            <label class="atk-field-label">🗡️ Saldıran (statları kullanılır):</label>
+                            <select id="atk-attacker-select" class="atk-select">
+                                <option value="">— Saldıran Seç —</option>
+                            </select>
+                            <div id="atk-attacker-info" class="atk-target-info">
+                                <span class="atk-hint">Saldıran seçilmedi</span>
+                            </div>
+
+                            <label class="atk-field-label" style="margin-top:8px;">🎯 Hedef (AC'si kontrol edilir, hasarı alır):</label>
+                            <select id="atk-target-select" class="atk-select">
+                                <option value="">— Hedef Seç —</option>
+                            </select>
+                            <div id="atk-target-info" class="atk-target-info">
+                                <span class="atk-hint">Hedef seçilmedi</span>
+                            </div>
+                        </div>
+
+                        <!-- Genel Modifikatörler -->
+                        <div class="atk-section">
+                            <h5>📊 Modifikatörler</h5>
+                            <div class="atk-grid-2">
+                                <div class="atk-field">
+                                    <label>Zar Stat</label>
+                                    <select id="atk-modifier" class="atk-select">
+                                        <option value="STR">STR</option>
+                                        <option value="DEX">DEX</option>
+                                        <option value="INT">INT</option>
+                                        <option value="CON">CON</option>
+                                        <option value="WIS">WIS</option>
+                                        <option value="CHR">CHR</option>
+                                    </select>
+                                </div>
+                                <div class="atk-field">
+                                    <label>Hedef AC</label>
+                                    <input type="number" id="atk-target-ac" value="10" class="atk-input">
+                                </div>
+                                <div class="atk-field">
+                                    <label>Manuel Ek</label>
+                                    <input type="number" id="atk-extra-damage" value="0" class="atk-input">
+                                </div>
+                                <div class="atk-field">
+                                    <label>Saldırı Adet</label>
+                                    <input type="number" id="atk-attack-count" value="1" min="1" max="20" class="atk-input">
+                                </div>
+                            </div>
+                            <div class="atk-check-row">
+                                <label class="atk-check"><input type="checkbox" id="atk-advantage"> Avantaj</label>
+                                <label class="atk-check"><input type="checkbox" id="atk-disadvantage"> Dezavantaj</label>
+                                <button id="atk-btn-clear-resist" class="atk-mini-btn atk-clear-resist-btn">Zayıflık/Direnç Temizle</button>
+                            </div>
+                        </div>
+
+                        <!-- Fiziksel Saldırı -->
+                        <div class="atk-section">
+                            <h5>⚔️ Fiziksel Saldırı</h5>
+                            <!-- Fiziksel Kanal -->
+                            <div class="atk-damage-channel">
+                                <span class="atk-channel-label">Fiziksel</span>
+                                <div class="atk-range-group">
+                                    <input type="number" id="atk-phys-min" value="0" class="atk-input-sm" placeholder="Min">
+                                    <span class="atk-sep">-</span>
+                                    <input type="number" id="atk-phys-max" value="0" class="atk-input-sm" placeholder="Max">
+                                    <span class="atk-sep">Ek:</span>
+                                    <input type="number" id="atk-phys-extra-min" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">-</span>
+                                    <input type="number" id="atk-phys-extra-max" value="0" class="atk-input-sm">
+                                </div>
+                                <div class="atk-resist-row">
+                                    <label><input type="radio" name="atk-phys-resist" id="atk-phys-weak"> Zayıf</label>
+                                    <label><input type="radio" name="atk-phys-resist" id="atk-phys-resist"> Dirençli</label>
+                                </div>
+                            </div>
+                            <!-- Element 1 -->
+                            <div class="atk-damage-channel">
+                                <span class="atk-channel-label">Ateş/El.1</span>
+                                <div class="atk-range-group">
+                                    <input type="number" id="atk-elem1-min" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">-</span>
+                                    <input type="number" id="atk-elem1-max" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">Ek:</span>
+                                    <input type="number" id="atk-elem1-extra-min" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">-</span>
+                                    <input type="number" id="atk-elem1-extra-max" value="0" class="atk-input-sm">
+                                </div>
+                                <div class="atk-resist-row">
+                                    <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-weak"> Zayıf</label>
+                                    <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-resist"> Dirençli</label>
+                                </div>
+                            </div>
+                            <!-- Element 2 -->
+                            <div class="atk-damage-channel">
+                                <span class="atk-channel-label">Buz/El.2</span>
+                                <div class="atk-range-group">
+                                    <input type="number" id="atk-elem2-min" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">-</span>
+                                    <input type="number" id="atk-elem2-max" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">Ek:</span>
+                                    <input type="number" id="atk-elem2-extra-min" value="0" class="atk-input-sm">
+                                    <span class="atk-sep">-</span>
+                                    <input type="number" id="atk-elem2-extra-max" value="0" class="atk-input-sm">
+                                </div>
+                                <div class="atk-resist-row">
+                                    <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-weak"> Zayıf</label>
+                                    <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-resist"> Dirençli</label>
+                                </div>
+                            </div>
+                            <button id="atk-btn-physical" class="atk-btn atk-btn-physical">⚔️ FİZİKSEL / SİLAH SALDIRISI ⚔️</button>
+                        </div>
+
+                        <!-- Büyü Saldırısı -->
+                        <div class="atk-section">
+                            <h5>✨ Büyü Saldırısı</h5>
+                            <div class="atk-spell-slots">
+                                <div class="atk-slot"><span>Lvl 1:</span> <span id="atk-slot-lvl1" class="atk-slot-count">0</span></div>
+                                <div class="atk-slot"><span>Lvl 2:</span> <span id="atk-slot-lvl2" class="atk-slot-count">0</span></div>
+                                <div class="atk-slot"><span>Lvl 3:</span> <span id="atk-slot-lvl3" class="atk-slot-count">0</span></div>
+                                <div class="atk-slot"><span>Lvl 4:</span> <span id="atk-slot-lvl4" class="atk-slot-count">0</span></div>
+                            </div>
+                            <div class="atk-spell-level-row">
+                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl1" checked> Lvl 1</label>
+                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl2"> Lvl 2</label>
+                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl3"> Lvl 3</label>
+                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl4"> Lvl 4</label>
+                            </div>
+                            <div class="atk-range-group atk-spell-range">
+                                <span>Hasar:</span>
+                                <input type="number" id="atk-spell-min" value="0" class="atk-input-sm">
+                                <span class="atk-sep">-</span>
+                                <input type="number" id="atk-spell-max" value="0" class="atk-input-sm">
+                                <span class="atk-sep">Ekstra:</span>
+                                <input type="number" id="atk-spell-extra-min" value="0" class="atk-input-sm">
+                                <span class="atk-sep">-</span>
+                                <input type="number" id="atk-spell-extra-max" value="0" class="atk-input-sm">
+                            </div>
+                            <button id="atk-btn-spell" class="atk-btn atk-btn-spell">✨ BÜYÜ SALDIRISI ✨</button>
+                        </div>
+
+                        <!-- Savaş Logu -->
+                        <div class="atk-section">
+                            <div class="atk-section-header">
+                                <h5>📜 Savaş Logu</h5>
+                                <button id="atk-btn-clear-log" class="atk-mini-btn">Temizle</button>
+                            </div>
+                            <div id="atk-combat-log" class="atk-combat-log"></div>
+                            <button id="atk-btn-apply-damage" class="atk-btn atk-btn-damage hidden">💀 Hasarı Uygula</button>
+                        </div>
+
+                    </div>
+                </details>
+
             </div>
 
             <!-- Yalnızca Oyunculara Görünecek Bilgi Paneli -->
@@ -186,7 +363,8 @@
 
     <!-- Socket.io istemci scripti -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/client.js?v=3"></script>
+    <script src="js/client.js?v=4"></script>
+    <script src="js/attack-panel.js?v=1"></script>
 </body>
 
 </html>

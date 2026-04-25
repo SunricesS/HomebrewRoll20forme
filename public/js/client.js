@@ -26,6 +26,9 @@ const allPlayers = {};
 const gameMapContainer = document.getElementById('game-map');
 const gameMap = document.getElementById('map-content');
 
+// Marker verilerini attack-panel.js için global olarak expose et
+window.__webdnd_markers = {};
+
 let isDragging = false;
 let draggedToken = null;
 let offsetX = 0;
@@ -183,14 +186,17 @@ socket.on('newPlayer', (playerData) => {
 });
 
 socket.on('currentMarkers', (markers) => {
+  Object.assign(window.__webdnd_markers, markers);
   Object.values(markers).forEach(marker => addToken(marker));
 });
 
 socket.on('newMarker', (markerData) => {
+  window.__webdnd_markers[markerData.id] = markerData;
   addToken(markerData);
 });
 
 socket.on('removeMarker', (markerId) => {
+  delete window.__webdnd_markers[markerId];
   if (tokens[markerId]) {
     tokens[markerId].remove();
     delete tokens[markerId];
@@ -198,6 +204,7 @@ socket.on('removeMarker', (markerId) => {
 });
 
 socket.on('updateMarkerData', (markerData) => {
+  window.__webdnd_markers[markerData.id] = markerData;
   updateToken(markerData);
 });
 
@@ -785,12 +792,46 @@ function showDmEditor(playerData) {
   document.getElementById('dm-edit-name').textContent = c.name + " Düzenleniyor";
   document.getElementById('dm-edit-hp').value = c.hp_current;
   document.getElementById('dm-edit-max-hp').value = c.hp_max;
-  document.getElementById('dm-edit-str').value = c.stats.str ?? 10;
-  document.getElementById('dm-edit-dex').value = c.stats.dex ?? 10;
-  document.getElementById('dm-edit-int').value = c.stats.int ?? 10;
-  document.getElementById('dm-edit-con').value = c.stats.con ?? 10;
-  document.getElementById('dm-edit-wis').value = c.stats.wis ?? 10;
-  document.getElementById('dm-edit-chr').value = c.stats.chr ?? 10;
+
+  // AC & Corruption
+  const acEl = document.getElementById('dm-edit-ac');
+  const acBonusEl = document.getElementById('dm-edit-ac-bonus');
+  const corruptionEl = document.getElementById('dm-edit-corruption');
+  if (acEl) acEl.value = c.ac ?? 10;
+  if (acBonusEl) acBonusEl.value = c.ac_bonus ?? 0;
+  if (corruptionEl) corruptionEl.value = c.corruption ?? 0;
+
+  // Stats & Bonuslar
+  document.getElementById('dm-edit-str').value = c.stats?.str ?? 10;
+  document.getElementById('dm-edit-dex').value = c.stats?.dex ?? 10;
+  document.getElementById('dm-edit-int').value = c.stats?.int ?? 10;
+  document.getElementById('dm-edit-con').value = c.stats?.con ?? 10;
+  document.getElementById('dm-edit-wis').value = c.stats?.wis ?? 10;
+  document.getElementById('dm-edit-chr').value = c.stats?.chr ?? 10;
+
+  const strBonusEl = document.getElementById('dm-edit-str-bonus');
+  const dexBonusEl = document.getElementById('dm-edit-dex-bonus');
+  const intBonusEl = document.getElementById('dm-edit-int-bonus');
+  const conBonusEl = document.getElementById('dm-edit-con-bonus');
+  const wisBonusEl = document.getElementById('dm-edit-wis-bonus');
+  const chrBonusEl = document.getElementById('dm-edit-chr-bonus');
+  if (strBonusEl) strBonusEl.value = c.stats?.str_bonus ?? 0;
+  if (dexBonusEl) dexBonusEl.value = c.stats?.dex_bonus ?? 0;
+  if (intBonusEl) intBonusEl.value = c.stats?.int_bonus ?? 0;
+  if (conBonusEl) conBonusEl.value = c.stats?.con_bonus ?? 0;
+  if (wisBonusEl) wisBonusEl.value = c.stats?.wis_bonus ?? 0;
+  if (chrBonusEl) chrBonusEl.value = c.stats?.chr_bonus ?? 0;
+
+  // Spell Slots
+  const slots = c.spell_slots || { lvl1: 0, lvl2: 0, lvl3: 0, lvl4: 0 };
+  const sl1 = document.getElementById('dm-edit-spell-lvl1');
+  const sl2 = document.getElementById('dm-edit-spell-lvl2');
+  const sl3 = document.getElementById('dm-edit-spell-lvl3');
+  const sl4 = document.getElementById('dm-edit-spell-lvl4');
+  if (sl1) sl1.value = slots.lvl1 ?? 0;
+  if (sl2) sl2.value = slots.lvl2 ?? 0;
+  if (sl3) sl3.value = slots.lvl3 ?? 0;
+  if (sl4) sl4.value = slots.lvl4 ?? 0;
 
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }
@@ -805,13 +846,36 @@ function saveDmEditorState(playerId) {
     hp_max: parseInt(document.getElementById('dm-edit-max-hp').value),
     stats: {
       str: parseInt(document.getElementById('dm-edit-str').value),
+      str_bonus: parseInt(document.getElementById('dm-edit-str-bonus')?.value) || 0,
       dex: parseInt(document.getElementById('dm-edit-dex').value),
+      dex_bonus: parseInt(document.getElementById('dm-edit-dex-bonus')?.value) || 0,
       int: parseInt(document.getElementById('dm-edit-int').value),
+      int_bonus: parseInt(document.getElementById('dm-edit-int-bonus')?.value) || 0,
       con: parseInt(document.getElementById('dm-edit-con').value),
+      con_bonus: parseInt(document.getElementById('dm-edit-con-bonus')?.value) || 0,
       wis: parseInt(document.getElementById('dm-edit-wis').value),
-      chr: parseInt(document.getElementById('dm-edit-chr').value)
-    }
+      wis_bonus: parseInt(document.getElementById('dm-edit-wis-bonus')?.value) || 0,
+      chr: parseInt(document.getElementById('dm-edit-chr').value),
+      chr_bonus: parseInt(document.getElementById('dm-edit-chr-bonus')?.value) || 0
+    },
+    ac: parseInt(document.getElementById('dm-edit-ac')?.value) || 10,
+    ac_bonus: parseInt(document.getElementById('dm-edit-ac-bonus')?.value) || 0,
+    corruption: parseInt(document.getElementById('dm-edit-corruption')?.value) || 0,
   };
+
+  // Spell slots
+  const sl1 = document.getElementById('dm-edit-spell-lvl1');
+  const sl2 = document.getElementById('dm-edit-spell-lvl2');
+  const sl3 = document.getElementById('dm-edit-spell-lvl3');
+  const sl4 = document.getElementById('dm-edit-spell-lvl4');
+  if (sl1 || sl2 || sl3 || sl4) {
+    updatedData.spell_slots = {
+      lvl1: parseInt(sl1?.value) || 0,
+      lvl2: parseInt(sl2?.value) || 0,
+      lvl3: parseInt(sl3?.value) || 0,
+      lvl4: parseInt(sl4?.value) || 0,
+    };
+  }
 
   const btn = document.getElementById('dm-edit-save-btn');
   if (btn) {
