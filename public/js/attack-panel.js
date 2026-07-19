@@ -19,6 +19,10 @@
   let lastAttackResult = null; // { totalDamage, targetId, targetType, targetName, attackerName }
   let allCharactersCache = [];
 
+  // === SALDIRAN FORM CACHE ===
+  // Her saldıran için form değerlerini hafızada tutar (type:id → { field: value, ... })
+  const attackerFormCache = new Map();
+
   // === DOM REFERANSLARI ===
   const panel = document.getElementById('attack-panel-container');
   if (!panel) return;
@@ -195,16 +199,178 @@
   }
 
   // ============================================================
+  // SALDIRAN FORM STATE KAYDET / GERİ YÜKLE
+  // ============================================================
+
+  /**
+   * Mevcut saldıranın tüm form değerlerini cache'e kaydeder.
+   */
+  function saveAttackerForm() {
+    if (!selectedAttacker) return;
+    const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
+
+    const formState = {
+      // Modifikatörler
+      modifier: modifierSelect?.value || 'STR',
+      extraDamage: extraDmgInput?.value || '0',
+      attackCount: attackCountInput?.value || '1',
+      advantage: advantageCheck?.checked || false,
+      disadvantage: disadvantageCheck?.checked || false,
+
+      // Fiziksel hasar
+      physMin: physMinInput?.value || '0',
+      physMax: physMaxInput?.value || '0',
+      physExMin: physExMinInput?.value || '0',
+      physExMax: physExMaxInput?.value || '0',
+      physWeak: physWeakRadio?.checked || false,
+      physResist: physResRadio?.checked || false,
+
+      // Element 1
+      elem1Min: elem1MinInput?.value || '0',
+      elem1Max: elem1MaxInput?.value || '0',
+      elem1ExMin: elem1ExMinInput?.value || '0',
+      elem1ExMax: elem1ExMaxInput?.value || '0',
+      elem1Weak: elem1WeakRadio?.checked || false,
+      elem1Resist: elem1ResRadio?.checked || false,
+
+      // Element 2
+      elem2Min: elem2MinInput?.value || '0',
+      elem2Max: elem2MaxInput?.value || '0',
+      elem2ExMin: elem2ExMinInput?.value || '0',
+      elem2ExMax: elem2ExMaxInput?.value || '0',
+      elem2Weak: elem2WeakRadio?.checked || false,
+      elem2Resist: elem2ResRadio?.checked || false,
+
+      // Büyü hasar
+      spellMin: spellMinInput?.value || '0',
+      spellMax: spellMaxInput?.value || '0',
+      spellExMin: spellExMinInput?.value || '0',
+      spellExMax: spellExMaxInput?.value || '0',
+
+      // Büyü seviyesi (hangi radio seçili)
+      spellLevel: (function () {
+        for (let i = 1; i <= 4; i++) {
+          const radio = document.getElementById(`atk-spell-lvl${i}`);
+          if (radio?.checked) return i;
+        }
+        return 1;
+      })()
+    };
+
+    attackerFormCache.set(key, formState);
+  }
+
+  /**
+   * Verilen anahtar için kaydedilmiş form değerlerini geri yükler.
+   * Kayıt yoksa tüm alanları varsayılana (boş/sıfır) döndürür.
+   */
+  function restoreAttackerForm(key) {
+    const state = attackerFormCache.get(key);
+
+    if (state) {
+      // Modifikatörler
+      if (modifierSelect) modifierSelect.value = state.modifier;
+      if (extraDmgInput) extraDmgInput.value = state.extraDamage;
+      if (attackCountInput) attackCountInput.value = state.attackCount;
+      if (advantageCheck) advantageCheck.checked = state.advantage;
+      if (disadvantageCheck) disadvantageCheck.checked = state.disadvantage;
+
+      // Fiziksel hasar
+      if (physMinInput) physMinInput.value = state.physMin;
+      if (physMaxInput) physMaxInput.value = state.physMax;
+      if (physExMinInput) physExMinInput.value = state.physExMin;
+      if (physExMaxInput) physExMaxInput.value = state.physExMax;
+      if (physWeakRadio) physWeakRadio.checked = state.physWeak;
+      if (physResRadio) physResRadio.checked = state.physResist;
+
+      // Element 1
+      if (elem1MinInput) elem1MinInput.value = state.elem1Min;
+      if (elem1MaxInput) elem1MaxInput.value = state.elem1Max;
+      if (elem1ExMinInput) elem1ExMinInput.value = state.elem1ExMin;
+      if (elem1ExMaxInput) elem1ExMaxInput.value = state.elem1ExMax;
+      if (elem1WeakRadio) elem1WeakRadio.checked = state.elem1Weak;
+      if (elem1ResRadio) elem1ResRadio.checked = state.elem1Resist;
+
+      // Element 2
+      if (elem2MinInput) elem2MinInput.value = state.elem2Min;
+      if (elem2MaxInput) elem2MaxInput.value = state.elem2Max;
+      if (elem2ExMinInput) elem2ExMinInput.value = state.elem2ExMin;
+      if (elem2ExMaxInput) elem2ExMaxInput.value = state.elem2ExMax;
+      if (elem2WeakRadio) elem2WeakRadio.checked = state.elem2Weak;
+      if (elem2ResRadio) elem2ResRadio.checked = state.elem2Resist;
+
+      // Büyü hasar
+      if (spellMinInput) spellMinInput.value = state.spellMin;
+      if (spellMaxInput) spellMaxInput.value = state.spellMax;
+      if (spellExMinInput) spellExMinInput.value = state.spellExMin;
+      if (spellExMaxInput) spellExMaxInput.value = state.spellExMax;
+
+      // Büyü seviyesi
+      for (let i = 1; i <= 4; i++) {
+        const radio = document.getElementById(`atk-spell-lvl${i}`);
+        if (radio) radio.checked = (i === state.spellLevel);
+      }
+    } else {
+      // Kayıt yok — tüm alanları varsayılana sıfırla
+      if (modifierSelect) modifierSelect.value = 'STR';
+      if (extraDmgInput) extraDmgInput.value = '0';
+      if (attackCountInput) attackCountInput.value = '1';
+      if (advantageCheck) advantageCheck.checked = false;
+      if (disadvantageCheck) disadvantageCheck.checked = false;
+
+      if (physMinInput) physMinInput.value = '0';
+      if (physMaxInput) physMaxInput.value = '0';
+      if (physExMinInput) physExMinInput.value = '0';
+      if (physExMaxInput) physExMaxInput.value = '0';
+      if (physWeakRadio) physWeakRadio.checked = false;
+      if (physResRadio) physResRadio.checked = false;
+
+      if (elem1MinInput) elem1MinInput.value = '0';
+      if (elem1MaxInput) elem1MaxInput.value = '0';
+      if (elem1ExMinInput) elem1ExMinInput.value = '0';
+      if (elem1ExMaxInput) elem1ExMaxInput.value = '0';
+      if (elem1WeakRadio) elem1WeakRadio.checked = false;
+      if (elem1ResRadio) elem1ResRadio.checked = false;
+
+      if (elem2MinInput) elem2MinInput.value = '0';
+      if (elem2MaxInput) elem2MaxInput.value = '0';
+      if (elem2ExMinInput) elem2ExMinInput.value = '0';
+      if (elem2ExMaxInput) elem2ExMaxInput.value = '0';
+      if (elem2WeakRadio) elem2WeakRadio.checked = false;
+      if (elem2ResRadio) elem2ResRadio.checked = false;
+
+      if (spellMinInput) spellMinInput.value = '0';
+      if (spellMaxInput) spellMaxInput.value = '0';
+      if (spellExMinInput) spellExMinInput.value = '0';
+      if (spellExMaxInput) spellExMaxInput.value = '0';
+
+      const lvl1Radio = document.getElementById('atk-spell-lvl1');
+      if (lvl1Radio) lvl1Radio.checked = true;
+      for (let i = 2; i <= 4; i++) {
+        const radio = document.getElementById(`atk-spell-lvl${i}`);
+        if (radio) radio.checked = false;
+      }
+    }
+  }
+
+  // ============================================================
   // SALDIRAN SEÇİMİ — Statlarını ve slotlarını gösterir
   // ============================================================
 
   function onAttackerChange() {
+    // Önceki saldıranın form değerlerini kaydet
+    saveAttackerForm();
+
     selectedAttacker = resolveSelection(attackerSelect?.value);
     if (!selectedAttacker) {
       if (attackerInfo) attackerInfo.innerHTML = '<span class="atk-hint">Saldıran seçilmedi</span>';
       fillSpellSlots(null);
       return;
     }
+
+    // Yeni saldıranın form değerlerini geri yükle
+    const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
+    restoreAttackerForm(key);
 
     const d = selectedAttacker.data;
     const stats = d.stats || {};
@@ -253,28 +419,31 @@
     selectedTarget = resolveSelection(targetSelect?.value);
     if (!selectedTarget) {
       if (targetInfo) targetInfo.innerHTML = '<span class="atk-hint">Hedef seçilmedi</span>';
-      targetACInput.value = '10';
       return;
     }
 
     const d = selectedTarget.data;
 
     if (selectedTarget.type === 'character') {
-      targetACInput.value = (d.ac || 10) + (d.ac_bonus || 0);
+      const totalAC = (d.ac || 10) + (d.ac_bonus || 0);
+      // Hedef AC inputunu otomatik doldur
+      if (targetACInput) targetACInput.value = totalAC;
       targetInfo.innerHTML = `
         <div class="atk-target-card atk-card-target">
           <div class="atk-target-name">🎯 ${escapeHtml(d.name)}</div>
           <div class="atk-target-hp">❤️ ${d.hp_current ?? '?'} / ${d.hp_max ?? '?'}</div>
-          <div class="atk-target-ac">🛡️ AC: ${(d.ac || 10)} + ${(d.ac_bonus || 0)} = ${(d.ac || 10) + (d.ac_bonus || 0)}</div>
+          <div class="atk-target-ac">🛡️ AC: ${(d.ac || 10)} + ${(d.ac_bonus || 0)} = ${totalAC}</div>
         </div>
       `;
     } else {
-      targetACInput.value = d.ac || 10;
+      const totalAC = (d.ac || 10) + (d.ac_bonus || 0);
+      // Hedef AC inputunu otomatik doldur
+      if (targetACInput) targetACInput.value = totalAC;
       targetInfo.innerHTML = `
         <div class="atk-target-card atk-card-target">
           <div class="atk-target-name">🎯 [İşaret] ${escapeHtml(d.name)}</div>
           <div class="atk-target-hp">❤️ ${d.hp ?? '?'} / ${d.maxHp ?? '?'}</div>
-          <div class="atk-target-ac">🛡️ AC: ${d.ac || 10}</div>
+          <div class="atk-target-ac">🛡️ AC: ${(d.ac || 10)} + ${(d.ac_bonus || 0)} = ${totalAC}</div>
         </div>
       `;
     }

@@ -4,7 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="DnD Masaüstü - Homebrew Roll20 tabletop oyun arayüzü. Harita, token ve zar sistemi.">
     <title>DnD Masaüstü - Oyun</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -19,6 +23,7 @@
         </div>
 
         <!-- Sağ Taraf (%25): Kontrol Paneli -->
+        <div id="panel-resize-handle" title="Paneli yeniden boyutlandır"></div>
         <div id="control-panel">
             <h3>Kontrol Paneli</h3>
             <p>Durum: <span id="status">Bağlanıyor...</span></p>
@@ -65,12 +70,24 @@
                             <input type="color" id="dm-marker-color" value="#f1c40f">
                         </div>
                         <div class="stats-grid stats-grid-3col">
-                            <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-hp"
-                                    placeholder="örn: 10"></div>
-                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-marker-max-hp"
-                                    placeholder="örn: 10"></div>
-                            <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-marker-size"
-                                    value="50"></div>
+                            <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-hp" placeholder="örn: 10"></div>
+                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-marker-max-hp" placeholder="örn: 10"></div>
+                            <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-marker-size" value="50"></div>
+                        </div>
+                        <!-- AC Değerleri -->
+                        <div class="stats-grid stats-grid-2col">
+                            <div class="form-group"><label>AC:</label><input type="number" id="dm-marker-ac" placeholder="örn: 12" value="10"></div>
+                            <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-marker-ac-bonus" placeholder="0" value="0"></div>
+                        </div>
+                        <!-- Stat Değerleri -->
+                        <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;">Stat / Bonus (Saldırı için)</p>
+                        <div class="stats-grid">
+                            <div class="form-group"><label>STR:</label><input type="number" id="dm-marker-str" placeholder="0" value="0"><input type="number" id="dm-marker-str-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>DEX:</label><input type="number" id="dm-marker-dex" placeholder="0" value="0"><input type="number" id="dm-marker-dex-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>INT:</label><input type="number" id="dm-marker-int" placeholder="0" value="0"><input type="number" id="dm-marker-int-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>CON:</label><input type="number" id="dm-marker-con" placeholder="0" value="0"><input type="number" id="dm-marker-con-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>WIS:</label><input type="number" id="dm-marker-wis" placeholder="0" value="0"><input type="number" id="dm-marker-wis-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
+                            <div class="form-group"><label>CHR:</label><input type="number" id="dm-marker-chr" placeholder="0" value="0"><input type="number" id="dm-marker-chr-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
                         </div>
                         <button id="btn-add-marker" class="btn primary action-btn">İşaret Ekle</button>
                     </div>
@@ -361,10 +378,75 @@
         </div>
     </div>
 
+    <!-- Mobil Sidebar Toggle -->
+    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Paneli Aç/Kapat">☰</button>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <!-- Socket.io istemci scripti -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/client.js?v=4"></script>
-    <script src="js/attack-panel.js?v=1"></script>
+    <script src="js/client.js?v=5"></script>
+    <script src="js/attack-panel.js?v=2"></script>
+    <script>
+        // Mobile sidebar toggle
+        (function() {
+            const toggle = document.getElementById('sidebar-toggle');
+            const panel = document.getElementById('control-panel');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (!toggle || !panel || !overlay) return;
+
+            function openPanel() {
+                panel.classList.add('panel-open');
+                overlay.classList.add('active');
+                toggle.textContent = '✕';
+            }
+            function closePanel() {
+                panel.classList.remove('panel-open');
+                overlay.classList.remove('active');
+                toggle.textContent = '☰';
+            }
+            toggle.addEventListener('click', function() {
+                panel.classList.contains('panel-open') ? closePanel() : openPanel();
+            });
+            overlay.addEventListener('click', closePanel);
+        })();
+
+        // Panel resize handle
+        (function() {
+            const handle = document.getElementById('panel-resize-handle');
+            const panel = document.getElementById('control-panel');
+            if (!handle || !panel) return;
+
+            let isResizing = false;
+            let startX, startWidth;
+
+            handle.addEventListener('mousedown', function(e) {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = panel.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                handle.classList.add('active');
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!isResizing) return;
+                const diff = startX - e.clientX;
+                const newWidth = Math.min(Math.max(startWidth + diff, 260), 700);
+                panel.style.width = newWidth + 'px';
+                panel.style.minWidth = newWidth + 'px';
+                panel.style.maxWidth = newWidth + 'px';
+            });
+
+            document.addEventListener('mouseup', function() {
+                if (!isResizing) return;
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                handle.classList.remove('active');
+            });
+        })();
+    </script>
 </body>
 
 </html>

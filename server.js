@@ -16,7 +16,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // === SABİTLER ===
 const MAX_DRAW_HISTORY = 10000;
-const BACKUP_INTERVAL_MS = 30000;
+const BACKUP_INTERVAL_MS = 30000; 
 const SESSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 saat
 
 // === YARDIMCI FONKSİYONLAR ===
@@ -55,7 +55,7 @@ function truncateStr(str, maxLen) {
 app.use(express.static('public'));
 
 // Genel JSON body limiti — 1 MB
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/ping', (req, res) => {
   res.status(200).send('pong');
@@ -613,6 +613,7 @@ io.on('connection', (socket) => {
       hp: markerData.hp != null ? clampNumber(markerData.hp, 0, 99999) : null,
       maxHp: markerData.maxHp != null ? clampNumber(markerData.maxHp, 0, 99999) : null,
       ac: markerData.ac != null ? clampNumber(markerData.ac, 0, 50) : 10,
+      ac_bonus: markerData.acBonus != null ? clampNumber(markerData.acBonus, 0, 50) : 0,
       stats: markerData.stats ? {
         str: clampNumber(markerData.stats?.str, 0, 30),
         str_bonus: clampNumber(markerData.stats?.str_bonus, 0, 30),
@@ -633,6 +634,7 @@ io.on('connection', (socket) => {
     markers[markerId] = newMarker;
     io.emit('newMarker', newMarker);
   });
+
 
   // ---- DM: Marker Sil ----
   socket.on('deleteMarker', (markerId) => {

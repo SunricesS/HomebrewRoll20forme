@@ -519,28 +519,46 @@ document.addEventListener('touchcancel', () => {
 const btnAddMarker = document.getElementById('btn-add-marker');
 if (btnAddMarker) {
   btnAddMarker.addEventListener('click', () => {
-    const nameEl = document.getElementById('dm-marker-name');
-    const colorEl = document.getElementById('dm-marker-color');
-    const imgEl = document.getElementById('dm-marker-img');
-    const hpEl = document.getElementById('dm-marker-hp');
-    const maxHpEl = document.getElementById('dm-marker-max-hp');
-    const sizeEl = document.getElementById('dm-marker-size');
+    const nameEl    = document.getElementById('dm-marker-name');
+    const colorEl   = document.getElementById('dm-marker-color');
+    const imgEl     = document.getElementById('dm-marker-img');
+    const hpEl      = document.getElementById('dm-marker-hp');
+    const maxHpEl   = document.getElementById('dm-marker-max-hp');
+    const sizeEl    = document.getElementById('dm-marker-size');
+    const acEl      = document.getElementById('dm-marker-ac');
+    const acBonusEl = document.getElementById('dm-marker-ac-bonus');
 
-    const name = (nameEl.value || 'X').substring(0, 2);
-    const color = colorEl.value || '#f1c40f';
+    const name   = (nameEl.value || 'X').substring(0, 2);
+    const color  = colorEl.value || '#f1c40f';
     const imgUrl = imgEl ? imgEl.value : '';
-    const hp = hpEl && hpEl.value !== '' ? parseInt(hpEl.value) : null;
-    const maxHp = maxHpEl && maxHpEl.value !== '' ? parseInt(maxHpEl.value) : null;
-    const size = sizeEl && sizeEl.value !== '' ? parseInt(sizeEl.value) : 50;
+    const hp     = hpEl    && hpEl.value    !== '' ? parseInt(hpEl.value)    : null;
+    const maxHp  = maxHpEl && maxHpEl.value !== '' ? parseInt(maxHpEl.value) : null;
+    const size   = sizeEl  && sizeEl.value  !== '' ? parseInt(sizeEl.value)  : 50;
+    const ac     = acEl    && acEl.value    !== '' ? parseInt(acEl.value)    : 10;
+    const acBonus = acBonusEl && acBonusEl.value !== '' ? parseInt(acBonusEl.value) : 0;
 
-    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size });
+    // Stat değerleri
+    const getNum = (id) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : 0; };
+    const stats = {
+      str:       getNum('dm-marker-str'),
+      str_bonus: getNum('dm-marker-str-bonus'),
+      dex:       getNum('dm-marker-dex'),
+      dex_bonus: getNum('dm-marker-dex-bonus'),
+      int:       getNum('dm-marker-int'),
+      int_bonus: getNum('dm-marker-int-bonus'),
+      con:       getNum('dm-marker-con'),
+      con_bonus: getNum('dm-marker-con-bonus'),
+      wis:       getNum('dm-marker-wis'),
+      wis_bonus: getNum('dm-marker-wis-bonus'),
+      chr:       getNum('dm-marker-chr'),
+      chr_bonus: getNum('dm-marker-chr-bonus'),
+    };
 
-    // Formu Temizle
+    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats });
+
+    // Sadece adı temizle — HP/AC/stat değerleri bir sonraki aynı tür düşman için kalır
     nameEl.value = '';
     if (imgEl) imgEl.value = '';
-    if (hpEl) hpEl.value = '';
-    if (maxHpEl) maxHpEl.value = '';
-    if (sizeEl) sizeEl.value = '50';
   });
 }
 
