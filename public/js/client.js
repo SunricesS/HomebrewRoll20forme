@@ -367,6 +367,35 @@ function addToken(playerData) {
     t.addEventListener('dblclick', () => openMarkerEditor(playerData));
   }
 
+  // Ctrl+Click ile hedef seçimi (DM için)
+  if (role === 'dm') {
+    t.addEventListener('click', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Hedef bilgilerini çöz
+      let targetInfo = null;
+      if (playerData.isMarker) {
+        // Güncel marker verisini al
+        const currentMarker = window.__webdnd_markers[playerData.id];
+        if (currentMarker) {
+          targetInfo = { type: 'marker', id: currentMarker.id, name: currentMarker.name, data: currentMarker };
+        }
+      } else if (playerData.character) {
+        // Güncel oyuncu verisini al
+        const currentPlayer = allPlayers[playerData.id];
+        if (currentPlayer && currentPlayer.character) {
+          targetInfo = { type: 'character', id: currentPlayer.character.id, name: currentPlayer.character.name, data: currentPlayer.character };
+        }
+      }
+
+      if (targetInfo && typeof window.__webdnd_ctrlClickTarget === 'function') {
+        window.__webdnd_ctrlClickTarget(targetInfo, t);
+      }
+    });
+  }
+
   // HP Badge
   const { hpCurrent, hpMax } = extractHp(playerData);
   if (hpCurrent !== null && hpMax !== null) {
@@ -443,6 +472,8 @@ function extractHp(playerData) {
  */
 function setupDragHandlers(tokenEl, tokenId) {
   tokenEl.addEventListener('mousedown', (e) => {
+    // Ctrl+Click hedef seçimi sırasında sürüklemeyi engelle
+    if (e.ctrlKey || e.metaKey) return;
     isDragging = true;
     draggedToken = tokenEl;
     draggedToken.dataset.id = tokenId;

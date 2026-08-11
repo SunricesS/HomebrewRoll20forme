@@ -4,7 +4,7 @@
 //
 // İki seçici:
 //   1. SALDIRAN — statları vuruş hesabında kullanılır, slotları düşürülür
-//   2. HEDEF    — AC'si vuruş kontrolünde kullanılır, hasarı alır
+//   2. HEDEF(LER) — Ctrl+Click ile çoklu seçim, AC kontrolü + hasar
 // ============================================================
 
 (function () {
@@ -15,8 +15,8 @@
 
   // === STATE ===
   let selectedAttacker = null; // { type, id, name, data }
-  let selectedTarget = null;   // { type, id, name, data }
-  let lastAttackResult = null; // { totalDamage, targetId, targetType, targetName, attackerName }
+  let selectedTargets = [];    // Array of { type, id, name, data, tokenEl }
+  let lastAttackResults = [];  // Array of { totalDamage, targetId, targetType, targetName, attackerName }
   let allCharactersCache = [];
 
   // === SALDIRAN FORM CACHE ===
@@ -31,6 +31,7 @@
   const attackerInfo = document.getElementById('atk-attacker-info');
   const targetSelect = document.getElementById('atk-target-select');
   const targetInfo = document.getElementById('atk-target-info');
+  const selectedTargetsList = document.getElementById('atk-selected-targets-list');
   const modifierSelect = document.getElementById('atk-modifier');
   const targetACInput = document.getElementById('atk-target-ac');
   const extraDmgInput = document.getElementById('atk-extra-damage');
@@ -412,42 +413,172 @@
   }
 
   // ============================================================
-  // HEDEF SEÇİMİ — AC'sini yükler
+  // HEDEF SEÇİMİ — Çoklu hedef desteği
   // ============================================================
 
+  /**
+   * Combobox'tan hedef seçildiğinde: Eski hedefleri temizler, tek hedef ekler.
+   */
   function onTargetChange() {
-    selectedTarget = resolveSelection(targetSelect?.value);
-    if (!selectedTarget) {
+    const resolved = resolveSelection(targetSelect?.value);
+    if (!resolved) return;
+
+    // Önceki hedeflerin token çerçevesini kaldır
+    clearAllTargetHighlights();
+    selectedTargets = [];
+
+    // Yeni hedefi ekle
+    addTargetToList(resolved, null);
+  }
+
+  /**
+   * Ctrl+Click ile haritadan hedef eklenir/kaldırılır (toggle).
+   */
+  function onCtrlClickTarget(targetInfo, tokenEl) {
+    // Zaten seçili mi kontrol et
+    const existingIdx = selectedTargets.findIndex(t => t.type === targetInfo.type && t.id === targetInfo.id);
+
+    if (existingIdx >= 0) {
+      // Kaldır (toggle off)
+      const removed = selectedTargets.splice(existingIdx, 1)[0];
+      if (removed.tokenEl) removed.tokenEl.classList.remove('token-target-selected');
+    } else {
+      // Ekle
+      addTargetToList(targetInfo, tokenEl);
+    }
+
+    renderSelectedTargets();
+    // Combobox'u temizle (çoklu seçim Ctrl+Click üzerinden yönetiliyor)
+    if (targetSelect) targetSelect.value = '';
+  }
+
+  /**
+   * Hedef listesine yeni bir hedef ekler.
+   */
+  function addTargetToList(targetInfo, tokenEl) {
+    // Duplicate kontrolü
+    const exists = selectedTargets.some(t => t.type === targetInfo.type && t.id === targetInfo.id);
+    if (exists) return;
+
+    selectedTargets.push({
+      type: targetInfo.type,
+      id: targetInfo.id,
+      name: targetInfo.name,
+      data: targetInfo.data,
+      tokenEl: tokenEl || null
+    });
+
+    // Token'a hedef çerçevesi ekle
+    if (tokenEl) tokenEl.classList.add('token-target-selected');
+
+    renderSelectedTargets();
+  }
+
+  /**
+   * Hedef listesinden belirli bir hedefi kaldırır.
+   */
+  function removeTargetById(type, id) {
+    const idx = selectedTargets.findIndex(t => t.type === type && t.id === id);
+    if (idx >= 0) {
+      const removed = selectedTargets.splice(idx, 1)[0];
+      if (removed.tokenEl) removed.tokenEl.classList.remove('token-target-selected');
+      renderSelectedTargets();
+    }
+  }
+
+  /**
+   * Tüm hedeflerin token çerçevesini kaldırır.
+   */
+  function clearAllTargetHighlights() {
+    selectedTargets.forEach(t => {
+      if (t.tokenEl) t.tokenEl.classList.remove('token-target-selected');
+    });
+  }
+
+  /**
+   * Bir hedefin AC değerini döndürür.
+   */
+  function getTargetAC(target) {
+    const d = target.data;
+    if (target.type === 'character') {
+      return (d.ac || 10) + (d.ac_bonus || 0);
+    } else {
+      return (d.ac || 10) + (d.ac_bonus || 0);
+    }
+  }
+
+  /**
+   * Seçili hedefler listesini DOM'a render eder.
+   */
+  function renderSelectedTargets() {
+    if (!selectedTargetsList) return;
+    selectedTargetsList.innerHTML = '';
+
+    if (selectedTargets.length === 0) {
       if (targetInfo) targetInfo.innerHTML = '<span class="atk-hint">Hedef seçilmedi</span>';
+      // AC inputu sıfırla
+      if (targetACInput) targetACInput.value = 10;
       return;
     }
 
-    const d = selectedTarget.data;
-
-    if (selectedTarget.type === 'character') {
-      const totalAC = (d.ac || 10) + (d.ac_bonus || 0);
-      // Hedef AC inputunu otomatik doldur
-      if (targetACInput) targetACInput.value = totalAC;
-      targetInfo.innerHTML = `
-        <div class="atk-target-card atk-card-target">
-          <div class="atk-target-name">🎯 ${escapeHtml(d.name)}</div>
-          <div class="atk-target-hp">❤️ ${d.hp_current ?? '?'} / ${d.hp_max ?? '?'}</div>
-          <div class="atk-target-ac">🛡️ AC: ${(d.ac || 10)} + ${(d.ac_bonus || 0)} = ${totalAC}</div>
-        </div>
-      `;
-    } else {
-      const totalAC = (d.ac || 10) + (d.ac_bonus || 0);
-      // Hedef AC inputunu otomatik doldur
-      if (targetACInput) targetACInput.value = totalAC;
-      targetInfo.innerHTML = `
-        <div class="atk-target-card atk-card-target">
-          <div class="atk-target-name">🎯 [İşaret] ${escapeHtml(d.name)}</div>
-          <div class="atk-target-hp">❤️ ${d.hp ?? '?'} / ${d.maxHp ?? '?'}</div>
-          <div class="atk-target-ac">🛡️ AC: ${(d.ac || 10)} + ${(d.ac_bonus || 0)} = ${totalAC}</div>
-        </div>
-      `;
+    // Tekil hedefte AC inputunu doldur
+    if (selectedTargets.length === 1) {
+      const ac = getTargetAC(selectedTargets[0]);
+      if (targetACInput) targetACInput.value = ac;
     }
+
+    // Bilgi alanını güncelle
+    if (targetInfo) {
+      if (selectedTargets.length === 1) {
+        const t = selectedTargets[0];
+        const d = t.data;
+        const ac = getTargetAC(t);
+        const isMarker = t.type === 'marker';
+        const hp = isMarker ? (d.hp ?? '?') : (d.hp_current ?? '?');
+        const maxHp = isMarker ? (d.maxHp ?? '?') : (d.hp_max ?? '?');
+        targetInfo.innerHTML = `
+          <div class="atk-target-card atk-card-target">
+            <div class="atk-target-name">🎯 ${isMarker ? '[İşaret] ' : ''}${escapeHtml(d.name)}</div>
+            <div class="atk-target-hp">❤️ ${hp} / ${maxHp}</div>
+            <div class="atk-target-ac">🛡️ AC: ${ac}</div>
+          </div>
+        `;
+      } else {
+        targetInfo.innerHTML = `<span class="atk-hint">🎯 ${selectedTargets.length} hedef seçili — her hedefe ayrı saldırı atılacak</span>`;
+      }
+    }
+
+    // Chip'leri oluştur
+    selectedTargets.forEach(t => {
+      const d = t.data;
+      const ac = getTargetAC(t);
+      const isMarker = t.type === 'marker';
+      const hp = isMarker ? (d.hp ?? '?') : (d.hp_current ?? '?');
+      const maxHp = isMarker ? (d.maxHp ?? '?') : (d.hp_max ?? '?');
+
+      const chip = document.createElement('div');
+      chip.className = 'atk-target-chip';
+      chip.innerHTML = `
+        <div class="atk-chip-info">
+          <span class="atk-chip-name">🎯 ${isMarker ? '[M] ' : ''}${escapeHtml(d.name)}</span>
+          <span class="atk-chip-hp">❤️${hp}/${maxHp}</span>
+          <span class="atk-chip-ac">🛡️${ac}</span>
+        </div>
+      `;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'atk-chip-remove';
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Hedefi kaldır';
+      removeBtn.addEventListener('click', () => removeTargetById(t.type, t.id));
+      chip.appendChild(removeBtn);
+
+      selectedTargetsList.appendChild(chip);
+    });
   }
+
+  // Ctrl+Click callback'ini kaydet
+  window.__webdnd_ctrlClickTarget = onCtrlClickTarget;
 
   // ============================================================
   // YARDIMCILAR
@@ -498,42 +629,57 @@
 
   async function performPhysicalAttack() {
     if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
-    if (!selectedTarget) { alert('Lütfen bir HEDEF seçin!'); return; }
+    if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
 
-    const body = {
-      attackerStats: getAttackerStats(),
-      targetAC: intVal(targetACInput),
-      attackType: 'physical',
-      advantage: advantageCheck?.checked || false,
-      disadvantage: disadvantageCheck?.checked || false,
-      attackCount: intVal(attackCountInput) || 1,
-      extraDamage: intVal(extraDmgInput),
-      physical: {
-        min: intVal(physMinInput), max: intVal(physMaxInput),
-        extraMin: intVal(physExMinInput), extraMax: intVal(physExMaxInput),
-        weakness: physWeakRadio?.checked || false,
-        resistance: physResRadio?.checked || false
-      },
-      element1: {
-        min: intVal(elem1MinInput), max: intVal(elem1MaxInput),
-        extraMin: intVal(elem1ExMinInput), extraMax: intVal(elem1ExMaxInput),
-        weakness: elem1WeakRadio?.checked || false,
-        resistance: elem1ResRadio?.checked || false
-      },
-      element2: {
-        min: intVal(elem2MinInput), max: intVal(elem2MaxInput),
-        extraMin: intVal(elem2ExMinInput), extraMax: intVal(elem2ExMaxInput),
-        weakness: elem2WeakRadio?.checked || false,
-        resistance: elem2ResRadio?.checked || false
-      }
-    };
+    // Her hedef için ayrı saldırı
+    lastAttackResults = [];
+    btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
+    btnSpellAttack && (btnSpellAttack.disabled = true);
 
-    await sendAttack(body);
+    for (const target of selectedTargets) {
+      const targetAC = selectedTargets.length === 1 ? intVal(targetACInput) : getTargetAC(target);
+
+      const body = {
+        attackerStats: getAttackerStats(),
+        targetAC: targetAC,
+        attackType: 'physical',
+        advantage: advantageCheck?.checked || false,
+        disadvantage: disadvantageCheck?.checked || false,
+        attackCount: intVal(attackCountInput) || 1,
+        extraDamage: intVal(extraDmgInput),
+        physical: {
+          min: intVal(physMinInput), max: intVal(physMaxInput),
+          extraMin: intVal(physExMinInput), extraMax: intVal(physExMaxInput),
+          weakness: physWeakRadio?.checked || false,
+          resistance: physResRadio?.checked || false
+        },
+        element1: {
+          min: intVal(elem1MinInput), max: intVal(elem1MaxInput),
+          extraMin: intVal(elem1ExMinInput), extraMax: intVal(elem1ExMaxInput),
+          weakness: elem1WeakRadio?.checked || false,
+          resistance: elem1ResRadio?.checked || false
+        },
+        element2: {
+          min: intVal(elem2MinInput), max: intVal(elem2MaxInput),
+          extraMin: intVal(elem2ExMinInput), extraMax: intVal(elem2ExMaxInput),
+          weakness: elem2WeakRadio?.checked || false,
+          resistance: elem2ResRadio?.checked || false
+        }
+      };
+
+      await sendAttackForTarget(body, target);
+    }
+
+    // Çoklu sonuçlar varsa toplam hasar uygulama butonu
+    showMultiApplyButton();
+
+    btnPhysicalAttack && (btnPhysicalAttack.disabled = false);
+    btnSpellAttack && (btnSpellAttack.disabled = false);
   }
 
   async function performSpellAttack() {
     if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
-    if (!selectedTarget) { alert('Lütfen bir HEDEF seçin!'); return; }
+    if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
 
     // Spell seviyesini belirle
     let spellLevel = 1;
@@ -549,22 +695,37 @@
       return;
     }
 
-    const body = {
-      attackerStats: getAttackerStats(),
-      targetAC: intVal(targetACInput),
-      attackType: 'spell',
-      advantage: advantageCheck?.checked || false,
-      disadvantage: disadvantageCheck?.checked || false,
-      attackCount: intVal(attackCountInput) || 1,
-      extraDamage: intVal(extraDmgInput),
-      spell: {
-        min: intVal(spellMinInput), max: intVal(spellMaxInput),
-        extraMin: intVal(spellExMinInput), extraMax: intVal(spellExMaxInput),
-        level: spellLevel
-      }
-    };
+    // Her hedef için ayrı saldırı
+    lastAttackResults = [];
+    btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
+    btnSpellAttack && (btnSpellAttack.disabled = true);
 
-    await sendAttack(body);
+    for (const target of selectedTargets) {
+      const targetAC = selectedTargets.length === 1 ? intVal(targetACInput) : getTargetAC(target);
+
+      const body = {
+        attackerStats: getAttackerStats(),
+        targetAC: targetAC,
+        attackType: 'spell',
+        advantage: advantageCheck?.checked || false,
+        disadvantage: disadvantageCheck?.checked || false,
+        attackCount: intVal(attackCountInput) || 1,
+        extraDamage: intVal(extraDmgInput),
+        spell: {
+          min: intVal(spellMinInput), max: intVal(spellMaxInput),
+          extraMin: intVal(spellExMinInput), extraMax: intVal(spellExMaxInput),
+          level: spellLevel
+        }
+      };
+
+      await sendAttackForTarget(body, target);
+    }
+
+    // Çoklu sonuçlar varsa toplam hasar uygulama butonu
+    showMultiApplyButton();
+
+    btnPhysicalAttack && (btnPhysicalAttack.disabled = false);
+    btnSpellAttack && (btnSpellAttack.disabled = false);
 
     // Slotu düşür (saldırandan)
     const newSlotCount = currentSlots - 1;
@@ -589,13 +750,10 @@
   }
 
   /**
-   * Sunucuya saldırı isteği gönderir ve sonucu loglar
+   * Tek bir hedefe saldırı isteği gönderir ve sonucu loglar.
    */
-  async function sendAttack(body) {
+  async function sendAttackForTarget(body, target) {
     try {
-      btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
-      btnSpellAttack && (btnSpellAttack.disabled = true);
-
       const res = await fetch('/api/combat/attack', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -608,9 +766,9 @@
       // Log başlığı: Saldıran → Hedef
       const atkLabel = body.attackType === 'physical' ? '⚔️ FİZİKSEL' : '✨ BÜYÜ';
       const attackerName = escapeHtml(selectedAttacker?.name || '?');
-      const targetName = escapeHtml(selectedTarget?.name || '?');
+      const targetName = escapeHtml(target.name || '?');
       addCombatLog(
-        `<span class="atk-log-header">--- ${atkLabel}: ${attackerName} → ${targetName} (${body.attackCount} Vuruş) ---</span>`,
+        `<span class="atk-log-header">--- ${atkLabel}: ${attackerName} → ${targetName} (${body.attackCount} Vuruş, AC:${body.targetAC}) ---</span>`,
         'header'
       );
 
@@ -631,36 +789,52 @@
         }
       });
 
-      addCombatLog(`<span class="atk-log-total">=== TOPLAM HASAR: ${result.totalDamage} ===</span>`, 'total');
+      addCombatLog(`<span class="atk-log-total">=== ${escapeHtml(target.name)}: TOPLAM HASAR: ${result.totalDamage} ===</span>`, 'total');
 
-      // Son sonucu sakla (hasarı HEDEFE uygula butonu için)
-      lastAttackResult = {
-        totalDamage: result.totalDamage,
-        targetId: selectedTarget?.id,
-        targetType: selectedTarget?.type,
-        targetName: selectedTarget?.name,
-        attackerName: selectedAttacker?.name
-      };
-
-      if (btnApplyDamage && result.totalDamage > 0) {
-        btnApplyDamage.classList.remove('hidden');
-        btnApplyDamage.textContent = `💀 ${result.totalDamage} Hasar Uygula → ${escapeHtml(selectedTarget?.name || '?')}`;
+      // Sonucu sakla (çoklu hasar uygulama için)
+      if (result.totalDamage > 0) {
+        lastAttackResults.push({
+          totalDamage: result.totalDamage,
+          targetId: target.id,
+          targetType: target.type,
+          targetName: target.name,
+          attackerName: selectedAttacker?.name
+        });
       }
 
     } catch (err) {
       console.error('Saldırı hatası:', err);
-      addCombatLog(`<span class="atk-log-error">HATA: ${escapeHtml(err.message)}</span>`, 'error');
-    } finally {
-      btnPhysicalAttack && (btnPhysicalAttack.disabled = false);
-      btnSpellAttack && (btnSpellAttack.disabled = false);
+      addCombatLog(`<span class="atk-log-error">HATA (${escapeHtml(target.name)}): ${escapeHtml(err.message)}</span>`, 'error');
     }
   }
 
   /**
-   * Son hesaplanan hasarı HEDEFE uygular
+   * Çoklu hedef sonuçları için "Hasarı Uygula" butonunu gösterir.
+   */
+  function showMultiApplyButton() {
+    if (lastAttackResults.length === 0) {
+      if (btnApplyDamage) btnApplyDamage.classList.add('hidden');
+      return;
+    }
+
+    if (btnApplyDamage) {
+      btnApplyDamage.classList.remove('hidden');
+      if (lastAttackResults.length === 1) {
+        const r = lastAttackResults[0];
+        btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar Uygula → ${escapeHtml(r.targetName)}`;
+      } else {
+        const totalAll = lastAttackResults.reduce((sum, r) => sum + r.totalDamage, 0);
+        const names = lastAttackResults.map(r => escapeHtml(r.targetName)).join(', ');
+        btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef, toplam ${totalAll})`;
+      }
+    }
+  }
+
+  /**
+   * Son hesaplanan hasarları tüm hedeflere uygular.
    */
   async function applyDamage() {
-    if (!lastAttackResult || lastAttackResult.totalDamage <= 0) {
+    if (lastAttackResults.length === 0) {
       alert('Uygulanacak hasar yok!');
       return;
     }
@@ -669,31 +843,41 @@
       btnApplyDamage.disabled = true;
       btnApplyDamage.textContent = 'Uygulanıyor...';
 
-      const res = await fetch('/api/combat/apply-damage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetType: lastAttackResult.targetType,
-          targetId: lastAttackResult.targetId,
-          damage: lastAttackResult.totalDamage
-        })
-      });
+      for (const attackResult of lastAttackResults) {
+        try {
+          const res = await fetch('/api/combat/apply-damage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              targetType: attackResult.targetType,
+              targetId: attackResult.targetId,
+              damage: attackResult.totalDamage
+            })
+          });
 
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Bilinmeyen hata');
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Bilinmeyen hata');
 
-      addCombatLog(
-        `<span class="atk-log-apply">💀 ${lastAttackResult.totalDamage} hasar uygulandı → ${escapeHtml(lastAttackResult.targetName)}. Yeni HP: ${result.newHp}</span>`,
-        'apply'
-      );
+          addCombatLog(
+            `<span class="atk-log-apply">💀 ${attackResult.totalDamage} hasar uygulandı → ${escapeHtml(attackResult.targetName)}. Yeni HP: ${result.newHp}</span>`,
+            'apply'
+          );
+        } catch (err) {
+          addCombatLog(
+            `<span class="atk-log-error">HATA (${escapeHtml(attackResult.targetName)}): ${escapeHtml(err.message)}</span>`,
+            'error'
+          );
+        }
+      }
 
-      lastAttackResult = null;
+      lastAttackResults = [];
       btnApplyDamage.classList.add('hidden');
 
       // Seçicileri yenile
       await loadSelectors();
       if (selectedAttacker) { attackerSelect.value = `${selectedAttacker.type}:${selectedAttacker.id}`; onAttackerChange(); }
-      if (selectedTarget) { targetSelect.value = `${selectedTarget.type}:${selectedTarget.id}`; onTargetChange(); }
+      // Hedef listesini güncelle (HP değişmiş olabilir)
+      renderSelectedTargets();
     } catch (err) {
       console.error('Hasar uygulama hatası:', err);
       addCombatLog(`<span class="atk-log-error">HATA: ${escapeHtml(err.message)}</span>`, 'error');
@@ -735,7 +919,7 @@
     socket.on('updateMarkerData', () => loadSelectors());
     socket.on('characterUpdated', () => {
       if (selectedAttacker) setTimeout(onAttackerChange, 300);
-      if (selectedTarget) setTimeout(onTargetChange, 300);
+      if (selectedTargets.length > 0) setTimeout(renderSelectedTargets, 300);
     });
   }
 
