@@ -20,6 +20,44 @@
                 <canvas id="drawing-layer"></canvas>
                 <!-- Token Sistemi -->
             </div>
+
+            <!-- ==================== BG3 COMBAT / İNİSİYATİF BAR ==================== -->
+            <div id="bg3-combat-bar-container" class="bg3-combat-container hidden">
+                <div class="bg3-combat-decor-left"></div>
+                <div class="bg3-combat-inner">
+                    <!-- Sol Bilgi / Tur Rozeti -->
+                    <div class="bg3-combat-round-badge" id="bg3-round-badge" title="Mevcut Tur">
+                        <span class="bg3-round-icon">⚔️</span>
+                        <span class="bg3-round-text" id="bg3-round-display">Tur 1</span>
+                    </div>
+
+                    <!-- Kartlar Şeridi -->
+                    <div class="bg3-cards-wrapper" id="bg3-cards-wrapper">
+                        <div class="bg3-cards-track" id="bg3-cards-track">
+                            <!-- JS ile dinamik render edilecek -->
+                        </div>
+                    </div>
+
+                    <!-- Sağ Kontrol Butonları -->
+                    <div class="bg3-combat-controls">
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-prev" id="bg3-btn-prev" title="Önceki Tur">⏮️</button>
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-next" id="bg3-btn-next" title="Sonraki Tur (Space / N)">
+                            <span class="bg3-next-icon">⏭️</span>
+                            <span class="bg3-next-text">Sonraki Tur</span>
+                        </button>
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-reroll" id="bg3-btn-reroll" title="Zarları Yeniden At">🎲</button>
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-close" id="bg3-btn-close" title="Combat Modunu Kapat">✕</button>
+                    </div>
+                </div>
+                <div class="bg3-combat-decor-right"></div>
+            </div>
+
+            <!-- Sol Alt Tetikleyici Buton -->
+            <button id="combat-mode-toggle-btn" class="combat-mode-floating-btn" title="Combat Modunu Aç / Kapat (Kısayol: C)">
+                <span class="combat-btn-icon">⚔️</span>
+                <span class="combat-btn-text">Combat Modu</span>
+                <span class="combat-btn-status-badge hidden" id="combat-btn-status-badge">Aktif</span>
+            </button>
         </div>
 
         <!-- Sağ Taraf (%25): Kontrol Paneli -->
@@ -46,6 +84,7 @@
                 <div class="dm-tools-header">
                     <h4>DM Araçları</h4>
                     <div class="dm-tools-actions">
+                        <button class="btn warning action-btn dm-combat-btn" id="btn-dm-toggle-combat" title="Combat Modunu Başlat / Kapat">⚔️ Combat Modu</button>
                         <button class="btn primary action-btn dm-save-btn" id="btn-force-save">Harita Kaydet</button>
                         <button class="btn secondary dm-gallery-btn"
                             onclick="window.open('/gallery.html', '_blank')">Galeriyi Aç</button>
@@ -489,6 +528,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/client.js?v=5"></script>
     <script src="js/attack-panel.js?v=2"></script>
+    <script src="js/combat-tracker.js?v=1"></script>
     <script>
         // Mobile sidebar toggle
         (function() {

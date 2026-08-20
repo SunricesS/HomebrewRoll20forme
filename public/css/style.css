@@ -2344,3 +2344,578 @@ input[type="color"]::-webkit-color-swatch {
     color: var(--text-muted) !important;
     font-weight: 500;
 }
+
+/* ============================================================
+   BALDUR'S GATE 3 — COMBAT & İNİSİYATİF TAKİP BARI
+   ============================================================ */
+
+/* Ana Kapsayıcı */
+.bg3-combat-container {
+    position: fixed;
+    top: 18px;
+    left: 40%;
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: calc(100vw - 360px);
+    pointer-events: auto;
+    animation: bg3SlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.85));
+}
+
+@keyframes bg3SlideDown {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+    }
+}
+
+/* BG3 Gotik Kanat Süslemeleri */
+.bg3-combat-decor-left,
+.bg3-combat-decor-right {
+    width: 22px;
+    height: 60px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.bg3-combat-decor-left::before,
+.bg3-combat-decor-right::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #d97706, #92400e, transparent);
+    clip-path: polygon(100% 0, 0 50%, 100% 100%, 75% 50%);
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6));
+}
+
+.bg3-combat-decor-right::before {
+    transform: translateY(-50%) scaleX(-1);
+}
+
+/* İç Kapsayıcı (Gövde) */
+.bg3-combat-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(180deg, rgba(17, 24, 39, 0.94) 0%, rgba(10, 14, 23, 0.98) 100%);
+    border: 1.5px solid rgba(217, 119, 6, 0.45);
+    border-radius: 12px;
+    padding: 8px 14px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 
+        inset 0 1px 0 rgba(251, 191, 36, 0.25),
+        inset 0 0 20px rgba(0, 0, 0, 0.6),
+        0 8px 30px rgba(0, 0, 0, 0.75);
+    max-width: 100%;
+}
+
+/* Tur Rozeti */
+.bg3-combat-round-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(135deg, rgba(217, 119, 6, 0.25), rgba(146, 64, 14, 0.35));
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    padding: 6px 12px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 10px rgba(245, 158, 11, 0.15);
+    flex-shrink: 0;
+    cursor: default;
+}
+
+.bg3-round-icon {
+    font-size: 15px;
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.8));
+}
+
+.bg3-round-text {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, #fef3c7, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+}
+
+/* Kartlar Şeridi */
+.bg3-cards-wrapper {
+    overflow-x: auto;
+    max-width: 58vw;
+    padding: 10px 4px 18px 4px;
+    scroll-behavior: smooth;
+}
+
+.bg3-cards-wrapper::-webkit-scrollbar {
+    height: 4px;
+}
+
+.bg3-cards-wrapper::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 4px;
+}
+
+.bg3-cards-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(217, 119, 6, 0.4);
+    border-radius: 4px;
+}
+
+.bg3-cards-track {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 4px 6px;
+}
+
+/* ==================== BG3 COMBAT CARD ==================== */
+.bg3-combat-card {
+    position: relative;
+    width: 60px;
+    min-width: 60px;
+    height: 80px;
+    background: var(--bg-card);
+    border-radius: 6px;
+    border: 2px solid var(--border-default);
+    cursor: pointer;
+    transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    flex-shrink: 0;
+}
+
+.bg3-combat-card:hover {
+    transform: translateY(-4px) scale(1.06);
+    border-color: var(--accent-hover);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+    z-index: 5;
+}
+
+/* Oyuncu / Canavar / DM Çerçeve Renkleri */
+.bg3-combat-card.card-player {
+    border-color: var(--token-theme-color, #0ea5e9);
+}
+
+.bg3-combat-card.card-enemy {
+    border-color: var(--token-theme-color, #ef4444);
+}
+
+.bg3-combat-card.card-dm {
+    border-color: var(--token-theme-color, #a855f7);
+}
+
+/* Portre Alanı */
+.bg3-card-portrait-wrap {
+    position: relative;
+    width: 100%;
+    height: 60px;
+    background: var(--bg-deepest);
+    border-radius: 4px 4px 0 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bg3-card-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.bg3-card-initial {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 800;
+    color: #ffffff;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+}
+
+.bg3-card-initial-fallback {
+    font-size: 22px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+/* İnisiyatif Rozeti (Zar) */
+.bg3-card-init-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background: rgba(6, 10, 19, 0.88);
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    border-radius: 4px;
+    padding: 1px 4px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #fbbf24;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    z-index: 2;
+}
+
+.bg3-badge-d20 {
+    font-size: 9px;
+}
+
+.bg3-badge-val {
+    letter-spacing: -0.2px;
+}
+
+/* Mini HP Bar */
+.bg3-card-hp-track {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 11px;
+    background: rgba(0, 0, 0, 0.85);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 3;
+    overflow: hidden;
+}
+
+.bg3-card-hp-fill {
+    height: 100%;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.bg3-card-hp-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8.5px;
+    font-weight: 800;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    line-height: 1;
+}
+
+/* Kart Alt İsim Etiketi */
+.bg3-card-name-label {
+    padding: 2px 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: rgba(10, 14, 23, 0.95);
+    border-radius: 0 0 4px 4px;
+}
+
+/* ==================== AKTİF SIRA VURGUSU (BG3 ACTIVE TURN) ==================== */
+.bg3-combat-card.active-turn {
+    transform: translateY(6px) scale(1.16) !important;
+    border-color: #f59e0b !important;
+    box-shadow: 
+        0 0 16px rgba(245, 158, 11, 0.85),
+        0 0 35px rgba(239, 68, 68, 0.6),
+        inset 0 0 10px rgba(245, 158, 11, 0.4);
+    z-index: 15 !important;
+    animation: bg3ActivePulse 1.8s infinite ease-in-out;
+}
+
+@keyframes bg3ActivePulse {
+    0% {
+        box-shadow: 
+            0 0 14px rgba(245, 158, 11, 0.8),
+            0 0 28px rgba(239, 68, 68, 0.5),
+            inset 0 0 8px rgba(245, 158, 11, 0.3);
+    }
+    50% {
+        box-shadow: 
+            0 0 24px rgba(245, 158, 11, 1),
+            0 0 42px rgba(239, 68, 68, 0.8),
+            inset 0 0 14px rgba(245, 158, 11, 0.6);
+    }
+    100% {
+        box-shadow: 
+            0 0 14px rgba(245, 158, 11, 0.8),
+            0 0 28px rgba(239, 68, 68, 0.5),
+            inset 0 0 8px rgba(245, 158, 11, 0.3);
+    }
+}
+
+/* Aktif Karakter İsim Banner'ı (Görseldeki "Za'krug" gibi) */
+.bg3-active-name-banner {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(20, 29, 43, 0.98), rgba(10, 14, 23, 0.98));
+    border: 1px solid #f59e0b;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #fbbf24;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.9), 0 0 10px rgba(245, 158, 11, 0.4);
+    z-index: 20;
+    pointer-events: none;
+    animation: bannerPop 0.3s ease;
+}
+
+@keyframes bannerPop {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -4px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+    }
+}
+
+.bg3-active-crown {
+    font-size: 10px;
+    filter: drop-shadow(0 0 3px #fbbf24);
+}
+
+/* ==================== ÖLÜ KARAKTER DURUMU ==================== */
+.bg3-combat-card.is-dead {
+    filter: grayscale(80%) contrast(0.9);
+    opacity: 0.6;
+    border-color: #64748b !important;
+}
+
+.bg3-card-death-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(185, 28, 28, 0.4) 0%, rgba(127, 29, 29, 0.75) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 4;
+}
+
+.bg3-death-skull {
+    font-size: 20px;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.9));
+}
+
+/* ==================== KONTROL BUTONLARI ==================== */
+.bg3-combat-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.bg3-ctrl-btn {
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-family);
+    transition: all var(--transition-base);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    padding: 7px 10px;
+    font-size: 13px;
+}
+
+.bg3-ctrl-btn:hover {
+    background: var(--bg-card);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+/* Sonraki Tur Butonu (Vurgulu BG3 Butonu) */
+.bg3-btn-next {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    color: #ffffff;
+    border: 1px solid #fbbf24;
+    box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4);
+    font-weight: 700;
+    gap: 6px;
+    padding: 7px 14px;
+}
+
+.bg3-btn-next:hover {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    box-shadow: 0 4px 18px rgba(245, 158, 11, 0.6);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.bg3-next-icon {
+    font-size: 14px;
+}
+
+.bg3-next-text {
+    font-size: 12px;
+    letter-spacing: 0.2px;
+}
+
+.bg3-btn-close {
+    color: var(--text-muted);
+}
+
+.bg3-btn-close:hover {
+    background: var(--danger-dim);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+/* ==================== SOL ALT TETİKLEYİCİ BUTON ==================== */
+.combat-mode-floating-btn {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: linear-gradient(180deg, rgba(20, 29, 43, 0.90) 0%, rgba(10, 14, 23, 0.95) 100%);
+    border: 1.5px solid rgba(14, 165, 233, 0.35);
+    border-radius: 30px;
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(14, 165, 233, 0.15);
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: auto;
+}
+
+.combat-mode-floating-btn:hover {
+    border-color: var(--accent-hover);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 20px var(--accent-glow);
+    transform: translateY(-2px);
+    color: #ffffff;
+}
+
+.combat-mode-floating-btn.active {
+    border-color: #f59e0b;
+    background: linear-gradient(180deg, rgba(30, 25, 15, 0.92) 0%, rgba(15, 12, 6, 0.96) 100%);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.4), 0 6px 20px rgba(0, 0, 0, 0.6);
+    animation: floatingBtnGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes floatingBtnGlow {
+    0%, 100% {
+        box-shadow: 0 0 14px rgba(245, 158, 11, 0.3), 0 6px 20px rgba(0, 0, 0, 0.6);
+    }
+    50% {
+        box-shadow: 0 0 24px rgba(245, 158, 11, 0.6), 0 6px 20px rgba(0, 0, 0, 0.6);
+    }
+}
+
+.combat-btn-icon {
+    font-size: 16px;
+}
+
+.combat-btn-status-badge {
+    background: #f59e0b;
+    color: #060a13;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* DM Tools Butonu Aktif Durum */
+.dm-combat-btn.active {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #060a13 !important;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.5) !important;
+}
+
+/* ==================== HARİTADA AKTİF TOKEN VURGUSU ==================== */
+.token.combat-active-token {
+    box-shadow: 
+        0 0 0 3px #f59e0b,
+        0 0 24px rgba(245, 158, 11, 0.9),
+        0 0 45px rgba(239, 68, 68, 0.7) !important;
+    border-color: #fbbf24 !important;
+    z-index: 50 !important;
+    animation: tokenCombatPulse 1.6s infinite ease-in-out;
+}
+
+@keyframes tokenCombatPulse {
+    0%, 100% {
+        box-shadow: 
+            0 0 0 3px #f59e0b,
+            0 0 18px rgba(245, 158, 11, 0.8),
+            0 0 32px rgba(239, 68, 68, 0.5);
+    }
+    50% {
+        box-shadow: 
+            0 0 0 4px #fbbf24,
+            0 0 30px rgba(245, 158, 11, 1),
+            0 0 50px rgba(239, 68, 68, 0.85);
+    }
+}
+
+/* Ping Animasyonu (Karta tıklandığında) */
+.token.combat-ping-pulse {
+    animation: combatPingWave 1.6s ease-out !important;
+}
+
+@keyframes combatPingWave {
+    0% {
+        outline: 0px solid rgba(245, 158, 11, 0.9);
+        outline-offset: 0px;
+    }
+    50% {
+        outline: 8px solid rgba(245, 158, 11, 0.6);
+        outline-offset: 12px;
+    }
+    100% {
+        outline: 0px solid rgba(245, 158, 11, 0);
+        outline-offset: 24px;
+    }
+}
+
+/* ==================== MOBİL UYUMLULUK ==================== */
+@media (max-width: 900px) {
+    .bg3-combat-container {
+        left: 50%;
+        top: 10px;
+        max-width: 96vw;
+    }
+
+    .bg3-cards-wrapper {
+        max-width: 50vw;
+    }
+
+    .combat-mode-floating-btn {
+        bottom: 16px;
+        left: 16px;
+        padding: 8px 14px;
+        font-size: 12px;
+    }
+}

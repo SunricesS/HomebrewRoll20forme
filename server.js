@@ -462,6 +462,9 @@ app.post('/api/combat/apply-damage', async (req, res) => {
           id: socketId,
           updates: { hp_current: newHp, hp_max: charData.hp_max }
         });
+        syncCombatantHp(socketId, newHp, charData.hp_max);
+      } else {
+        syncCombatantHp(targetId, newHp, charData.hp_max);
       }
 
       res.json({ success: true, newHp, targetType: 'character' });
@@ -470,6 +473,7 @@ app.post('/api/combat/apply-damage', async (req, res) => {
       if (markers[targetId] && markers[targetId].hp != null) {
         markers[targetId].hp = Math.max(0, markers[targetId].hp - safeDamage);
         io.emit('updateMarkerData', markers[targetId]);
+        syncCombatantHp(targetId, markers[targetId].hp, markers[targetId].maxHp);
         res.json({ success: true, newHp: markers[targetId].hp, targetType: 'marker' });
       } else {
         res.status(404).json({ error: 'Marker bulunamadı veya HP yok.' });
@@ -608,6 +612,127 @@ const sessionCache = {};
 let mapBgUrl = '';
 let drawHistory = [];
 
+// === SAVAŞ / İNİSİYATİF DURUMU (BG3 COMBAT TRACKER) ===
+let combatState = {
+  active: false,
+  round: 1,
+  currentTurnIndex: 0,
+  combatants: []
+};
+
+/**
+ * Haritadaki tüm aktif oyuncu ve marker tokenları için 1d20 + CHR modifikatörü hesaplayıp
+ * BG3 tarzı inisiyatif listesi oluşturur ve sıralar.
+ */
+function calculateInitiativeForCombat() {
+  const list = [];
+
+  // 1. Oyuncular (DM Hariç)
+  Object.values(players).forEach(p => {
+    // DM tokeni savaşa dahil edilmez
+    if (p.role === 'dm') return;
+
+    const name = p.character?.name || 'Oyuncu';
+    const characterId = p.character?.id || null;
+    const chrStat = p.character?.stats?.chr != null ? p.character.stats.chr : 10;
+    const chrBonus = p.character?.stats?.chr_bonus != null ? p.character.stats.chr_bonus : 0;
+    // D&D CHR Modifikatörü = floor((CHR - 10) / 2) + Bonus
+    const chrMod = Math.floor((chrStat - 10) / 2) + chrBonus;
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + chrMod;
+    const hpCurrent = p.character?.hp_current ?? null;
+    const hpMax = p.character?.hp_max ?? null;
+
+    list.push({
+      id: p.id,
+      sessionId: p.sessionId,
+      characterId: characterId,
+      name: name,
+      color: p.color || '#3498db',
+      imgUrl: p.imgUrl || p.character?.avatar_url || null,
+      isMarker: false,
+      role: p.role || 'player',
+      hpCurrent: hpCurrent,
+      hpMax: hpMax,
+      chrStat: chrStat,
+      chrBonus: chrBonus,
+      chrMod: chrMod,
+      roll: roll,
+      total: total,
+      isDead: hpCurrent !== null && hpCurrent <= 0
+    });
+  });
+
+  // 2. DM Marker'ları (Canavarlar / NPC'ler)
+  Object.values(markers).forEach(m => {
+    const name = m.name || 'NPC';
+    const chrStat = m.stats?.chr != null ? m.stats.chr : 10;
+    const chrBonus = m.stats?.chr_bonus != null ? m.stats.chr_bonus : 0;
+    const chrMod = Math.floor((chrStat - 10) / 2) + chrBonus;
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + chrMod;
+    const hpCurrent = m.hp ?? null;
+    const hpMax = m.maxHp ?? null;
+
+    list.push({
+      id: m.id,
+      name: name,
+      color: m.color || '#e74c3c',
+      imgUrl: m.imgUrl || null,
+      isMarker: true,
+      role: 'marker',
+      hpCurrent: hpCurrent,
+      hpMax: hpMax,
+      chrStat: chrStat,
+      chrBonus: chrBonus,
+      chrMod: chrMod,
+      roll: roll,
+      total: total,
+      isDead: hpCurrent !== null && hpCurrent <= 0
+    });
+  });
+
+  // 3. Sıralama:
+  // - En yüksek toplam puan en solda (azalan)
+  // - Eşitlik durumunda CHR değeri (stat + bonus) yüksek olana öncelik
+  // - Hâlâ eşitse d20 ham zar sonucuna göre
+  list.sort((a, b) => {
+    if (b.total !== a.total) {
+      return b.total - a.total;
+    }
+    const aChrTotal = a.chrStat + a.chrBonus;
+    const bChrTotal = b.chrStat + b.chrBonus;
+    if (bChrTotal !== aChrTotal) {
+      return bChrTotal - aChrTotal;
+    }
+    if (b.roll !== a.roll) {
+      return b.roll - a.roll;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return list;
+}
+
+/**
+ * Savaşçı can değerini günceller ve değişiklik varsa tüm istemcilere bildirir.
+ */
+function syncCombatantHp(id, hpCurrent, hpMax) {
+  if (!combatState.active || !combatState.combatants.length) return;
+  let changed = false;
+  combatState.combatants.forEach(c => {
+    if (c.id === id || (c.sessionId && c.sessionId === id)) {
+      if (hpCurrent !== undefined) c.hpCurrent = hpCurrent;
+      if (hpMax !== undefined) c.hpMax = hpMax;
+      c.isDead = c.hpCurrent !== null && c.hpCurrent <= 0;
+      changed = true;
+    }
+  });
+  if (changed) {
+    io.emit('combatStateUpdated', combatState);
+  }
+}
+
 // === SOCKET.IO EVENT YÖNETİMİ ===
 io.on('connection', (socket) => {
   console.log('Bir oyuncu bağlandı: ' + socket.id);
@@ -691,6 +816,9 @@ io.on('connection', (socket) => {
     if (mapBgUrl) {
       socket.emit('updateBg', mapBgUrl);
     }
+
+    // Mevcut Savaş / İnisiyatif durumunu gönder
+    socket.emit('combatStateUpdated', combatState);
   });
 
   // ---- DM: Yeni Marker Oluştur ----
@@ -729,6 +857,32 @@ io.on('connection', (socket) => {
     };
     markers[markerId] = newMarker;
     io.emit('newMarker', newMarker);
+
+    // Eğer savaş aktifse yeni marker'ı da savaşa ekle
+    if (combatState.active) {
+      const chrStat = newMarker.stats?.chr != null ? newMarker.stats.chr : 10;
+      const chrBonus = newMarker.stats?.chr_bonus != null ? newMarker.stats.chr_bonus : 0;
+      const chrMod = Math.floor((chrStat - 10) / 2) + chrBonus;
+      const roll = Math.floor(Math.random() * 20) + 1;
+      const total = roll + chrMod;
+      combatState.combatants.push({
+        id: newMarker.id,
+        name: newMarker.name || 'NPC',
+        color: newMarker.color || '#e74c3c',
+        imgUrl: newMarker.imgUrl || null,
+        isMarker: true,
+        role: 'marker',
+        hpCurrent: newMarker.hp,
+        hpMax: newMarker.maxHp,
+        chrStat,
+        chrBonus,
+        chrMod,
+        roll,
+        total,
+        isDead: newMarker.hp !== null && newMarker.hp <= 0
+      });
+      io.emit('combatStateUpdated', combatState);
+    }
   });
 
 
@@ -739,6 +893,15 @@ io.on('connection', (socket) => {
 
     delete markers[markerId];
     io.emit('removeMarker', markerId);
+
+    // Savaş aktifse listeden çıkar
+    if (combatState.active) {
+      combatState.combatants = combatState.combatants.filter(c => c.id !== markerId);
+      if (combatState.currentTurnIndex >= combatState.combatants.length) {
+        combatState.currentTurnIndex = Math.max(0, combatState.combatants.length - 1);
+      }
+      io.emit('combatStateUpdated', combatState);
+    }
   });
 
   // ---- DM: Marker Düzenle ----
@@ -749,6 +912,10 @@ io.on('connection', (socket) => {
     if (data.hp !== undefined) markers[data.id].hp = clampNumber(data.hp, 0, 99999);
     if (data.size !== undefined) markers[data.id].size = clampNumber(data.size, 10, 500);
     io.emit('updateMarkerData', markers[data.id]);
+
+    if (data.hp !== undefined) {
+      syncCombatantHp(data.id, data.hp, markers[data.id].maxHp);
+    }
   });
 
   // ---- DM: Arka Plan Güncelle ----
@@ -775,6 +942,15 @@ io.on('connection', (socket) => {
       imgUrl: players[socket.id].imgUrl,
       color: players[socket.id].color
     });
+
+    if (combatState.active) {
+      const c = combatState.combatants.find(item => item.id === socket.id);
+      if (c) {
+        if (data.imgUrl !== undefined) c.imgUrl = players[socket.id].imgUrl;
+        if (data.color !== undefined) c.color = players[socket.id].color;
+        io.emit('combatStateUpdated', combatState);
+      }
+    }
   });
 
   // ---- DM: Karakter Güncelle ----
@@ -828,6 +1004,7 @@ io.on('connection', (socket) => {
     if (players[data.id] && players[data.id].character) {
       Object.assign(players[data.id].character, updates);
       io.emit('characterUpdated', { id: data.id, updates: updates });
+      syncCombatantHp(data.id, updates.hp_current, updates.hp_max);
     }
   });
 
@@ -918,6 +1095,85 @@ io.on('connection', (socket) => {
     socket.emit('saveComplete');
   });
 
+  // ---- BG3 COMBAT / İNİSİYATİF EVENTLERİ ----
+  socket.on('getCombatState', () => {
+    socket.emit('combatStateUpdated', combatState);
+  });
+
+  socket.on('startCombat', () => {
+    combatState.combatants = calculateInitiativeForCombat();
+    combatState.active = true;
+    combatState.round = 1;
+    combatState.currentTurnIndex = 0;
+    io.emit('combatStateUpdated', combatState);
+    io.emit('combatStarted', { round: combatState.round, combatants: combatState.combatants });
+  });
+
+  socket.on('endCombat', () => {
+    combatState.active = false;
+    combatState.currentTurnIndex = 0;
+    combatState.round = 1;
+    combatState.combatants = [];
+    io.emit('combatStateUpdated', combatState);
+    io.emit('combatEnded');
+  });
+
+  socket.on('toggleCombat', () => {
+    if (combatState.active) {
+      combatState.active = false;
+      combatState.currentTurnIndex = 0;
+      combatState.round = 1;
+      combatState.combatants = [];
+      io.emit('combatStateUpdated', combatState);
+      io.emit('combatEnded');
+    } else {
+      combatState.combatants = calculateInitiativeForCombat();
+      combatState.active = true;
+      combatState.round = 1;
+      combatState.currentTurnIndex = 0;
+      io.emit('combatStateUpdated', combatState);
+      io.emit('combatStarted', { round: combatState.round, combatants: combatState.combatants });
+    }
+  });
+
+  socket.on('nextCombatTurn', () => {
+    if (!combatState.active || !combatState.combatants.length) return;
+    
+    let nextIndex = combatState.currentTurnIndex + 1;
+    if (nextIndex >= combatState.combatants.length) {
+      nextIndex = 0;
+      combatState.round += 1;
+    }
+    combatState.currentTurnIndex = nextIndex;
+    io.emit('combatStateUpdated', combatState);
+  });
+
+  socket.on('prevCombatTurn', () => {
+    if (!combatState.active || !combatState.combatants.length) return;
+    
+    if (combatState.currentTurnIndex > 0) {
+      combatState.currentTurnIndex -= 1;
+    } else if (combatState.round > 1) {
+      combatState.round -= 1;
+      combatState.currentTurnIndex = combatState.combatants.length - 1;
+    }
+    io.emit('combatStateUpdated', combatState);
+  });
+
+  socket.on('setCombatTurn', (index) => {
+    if (!combatState.active || !combatState.combatants.length) return;
+    const safeIdx = clampNumber(index, 0, combatState.combatants.length - 1);
+    combatState.currentTurnIndex = safeIdx;
+    io.emit('combatStateUpdated', combatState);
+  });
+
+  socket.on('rerollCombatInitiative', () => {
+    if (!combatState.active) return;
+    combatState.combatants = calculateInitiativeForCombat();
+    combatState.currentTurnIndex = 0;
+    io.emit('combatStateUpdated', combatState);
+  });
+
   // ---- Bağlantı Kopma ----
   socket.on('disconnect', () => {
     console.log('Oyuncu ayrıldı: ' + socket.id);
@@ -935,6 +1191,15 @@ io.on('connection', (socket) => {
 
       delete players[socket.id];
       io.emit('playerDisconnected', socket.id);
+
+      // Savaş devam ediyorsa listeden çıkar
+      if (combatState.active) {
+        combatState.combatants = combatState.combatants.filter(c => c.id !== socket.id);
+        if (combatState.currentTurnIndex >= combatState.combatants.length) {
+          combatState.currentTurnIndex = Math.max(0, combatState.combatants.length - 1);
+        }
+        io.emit('combatStateUpdated', combatState);
+      }
     }
   });
 });

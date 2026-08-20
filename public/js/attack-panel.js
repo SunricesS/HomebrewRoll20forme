@@ -387,18 +387,18 @@
     });
     if (hasDbChars) selectEl.appendChild(dbGroup);
 
-    // Grup 3: İşaretler/NPC (HP'li marker'lar)
+    // Grup 3: İşaretler/NPC
     if (window.__webdnd_markers) {
       const markerGroup = document.createElement('optgroup');
       markerGroup.label = '⚔️ İşaretler/NPC';
       let hasMarkers = false;
 
       Object.values(window.__webdnd_markers).forEach(m => {
-        if (m.hp == null) return;
         hasMarkers = true;
         const opt = document.createElement('option');
         opt.value = `marker:${m.id}`;
-        opt.textContent = `[M] ${m.name} (HP: ${m.hp}/${m.maxHp || '?'})`;
+        const hpInfo = m.hp != null ? ` (HP: ${m.hp}/${m.maxHp || '?'})` : '';
+        opt.textContent = `[M] ${m.name}${hpInfo}`;
         markerGroup.appendChild(opt);
       });
       if (hasMarkers) selectEl.appendChild(markerGroup);
@@ -574,6 +574,28 @@
       fillSpellSlots(null);
     }
   }
+
+  /**
+   * Dışarıdan (örn. BG3 Combat Tracker'dan) saldıran seçmek için global API
+   */
+  window.__webdnd_selectAttacker = function (selectionKey) {
+    if (!attackerSelect) return;
+    if (!selectionKey) {
+      attackerSelect.value = '';
+      onAttackerChange();
+      return;
+    }
+
+    // Seçenek henüz select listesinde yoksa güncelle
+    let option = attackerSelect.querySelector(`option[value="${selectionKey}"]`);
+    if (!option) {
+      populateSelect(attackerSelect, '— Saldıran Seç —');
+      option = attackerSelect.querySelector(`option[value="${selectionKey}"]`);
+    }
+
+    attackerSelect.value = selectionKey;
+    onAttackerChange();
+  };
 
   // ============================================================
   // HEDEF SEÇİMİ — Çoklu hedef desteği
@@ -1058,6 +1080,18 @@
   });
   disadvantageCheck?.addEventListener('change', () => {
     if (disadvantageCheck.checked && advantageCheck) advantageCheck.checked = false;
+  });
+
+  panel?.addEventListener('toggle', () => {
+    if (panel.open) {
+      const currentAttackerVal = attackerSelect ? attackerSelect.value : null;
+      loadSelectors().then(() => {
+        if (currentAttackerVal && attackerSelect) {
+          attackerSelect.value = currentAttackerVal;
+          onAttackerChange();
+        }
+      });
+    }
   });
 
   // === SOCKET SENKRONİZASYON ===
