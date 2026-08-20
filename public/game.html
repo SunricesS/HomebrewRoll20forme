@@ -230,57 +230,130 @@
                         <!-- Fiziksel Saldırı -->
                         <div class="atk-section">
                             <h5>⚔️ Fiziksel Saldırı</h5>
+
                             <!-- Fiziksel Kanal -->
-                            <div class="atk-damage-channel">
-                                <span class="atk-channel-label">Fiziksel</span>
-                                <div class="atk-range-group">
-                                    <input type="number" id="atk-phys-min" value="0" class="atk-input-sm" placeholder="Min">
-                                    <span class="atk-sep">-</span>
-                                    <input type="number" id="atk-phys-max" value="0" class="atk-input-sm" placeholder="Max">
-                                    <span class="atk-sep">Ek:</span>
-                                    <input type="number" id="atk-phys-extra-min" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">-</span>
-                                    <input type="number" id="atk-phys-extra-max" value="0" class="atk-input-sm">
+                            <div class="atk-damage-channel" data-channel="phys">
+                                <div class="atk-channel-header">
+                                    <span class="atk-channel-label">Fiziksel</span>
+                                    <div class="atk-resist-row">
+                                        <label><input type="radio" name="atk-phys-resist" id="atk-phys-weak"> Zayıf</label>
+                                        <label><input type="radio" name="atk-phys-resist" id="atk-phys-resist"> Dirençli</label>
+                                    </div>
                                 </div>
-                                <div class="atk-resist-row">
-                                    <label><input type="radio" name="atk-phys-resist" id="atk-phys-weak"> Zayıf</label>
-                                    <label><input type="radio" name="atk-phys-resist" id="atk-phys-resist"> Dirençli</label>
+
+                                <div class="atk-pool-display" id="atk-phys-display">
+                                    <div class="atk-pool-badges" id="atk-phys-badges">
+                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                    </div>
+                                    <div class="atk-pool-result hidden" id="atk-phys-result">
+                                        <div class="atk-result-total">Toplam: <span id="atk-phys-total-val">0</span></div>
+                                        <div class="atk-result-breakdown" id="atk-phys-breakdown-val"></div>
+                                    </div>
+                                </div>
+
+                                <div class="atk-dice-toolbar">
+                                    <div class="atk-dice-buttons">
+                                        <button type="button" class="atk-die-btn atk-die-4" data-die="4" title="d4 ekle">d4</button>
+                                        <button type="button" class="atk-die-btn atk-die-6" data-die="6" title="d6 ekle">d6</button>
+                                        <button type="button" class="atk-die-btn atk-die-8" data-die="8" title="d8 ekle">d8</button>
+                                        <button type="button" class="atk-die-btn atk-die-10" data-die="10" title="d10 ekle">d10</button>
+                                        <button type="button" class="atk-die-btn atk-die-12" data-die="12" title="d12 ekle">d12</button>
+                                        <button type="button" class="atk-die-btn atk-die-20" data-die="20" title="d20 ekle">d20</button>
+                                    </div>
+                                    <div class="atk-dice-actions">
+                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-minus" data-action="minus">-</button>
+                                            <input type="number" class="atk-bonus-input" id="atk-phys-bonus" value="0" placeholder="0">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
+                                        </div>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-phys-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-phys-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                    </div>
                                 </div>
                             </div>
+
                             <!-- Element 1 -->
-                            <div class="atk-damage-channel">
-                                <span class="atk-channel-label">Ateş/El.1</span>
-                                <div class="atk-range-group">
-                                    <input type="number" id="atk-elem1-min" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">-</span>
-                                    <input type="number" id="atk-elem1-max" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">Ek:</span>
-                                    <input type="number" id="atk-elem1-extra-min" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">-</span>
-                                    <input type="number" id="atk-elem1-extra-max" value="0" class="atk-input-sm">
+                            <div class="atk-damage-channel" data-channel="elem1">
+                                <div class="atk-channel-header">
+                                    <span class="atk-channel-label" style="color:var(--danger, #ef4444);">Ateş/El.1</span>
+                                    <div class="atk-resist-row">
+                                        <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-weak"> Zayıf</label>
+                                        <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-resist"> Dirençli</label>
+                                    </div>
                                 </div>
-                                <div class="atk-resist-row">
-                                    <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-weak"> Zayıf</label>
-                                    <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-resist"> Dirençli</label>
+
+                                <div class="atk-pool-display" id="atk-elem1-display">
+                                    <div class="atk-pool-badges" id="atk-elem1-badges">
+                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                    </div>
+                                    <div class="atk-pool-result hidden" id="atk-elem1-result">
+                                        <div class="atk-result-total">Toplam: <span id="atk-elem1-total-val">0</span></div>
+                                        <div class="atk-result-breakdown" id="atk-elem1-breakdown-val"></div>
+                                    </div>
+                                </div>
+
+                                <div class="atk-dice-toolbar">
+                                    <div class="atk-dice-buttons">
+                                        <button type="button" class="atk-die-btn atk-die-4" data-die="4" title="d4 ekle">d4</button>
+                                        <button type="button" class="atk-die-btn atk-die-6" data-die="6" title="d6 ekle">d6</button>
+                                        <button type="button" class="atk-die-btn atk-die-8" data-die="8" title="d8 ekle">d8</button>
+                                        <button type="button" class="atk-die-btn atk-die-10" data-die="10" title="d10 ekle">d10</button>
+                                        <button type="button" class="atk-die-btn atk-die-12" data-die="12" title="d12 ekle">d12</button>
+                                        <button type="button" class="atk-die-btn atk-die-20" data-die="20" title="d20 ekle">d20</button>
+                                    </div>
+                                    <div class="atk-dice-actions">
+                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-minus" data-action="minus">-</button>
+                                            <input type="number" class="atk-bonus-input" id="atk-elem1-bonus" value="0" placeholder="0">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
+                                        </div>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem1-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem1-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                    </div>
                                 </div>
                             </div>
+
                             <!-- Element 2 -->
-                            <div class="atk-damage-channel">
-                                <span class="atk-channel-label">Buz/El.2</span>
-                                <div class="atk-range-group">
-                                    <input type="number" id="atk-elem2-min" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">-</span>
-                                    <input type="number" id="atk-elem2-max" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">Ek:</span>
-                                    <input type="number" id="atk-elem2-extra-min" value="0" class="atk-input-sm">
-                                    <span class="atk-sep">-</span>
-                                    <input type="number" id="atk-elem2-extra-max" value="0" class="atk-input-sm">
+                            <div class="atk-damage-channel" data-channel="elem2">
+                                <div class="atk-channel-header">
+                                    <span class="atk-channel-label" style="color:var(--accent, #0ea5e9);">Buz/El.2</span>
+                                    <div class="atk-resist-row">
+                                        <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-weak"> Zayıf</label>
+                                        <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-resist"> Dirençli</label>
+                                    </div>
                                 </div>
-                                <div class="atk-resist-row">
-                                    <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-weak"> Zayıf</label>
-                                    <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-resist"> Dirençli</label>
+
+                                <div class="atk-pool-display" id="atk-elem2-display">
+                                    <div class="atk-pool-badges" id="atk-elem2-badges">
+                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                    </div>
+                                    <div class="atk-pool-result hidden" id="atk-elem2-result">
+                                        <div class="atk-result-total">Toplam: <span id="atk-elem2-total-val">0</span></div>
+                                        <div class="atk-result-breakdown" id="atk-elem2-breakdown-val"></div>
+                                    </div>
+                                </div>
+
+                                <div class="atk-dice-toolbar">
+                                    <div class="atk-dice-buttons">
+                                        <button type="button" class="atk-die-btn atk-die-4" data-die="4" title="d4 ekle">d4</button>
+                                        <button type="button" class="atk-die-btn atk-die-6" data-die="6" title="d6 ekle">d6</button>
+                                        <button type="button" class="atk-die-btn atk-die-8" data-die="8" title="d8 ekle">d8</button>
+                                        <button type="button" class="atk-die-btn atk-die-10" data-die="10" title="d10 ekle">d10</button>
+                                        <button type="button" class="atk-die-btn atk-die-12" data-die="12" title="d12 ekle">d12</button>
+                                        <button type="button" class="atk-die-btn atk-die-20" data-die="20" title="d20 ekle">d20</button>
+                                    </div>
+                                    <div class="atk-dice-actions">
+                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-minus" data-action="minus">-</button>
+                                            <input type="number" class="atk-bonus-input" id="atk-elem2-bonus" value="0" placeholder="0">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
+                                        </div>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem2-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem2-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                    </div>
                                 </div>
                             </div>
+
                             <button id="atk-btn-physical" class="atk-btn atk-btn-physical">⚔️ FİZİKSEL / SİLAH SALDIRISI ⚔️</button>
                         </div>
 
@@ -299,16 +372,44 @@
                                 <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl3"> Lvl 3</label>
                                 <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl4"> Lvl 4</label>
                             </div>
-                            <div class="atk-range-group atk-spell-range">
-                                <span>Hasar:</span>
-                                <input type="number" id="atk-spell-min" value="0" class="atk-input-sm">
-                                <span class="atk-sep">-</span>
-                                <input type="number" id="atk-spell-max" value="0" class="atk-input-sm">
-                                <span class="atk-sep">Ekstra:</span>
-                                <input type="number" id="atk-spell-extra-min" value="0" class="atk-input-sm">
-                                <span class="atk-sep">-</span>
-                                <input type="number" id="atk-spell-extra-max" value="0" class="atk-input-sm">
+
+                            <!-- Büyü Hasar Kanalı -->
+                            <div class="atk-damage-channel" data-channel="spell">
+                                <div class="atk-channel-header">
+                                    <span class="atk-channel-label" style="color:var(--accent-hover, #38bdf8);">Büyü Hasarı</span>
+                                </div>
+
+                                <div class="atk-pool-display" id="atk-spell-display">
+                                    <div class="atk-pool-badges" id="atk-spell-badges">
+                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                    </div>
+                                    <div class="atk-pool-result hidden" id="atk-spell-result">
+                                        <div class="atk-result-total">Toplam: <span id="atk-spell-total-val">0</span></div>
+                                        <div class="atk-result-breakdown" id="atk-spell-breakdown-val"></div>
+                                    </div>
+                                </div>
+
+                                <div class="atk-dice-toolbar">
+                                    <div class="atk-dice-buttons">
+                                        <button type="button" class="atk-die-btn atk-die-4" data-die="4" title="d4 ekle">d4</button>
+                                        <button type="button" class="atk-die-btn atk-die-6" data-die="6" title="d6 ekle">d6</button>
+                                        <button type="button" class="atk-die-btn atk-die-8" data-die="8" title="d8 ekle">d8</button>
+                                        <button type="button" class="atk-die-btn atk-die-10" data-die="10" title="d10 ekle">d10</button>
+                                        <button type="button" class="atk-die-btn atk-die-12" data-die="12" title="d12 ekle">d12</button>
+                                        <button type="button" class="atk-die-btn atk-die-20" data-die="20" title="d20 ekle">d20</button>
+                                    </div>
+                                    <div class="atk-dice-actions">
+                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-minus" data-action="minus">-</button>
+                                            <input type="number" class="atk-bonus-input" id="atk-spell-bonus" value="0" placeholder="0">
+                                            <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
+                                        </div>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-spell-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-spell-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                    </div>
+                                </div>
                             </div>
+
                             <button id="atk-btn-spell" class="atk-btn atk-btn-spell">✨ BÜYÜ SALDIRISI ✨</button>
                         </div>
 

@@ -1504,63 +1504,315 @@ html {
     height: 14px;
 }
 
-/* — Damage Channels — */
+/* — Damage Channels & Dice Pool System — */
 .atk-damage-channel {
     background: var(--bg-secondary);
-    border-radius: var(--radius-sm);
-    padding: 8px 10px;
-    margin-bottom: 6px;
+    border-radius: var(--radius-md, 8px);
+    padding: 10px;
+    margin-bottom: 8px;
     border: 1px solid var(--border-subtle);
-    transition: border-color var(--transition-fast);
+    transition: all var(--transition-fast);
 }
 
 .atk-damage-channel:hover {
     border-color: var(--border-accent);
 }
 
+.atk-channel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
 .atk-channel-label {
-    display: block;
+    display: inline-block;
     font-size: 13px;
     font-weight: 700;
     color: var(--warning);
-    margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.atk-range-group {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex-wrap: nowrap;
-    margin-bottom: 4px;
-}
-
-.atk-sep {
-    color: var(--text-muted);
-    font-size: 12px;
-}
-
 .atk-resist-row {
     display: flex;
-    gap: 12px;
-    font-size: 12px;
+    gap: 8px;
+    font-size: 11px;
     color: var(--text-secondary);
-    margin-top: 4px;
 }
 
 .atk-resist-row label {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     cursor: pointer;
     font-weight: 500;
 }
 
 .atk-resist-row input[type="radio"] {
     accent-color: var(--purple);
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
+}
+
+/* — Dice Pool Display Area (Top) — */
+.atk-pool-display {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-sm, 6px);
+    padding: 6px 8px;
+    min-height: 38px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    transition: all var(--transition-fast);
+}
+
+.atk-pool-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.atk-pool-empty-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.atk-die-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+    animation: chipPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.atk-die-chip:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    transform: translateY(-1px);
+}
+
+.atk-die-chip-remove {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-left: 1px;
+}
+
+.atk-die-chip:hover .atk-die-chip-remove {
+    opacity: 1;
+}
+
+.atk-die-chip-4 { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+.atk-die-chip-6 { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
+.atk-die-chip-8 { border-color: rgba(14, 165, 233, 0.4); background: rgba(14, 165, 233, 0.15); color: #7dd3fc; }
+.atk-die-chip-10 { border-color: rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.15); color: #a5b4fc; }
+.atk-die-chip-12 { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.15); color: #d8b4fe; }
+.atk-die-chip-20 { border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.15); color: #fda4af; }
+.atk-die-chip-bonus { border-color: rgba(234, 179, 8, 0.4); background: rgba(234, 179, 8, 0.15); color: #fef08a; }
+
+@keyframes chipPop {
+    0% { transform: scale(0.6); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* — Dice Pool Result Area — */
+.atk-pool-result {
+    padding-top: 4px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: fadeInResult 0.25s ease-out;
+}
+
+@keyframes fadeInResult {
+    from { opacity: 0; transform: translateY(3px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.atk-result-total {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--accent-hover);
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.atk-result-total span {
+    font-size: 18px;
+    color: #38bdf8;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+.atk-result-breakdown {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: 'Courier New', Courier, monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+/* — Dice Toolbar (Bottom Buttons) — */
+.atk-dice-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.atk-dice-buttons {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+}
+
+.atk-die-btn {
+    background: var(--bg-tertiary, #1e293b);
+    border: 1px solid var(--border-default);
+    color: var(--text-primary);
+    border-radius: var(--radius-sm, 4px);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 0;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.atk-die-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.atk-die-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+.atk-die-4:hover { border-color: #10b981; color: #10b981; background: rgba(16, 185, 129, 0.1); }
+.atk-die-6:hover { border-color: #f59e0b; color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+.atk-die-8:hover { border-color: #0ea5e9; color: #0ea5e9; background: rgba(14, 165, 233, 0.1); }
+.atk-die-10:hover { border-color: #6366f1; color: #6366f1; background: rgba(99, 102, 241, 0.1); }
+.atk-die-12:hover { border-color: #a855f7; color: #a855f7; background: rgba(168, 85, 247, 0.1); }
+.atk-die-20:hover { border-color: #f43f5e; color: #f43f5e; background: rgba(244, 63, 94, 0.1); }
+
+.atk-dice-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* — Bonus Stepper — */
+.atk-bonus-stepper {
+    display: flex;
+    align-items: center;
+    background: var(--bg-tertiary, #1e293b);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm, 4px);
+    overflow: hidden;
+    height: 28px;
+}
+
+.atk-bonus-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    width: 22px;
+    height: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.atk-bonus-btn:hover {
+    background: var(--accent-subtle);
+    color: var(--accent);
+}
+
+.atk-bonus-input {
+    width: 32px;
+    height: 100%;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    -moz-appearance: textfield;
+}
+
+.atk-bonus-input::-webkit-outer-spin-button,
+.atk-bonus-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* — Action Buttons in Toolbar — */
+.atk-action-btn {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.atk-btn-roll {
+    flex: 1;
+    background: var(--accent-subtle);
+    border-color: var(--accent-dim);
+    color: var(--accent-hover);
+    justify-content: center;
+}
+
+.atk-btn-roll:hover {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.atk-btn-clear {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+}
+
+.atk-btn-clear:hover {
+    background: var(--danger);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
 }
 
 /* — Spell Slots — */
@@ -1611,13 +1863,6 @@ html {
     width: 13px;
     height: 13px;
 }
-
-.atk-spell-range {
-    justify-content: center;
-    margin-bottom: 10px;
-}
-
-.atk-spell-range span {
     color: var(--text-secondary);
     font-size: 13px;
     font-weight: 500;

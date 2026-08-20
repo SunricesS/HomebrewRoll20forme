@@ -180,6 +180,141 @@ function rollDisadvantage(min, max) {
   return Math.min(rollDie(min, max), rollDie(min, max));
 }
 
+function rollChannelDamage(channel) {
+  if (!channel) return { damage: 0, breakdown: '' };
+
+  // 1. Dice pool desteği ({ dice: { d4, d6, ... }, bonus, weakness, resistance })
+  if (channel.dice && typeof channel.dice === 'object') {
+    let rawTotal = 0;
+    const parts = [];
+    const sidesList = [4, 6, 8, 10, 12, 20];
+    let hasDice = false;
+
+    for (const sides of sidesList) {
+      const count = clampNumber(parseInt(channel.dice[`d${sides}`] ?? channel.dice[sides] ?? 0), 0, 50);
+      if (count > 0) {
+        hasDice = true;
+        const rolls = [];
+        for (let i = 0; i < count; i++) {
+          const r = rollDie(1, sides);
+          rolls.push(r);
+          rawTotal += r;
+        }
+        parts.push(`${count}d${sides} [${rolls.join(' + ')}]`);
+      }
+    }
+
+    const bonus = clampNumber(parseInt(channel.bonus) || 0, -1000, 1000);
+    if (bonus !== 0) {
+      rawTotal += bonus;
+      parts.push(bonus > 0 ? `+${bonus}` : `${bonus}`);
+    }
+
+    if (hasDice || bonus !== 0) {
+      let finalDmg = Math.max(0, rawTotal);
+      if (channel.weakness) {
+        finalDmg *= 2;
+        parts.push('(Zayıf 2x)');
+      } else if (channel.resistance) {
+        finalDmg = Math.floor(finalDmg / 2);
+        parts.push('(Dirençli 0.5x)');
+      }
+      return { damage: finalDmg, breakdown: parts.join(' ') };
+    }
+  }
+
+  // 2. Geriye dönük uyumluluk (Legacy min/max)
+  let dmg = 0;
+  const parts = [];
+  const pMin = clampNumber(channel.min, 0, 1000);
+  const pMax = clampNumber(channel.max, 0, 1000);
+  const peMin = clampNumber(channel.extraMin, 0, 1000);
+  const peMax = clampNumber(channel.extraMax, 0, 1000);
+
+  if (pMax > 0) {
+    const r1 = rollDie(pMin, pMax);
+    dmg += r1;
+    parts.push(`[${r1}]`);
+  }
+  if (peMax > 0) {
+    const r2 = rollDie(peMin, peMax);
+    dmg += r2;
+    parts.push(`Ek:[${r2}]`);
+  }
+
+  if (channel.weakness) {
+    dmg *= 2;
+    parts.push('(Zayıf 2x)');
+  } else if (channel.resistance) {
+    dmg = Math.floor(dmg / 2);
+    parts.push('(Dirençli 0.5x)');
+  }
+
+  return { damage: dmg, breakdown: parts.join(' + ') };
+}
+
+function rollSpellDamage(spell) {
+  if (!spell) return { damage: 0, breakdown: '' };
+  const slotMultipliers = { 1: 1, 2: 1.5, 3: 2, 4: 2.5 };
+  const sLevel = clampNumber(spell.level, 1, 4);
+  const mult = slotMultipliers[sLevel] || 1;
+
+  if (spell.dice && typeof spell.dice === 'object') {
+    let rawTotal = 0;
+    const parts = [];
+    const sidesList = [4, 6, 8, 10, 12, 20];
+    let hasDice = false;
+
+    for (const sides of sidesList) {
+      const count = clampNumber(parseInt(spell.dice[`d${sides}`] ?? spell.dice[sides] ?? 0), 0, 50);
+      if (count > 0) {
+        hasDice = true;
+        const rolls = [];
+        for (let i = 0; i < count; i++) {
+          const r = rollDie(1, sides);
+          rolls.push(r);
+          rawTotal += r;
+        }
+        parts.push(`${count}d${sides} [${rolls.join(' + ')}]`);
+      }
+    }
+
+    const bonus = clampNumber(parseInt(spell.bonus) || 0, -1000, 1000);
+    if (bonus !== 0) {
+      rawTotal += bonus;
+      parts.push(bonus > 0 ? `+${bonus}` : `${bonus}`);
+    }
+
+    if (hasDice || bonus !== 0) {
+      const scaledDmg = Math.max(0, Math.floor(rawTotal * mult));
+      if (mult !== 1) {
+        parts.push(`(Lvl ${sLevel}: ${mult}x)`);
+      }
+      return { damage: scaledDmg, breakdown: parts.join(' ') };
+    }
+  }
+
+  // Geriye dönük uyumluluk (Legacy min/max)
+  const sMin = clampNumber(spell.min, 0, 1000);
+  const sMax = clampNumber(spell.max, 0, 1000);
+  const seMin = clampNumber(spell.extraMin, 0, 1000);
+  const seMax = clampNumber(spell.extraMax, 0, 1000);
+
+  let spellDmg = 0;
+  const parts = [];
+  if (sMax > 0) {
+    const r1 = rollDie(Math.floor(sMin * mult), Math.floor(sMax * mult));
+    spellDmg += r1;
+    parts.push(`[${r1}]`);
+    if (seMax > 0) {
+      const r2 = rollDie(Math.floor(seMin * mult), Math.floor(seMax * mult));
+      spellDmg += r2;
+      parts.push(`Ek:[${r2}]`);
+    }
+  }
+  return { damage: spellDmg, breakdown: parts.join(' + ') };
+}
+
 // ---- Saldırı Hesapla ----
 app.post('/api/combat/attack', (req, res) => {
   try {
@@ -192,11 +327,11 @@ app.post('/api/combat/attack', (req, res) => {
       attackCount,       // saldırı adedi
       extraDamage,       // manuel ek hasar
       // Fiziksel saldırı parametreleri
-      physical,          // { min, max, extraMin, extraMax }
-      element1,          // { min, max, extraMin, extraMax, weakness, resistance }
-      element2,          // { min, max, extraMin, extraMax, weakness, resistance }
+      physical,          // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
+      element1,          // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
+      element2,          // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
       // Büyü saldırı parametreleri
-      spell,             // { min, max, extraMin, extraMax, level }
+      spell,             // { dice, bonus, min, max, extraMin, extraMax, level }
     } = req.body;
 
     const safeAC = clampNumber(targetAC, 0, 50);
@@ -235,78 +370,38 @@ app.post('/api/combat/attack', (req, res) => {
           modifiedRoll,
           isCritical: false,
           isCritFail,
-          damage: 0
+          damage: 0,
+          breakdown: 'ISKA'
         });
         continue;
       }
 
       // 4. Hasar hesaplama
       let damage = 0;
+      const breakdownParts = [];
 
       if (attackType === 'physical') {
-        // Fiziksel kanal
-        let physDmg = 0;
-        const pMin = clampNumber(physical?.min, 0, 1000);
-        const pMax = clampNumber(physical?.max, 0, 1000);
-        const peMin = clampNumber(physical?.extraMin, 0, 1000);
-        const peMax = clampNumber(physical?.extraMax, 0, 1000);
-        if (pMax > 0) physDmg = rollDie(pMin, pMax) + (peMax > 0 ? rollDie(peMin, peMax) : 0);
+        const physRes = rollChannelDamage(physical);
+        const elem1Res = rollChannelDamage(element1);
+        const elem2Res = rollChannelDamage(element2);
 
-        // Element 1 kanalı
-        let elem1Dmg = 0;
-        const e1Min = clampNumber(element1?.min, 0, 1000);
-        const e1Max = clampNumber(element1?.max, 0, 1000);
-        const e1eMin = clampNumber(element1?.extraMin, 0, 1000);
-        const e1eMax = clampNumber(element1?.extraMax, 0, 1000);
-        if (e1Max > 0) elem1Dmg = rollDie(e1Min, e1Max) + (e1eMax > 0 ? rollDie(e1eMin, e1eMax) : 0);
+        if (physRes.breakdown) breakdownParts.push(`Fiziksel: ${physRes.breakdown}`);
+        if (elem1Res.breakdown) breakdownParts.push(`Ateş/El.1: ${elem1Res.breakdown}`);
+        if (elem2Res.breakdown) breakdownParts.push(`Buz/El.2: ${elem2Res.breakdown}`);
 
-        // Element 2 kanalı
-        let elem2Dmg = 0;
-        const e2Min = clampNumber(element2?.min, 0, 1000);
-        const e2Max = clampNumber(element2?.max, 0, 1000);
-        const e2eMin = clampNumber(element2?.extraMin, 0, 1000);
-        const e2eMax = clampNumber(element2?.extraMax, 0, 1000);
-        if (e2Max > 0) elem2Dmg = rollDie(e2Min, e2Max) + (e2eMax > 0 ? rollDie(e2eMin, e2eMax) : 0);
-
-        // Zayıflık / Direnç çarpanları
-        if (physical?.weakness) physDmg *= 2;
-        else if (physical?.resistance) physDmg = Math.floor(physDmg / 2);
-
-        if (element1?.weakness) elem1Dmg *= 2;
-        else if (element1?.resistance) elem1Dmg = Math.floor(elem1Dmg / 2);
-
-        if (element2?.weakness) elem2Dmg *= 2;
-        else if (element2?.resistance) elem2Dmg = Math.floor(elem2Dmg / 2);
-
-        damage = physDmg + elem1Dmg + elem2Dmg + safeExtra;
+        damage = physRes.damage + elem1Res.damage + elem2Res.damage + safeExtra;
+        if (safeExtra > 0) breakdownParts.push(`Manuel Ek: +${safeExtra}`);
       } else {
-        // Büyü saldırısı
-        const slotMultipliers = { 1: 1, 2: 1.5, 3: 2, 4: 2.5 };
-        const sLevel = clampNumber(spell?.level, 1, 4);
-        const mult = slotMultipliers[sLevel] || 1;
-
-        const sMin = clampNumber(spell?.min, 0, 1000);
-        const sMax = clampNumber(spell?.max, 0, 1000);
-        const seMin = clampNumber(spell?.extraMin, 0, 1000);
-        const seMax = clampNumber(spell?.extraMax, 0, 1000);
-
-        let spellDmg = 0;
-        if (sMax > 0) {
-          spellDmg = rollDie(
-            Math.floor(sMin * mult),
-            Math.floor(sMax * mult)
-          ) + (seMax > 0 ? rollDie(
-            Math.floor(seMin * mult),
-            Math.floor(seMax * mult)
-          ) : 0);
-        }
-
-        damage = spellDmg + safeExtra;
+        const spellRes = rollSpellDamage(spell);
+        if (spellRes.breakdown) breakdownParts.push(`Büyü: ${spellRes.breakdown}`);
+        damage = spellRes.damage + safeExtra;
+        if (safeExtra > 0) breakdownParts.push(`Manuel Ek: +${safeExtra}`);
       }
 
       // 5. Kritik vuruş çarpanı (1.5x)
       if (isCritical) {
         damage = Math.floor(damage * 1.5);
+        breakdownParts.push('(KRİTİK x1.5)');
       }
 
       totalDamage += damage;
@@ -318,7 +413,8 @@ app.post('/api/combat/attack', (req, res) => {
         modifiedRoll,
         isCritical,
         isCritFail: false,
-        damage
+        damage,
+        breakdown: breakdownParts.join(' | ') || `${damage}`
       });
     }
 
