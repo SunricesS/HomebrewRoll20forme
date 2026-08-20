@@ -201,8 +201,8 @@
           hasItems = true;
           const chip = document.createElement('span');
           chip.className = `atk-die-chip atk-die-chip-${sides}`;
-          chip.title = `1 adet d${sides} çıkar (${count}d${sides})`;
-          chip.innerHTML = `🎲 ${count}d${sides} <span class="atk-die-chip-remove">×</span>`;
+          chip.title = `1 adet d${sides} çıkar (Mevcut: ${count}d${sides})`;
+          chip.innerHTML = `<span class="atk-chip-label">${count}d${sides}</span><span class="atk-die-chip-remove" title="Kaldır">✕</span>`;
           chip.addEventListener('click', () => this.removeDie(sides));
           this.badgesEl.appendChild(chip);
         }
@@ -214,7 +214,7 @@
         bonusChip.className = 'atk-die-chip atk-die-chip-bonus';
         bonusChip.title = 'Bonusu sıfırla';
         const sign = this.bonus > 0 ? `+${this.bonus}` : `${this.bonus}`;
-        bonusChip.innerHTML = `⚡ ${sign} <span class="atk-die-chip-remove">×</span>`;
+        bonusChip.innerHTML = `<span class="atk-chip-label">Bonus ${sign}</span><span class="atk-die-chip-remove" title="Sıfırla">✕</span>`;
         bonusChip.addEventListener('click', () => this.setBonus(0));
         this.badgesEl.appendChild(bonusChip);
       }
@@ -617,6 +617,20 @@
   }
 
   /**
+   * Hedefe karşılık gelen DOM token elemanını bulur.
+   */
+  function findTokenElForTarget(targetInfo) {
+    if (typeof tokens !== 'undefined') {
+      if (tokens[targetInfo.id]) return tokens[targetInfo.id];
+      if (typeof allPlayers !== 'undefined') {
+        const p = Object.values(allPlayers).find(p => p.character && p.character.id === targetInfo.id);
+        if (p && tokens[p.id]) return tokens[p.id];
+      }
+    }
+    return null;
+  }
+
+  /**
    * Ctrl+Click ile haritadan hedef eklenir/kaldırılır (toggle).
    */
   function onCtrlClickTarget(targetInfo, tokenEl) {
@@ -626,7 +640,8 @@
     if (existingIdx >= 0) {
       // Kaldır (toggle off)
       const removed = selectedTargets.splice(existingIdx, 1)[0];
-      if (removed.tokenEl) removed.tokenEl.classList.remove('token-target-selected');
+      const el = removed.tokenEl || findTokenElForTarget(removed);
+      if (el) el.classList.remove('token-target-selected');
     } else {
       // Ekle
       addTargetToList(targetInfo, tokenEl);
@@ -645,16 +660,18 @@
     const exists = selectedTargets.some(t => t.type === targetInfo.type && t.id === targetInfo.id);
     if (exists) return;
 
+    const resolvedTokenEl = tokenEl || findTokenElForTarget(targetInfo);
+
     selectedTargets.push({
       type: targetInfo.type,
       id: targetInfo.id,
       name: targetInfo.name,
       data: targetInfo.data,
-      tokenEl: tokenEl || null
+      tokenEl: resolvedTokenEl || null
     });
 
     // Token'a hedef çerçevesi ekle
-    if (tokenEl) tokenEl.classList.add('token-target-selected');
+    if (resolvedTokenEl) resolvedTokenEl.classList.add('token-target-selected');
 
     renderSelectedTargets();
   }
@@ -666,7 +683,8 @@
     const idx = selectedTargets.findIndex(t => t.type === type && t.id === id);
     if (idx >= 0) {
       const removed = selectedTargets.splice(idx, 1)[0];
-      if (removed.tokenEl) removed.tokenEl.classList.remove('token-target-selected');
+      const el = removed.tokenEl || findTokenElForTarget(removed);
+      if (el) el.classList.remove('token-target-selected');
       renderSelectedTargets();
     }
   }
@@ -676,8 +694,10 @@
    */
   function clearAllTargetHighlights() {
     selectedTargets.forEach(t => {
-      if (t.tokenEl) t.tokenEl.classList.remove('token-target-selected');
+      const el = t.tokenEl || findTokenElForTarget(t);
+      if (el) el.classList.remove('token-target-selected');
     });
+    document.querySelectorAll('.token-target-selected').forEach(el => el.classList.remove('token-target-selected'));
   }
 
   /**
@@ -723,17 +743,17 @@
         const maxHp = isMarker ? (d.maxHp ?? '?') : (d.hp_max ?? '?');
         targetInfo.innerHTML = `
           <div class="atk-target-card atk-card-target">
-            <div class="atk-target-name">🎯 ${isMarker ? '[İşaret] ' : ''}${escapeHtml(d.name)}</div>
-            <div class="atk-target-hp">❤️ ${hp} / ${maxHp}</div>
-            <div class="atk-target-ac">🛡️ AC: ${ac}</div>
+            <div class="atk-target-name">${isMarker ? '[İşaret] ' : ''}${escapeHtml(d.name)}</div>
+            <div class="atk-target-hp">HP: ${hp} / ${maxHp}</div>
+            <div class="atk-target-ac">AC: ${ac}</div>
           </div>
         `;
       } else {
-        targetInfo.innerHTML = `<span class="atk-hint">🎯 ${selectedTargets.length} hedef seçili — her hedefe ayrı saldırı atılacak</span>`;
+        targetInfo.innerHTML = `<span class="atk-hint">${selectedTargets.length} hedef seçili — her hedefe ayrı saldırı atılacak</span>`;
       }
     }
 
-    // Chip'leri oluştur
+    // Target Item Kartlarını oluştur
     selectedTargets.forEach(t => {
       const d = t.data;
       const ac = getTargetAC(t);
@@ -741,24 +761,25 @@
       const hp = isMarker ? (d.hp ?? '?') : (d.hp_current ?? '?');
       const maxHp = isMarker ? (d.maxHp ?? '?') : (d.hp_max ?? '?');
 
-      const chip = document.createElement('div');
-      chip.className = 'atk-target-chip';
-      chip.innerHTML = `
-        <div class="atk-chip-info">
-          <span class="atk-chip-name">🎯 ${isMarker ? '[M] ' : ''}${escapeHtml(d.name)}</span>
-          <span class="atk-chip-hp">❤️${hp}/${maxHp}</span>
-          <span class="atk-chip-ac">🛡️${ac}</span>
+      const card = document.createElement('div');
+      card.className = 'atk-target-item-card';
+      card.innerHTML = `
+        <div class="atk-target-item-left">
+          <span class="atk-target-item-name">${isMarker ? '[M] ' : ''}${escapeHtml(d.name)}</span>
+          <div class="atk-target-item-badges">
+            <span class="atk-target-badge-hp">HP: ${hp}/${maxHp}</span>
+            <span class="atk-target-badge-ac">AC: ${ac}</span>
+          </div>
         </div>
+        <button type="button" class="atk-target-item-remove" title="Hedefi kaldır">✕</button>
       `;
 
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'atk-chip-remove';
-      removeBtn.textContent = '×';
-      removeBtn.title = 'Hedefi kaldır';
-      removeBtn.addEventListener('click', () => removeTargetById(t.type, t.id));
-      chip.appendChild(removeBtn);
+      card.querySelector('.atk-target-item-remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeTargetById(t.type, t.id);
+      });
 
-      selectedTargetsList.appendChild(chip);
+      selectedTargetsList.appendChild(card);
     });
   }
 

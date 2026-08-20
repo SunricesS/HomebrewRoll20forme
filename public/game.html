@@ -8,7 +8,7 @@
     <title>DnD Masaüstü - Oyun</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700;800;900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=MedievalSharp&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 </head>
 
@@ -40,12 +40,11 @@
 
                     <!-- Sağ Kontrol Butonları -->
                     <div class="bg3-combat-controls">
-                        <button type="button" class="bg3-ctrl-btn bg3-btn-prev" id="bg3-btn-prev" title="Önceki Tur">⏮️</button>
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-prev" id="bg3-btn-prev" title="Önceki Tur">‹</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-next" id="bg3-btn-next" title="Sonraki Tur (Space / N)">
-                            <span class="bg3-next-icon">⏭️</span>
-                            <span class="bg3-next-text">Sonraki Tur</span>
+                            <span class="bg3-next-text">Sonraki Tur ›</span>
                         </button>
-                        <button type="button" class="bg3-ctrl-btn bg3-btn-reroll" id="bg3-btn-reroll" title="Zarları Yeniden At">🎲</button>
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-reroll" id="bg3-btn-reroll" title="Zarları Yeniden At">Zar Yenile</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-close" id="bg3-btn-close" title="Combat Modunu Kapat">✕</button>
                     </div>
                 </div>
@@ -305,8 +304,8 @@
                                             <input type="number" class="atk-bonus-input" id="atk-phys-bonus" value="0" placeholder="0">
                                             <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
                                         </div>
-                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-phys-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
-                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-phys-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-phys-roll" title="Sadece bu havuzu at">Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-phys-clear" title="Havuzu temizle">Temizle</button>
                                     </div>
                                 </div>
                             </div>
@@ -346,8 +345,8 @@
                                             <input type="number" class="atk-bonus-input" id="atk-elem1-bonus" value="0" placeholder="0">
                                             <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
                                         </div>
-                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem1-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
-                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem1-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem1-roll" title="Sadece bu havuzu at">Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem1-clear" title="Havuzu temizle">Temizle</button>
                                     </div>
                                 </div>
                             </div>
@@ -387,18 +386,18 @@
                                             <input type="number" class="atk-bonus-input" id="atk-elem2-bonus" value="0" placeholder="0">
                                             <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
                                         </div>
-                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem2-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
-                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem2-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem2-roll" title="Sadece bu havuzu at">Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem2-clear" title="Havuzu temizle">Temizle</button>
                                     </div>
                                 </div>
                             </div>
 
-                            <button id="atk-btn-physical" class="atk-btn atk-btn-physical">⚔️ FİZİKSEL / SİLAH SALDIRISI ⚔️</button>
+                            <button id="atk-btn-physical" class="atk-btn atk-btn-physical">FİZİKSEL / SİLAH SALDIRISI</button>
                         </div>
 
                         <!-- Büyü Saldırısı -->
                         <div class="atk-section">
-                            <h5>✨ Büyü Saldırısı</h5>
+                            <h5>Büyü Saldırısı</h5>
                             <div class="atk-spell-slots">
                                 <div class="atk-slot"><span>Lvl 1:</span> <span id="atk-slot-lvl1" class="atk-slot-count">0</span></div>
                                 <div class="atk-slot"><span>Lvl 2:</span> <span id="atk-slot-lvl2" class="atk-slot-count">0</span></div>
@@ -443,23 +442,23 @@
                                             <input type="number" class="atk-bonus-input" id="atk-spell-bonus" value="0" placeholder="0">
                                             <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
                                         </div>
-                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-spell-roll" title="Sadece bu havuzu at">🎲 Zar At</button>
-                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-spell-clear" title="Havuzu temizle">🗑️ Temizle</button>
+                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-spell-roll" title="Sadece bu havuzu at">Zar At</button>
+                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-spell-clear" title="Havuzu temizle">Temizle</button>
                                     </div>
                                 </div>
                             </div>
 
-                            <button id="atk-btn-spell" class="atk-btn atk-btn-spell">✨ BÜYÜ SALDIRISI ✨</button>
+                            <button id="atk-btn-spell" class="atk-btn atk-btn-spell">BÜYÜ SALDIRISI</button>
                         </div>
 
                         <!-- Savaş Logu -->
                         <div class="atk-section">
                             <div class="atk-section-header">
-                                <h5>📜 Savaş Logu</h5>
+                                <h5>Savaş Logu</h5>
                                 <button id="atk-btn-clear-log" class="atk-mini-btn">Temizle</button>
                             </div>
                             <div id="atk-combat-log" class="atk-combat-log"></div>
-                            <button id="atk-btn-apply-damage" class="atk-btn atk-btn-damage hidden">💀 Hasarı Uygula</button>
+                            <button id="atk-btn-apply-damage" class="atk-btn atk-btn-damage hidden">Hasarı Uygula</button>
                         </div>
 
                     </div>

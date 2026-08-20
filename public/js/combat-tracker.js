@@ -214,12 +214,12 @@
         portraitWrap.appendChild(deathOverlay);
       }
 
-      // 3. İnisiyatif Rozeti (Zar sonucu)
+      // 3. İnisiyatif Rozeti (Zar sonucu - Mouse hover ile gözükür)
       const initBadge = document.createElement('div');
       initBadge.className = 'bg3-card-init-badge';
       const modSign = c.chrMod >= 0 ? `+${c.chrMod}` : `${c.chrMod}`;
       initBadge.title = `İnisiyatif: 1d20(${c.roll || 0}) + CHR Mod(${modSign}) = ${c.total || 0}\nCHR Stat: ${c.chrStat || 10} (+${c.chrBonus || 0})`;
-      initBadge.innerHTML = `<span class="bg3-badge-d20">🎲</span><span class="bg3-badge-val">${c.total || 0}</span>`;
+      initBadge.innerHTML = `<span class="bg3-badge-val">${c.total || 0}</span>`;
       portraitWrap.appendChild(initBadge);
 
       // 4. Mini HP Barı
@@ -252,7 +252,7 @@
       if (isActive) {
         const activeBanner = document.createElement('div');
         activeBanner.className = 'bg3-active-name-banner';
-        activeBanner.innerHTML = `<span class="bg3-active-crown">👑</span> ${escapeHtml(c.name)}`;
+        activeBanner.innerHTML = `<span class="bg3-active-name-text">${escapeHtml(c.name)}</span>`;
         card.appendChild(activeBanner);
       }
 
