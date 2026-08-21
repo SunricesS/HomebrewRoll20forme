@@ -71,11 +71,17 @@
         }
 
         function copyToClipboard(url) {
-            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(showToast).catch(() => {
+            try {
+                if (navigator && navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(url).then(function() {
+                        showToast();
+                    }).catch(function() {
+                        fallbackCopyTextToClipboard(url);
+                    });
+                } else {
                     fallbackCopyTextToClipboard(url);
-                });
-            } else {
+                }
+            } catch (err) {
                 fallbackCopyTextToClipboard(url);
             }
         }
@@ -84,23 +90,30 @@
             const textArea = document.createElement("textarea");
             textArea.value = text;
             textArea.style.position = "fixed";
+            textArea.style.top = "-9999px";
+            textArea.style.left = "-9999px";
+            textArea.style.opacity = "0";
             document.body.appendChild(textArea);
             textArea.focus();
             textArea.select();
             try {
-                document.execCommand('copy');
-                showToast();
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast();
+                } else {
+                    alert("Kopyalanamadı: " + text);
+                }
             } catch (err) {
                 console.error('Kopyalama basarisiz', err);
-                alert("Kopyalanamadı: " + text);
+                prompt("URL'yi elle kopyalayın:", text);
             }
             document.body.removeChild(textArea);
         }
 
         function showToast() {
             const toast = document.getElementById("toast");
-            toast.className = "toast show";
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+            toast.classList.add("show");
+            setTimeout(function() { toast.classList.remove("show"); }, 2500);
         }
 
         document.getElementById('searchInput').addEventListener('input', (e) => {

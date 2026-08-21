@@ -800,10 +800,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .dm-tools-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
     margin-bottom: 14px;
-    gap: 8px;
+    gap: 10px;
 }
 
 .dm-tools-header h4 {
@@ -818,24 +817,29 @@ h1, h2, h3, h4, h5, h6 {
 .dm-tools-actions {
     display: flex;
     gap: 6px;
+    width: 100%;
+}
+
+.dm-tools-actions .btn {
+    flex: 1;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+    margin-top: 0 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+    white-space: nowrap;
+    text-align: center;
+    min-width: 0;
 }
 
 .dm-save-btn {
-    padding: 6px 12px !important;
-    font-size: 11px !important;
     background: linear-gradient(135deg, #d97706, #92400e) !important;
     color: #ffffff !important;
-    margin-top: 0 !important;
     border: 1px solid #fcd34d !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
 }
 
 .dm-gallery-btn {
-    padding: 6px 12px !important;
-    font-size: 11px !important;
     background: linear-gradient(135deg, #2e7d32, #1b5e20) !important;
     border: 1px solid #81c784 !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* — Collapsible Sections (Gilded Grimoire Box) — */
@@ -1896,43 +1900,34 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .bg3-cards-wrapper {
-    overflow-x: auto;
-    max-width: 58vw;
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
     padding: 10px 4px 18px 4px;
-    scroll-behavior: smooth;
-}
-
-.bg3-cards-wrapper::-webkit-scrollbar {
-    height: 4px;
-}
-
-.bg3-cards-wrapper::-webkit-scrollbar-thumb {
-    background: var(--accent-dim);
-    border-radius: 4px;
 }
 
 .bg3-cards-track {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    padding: 4px 6px;
+    gap: 4px;
+    padding: 4px 2px;
 }
 
 /* ==================== BG3 COMBAT CARD ==================== */
 .bg3-combat-card {
     position: relative;
-    width: 60px;
-    min-width: 60px;
-    height: 80px;
+    width: 50px;
+    min-width: 32px;
+    height: 68px;
     background: #18110c;
-    border-radius: 6px;
+    border-radius: 5px;
     border: 2px solid var(--border-default);
     cursor: pointer;
     transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease, border-color 0.2s ease;
     display: flex;
     flex-direction: column;
     overflow: visible;
-    flex-shrink: 0;
+    flex-shrink: 1;
 }
 
 .bg3-combat-card:hover {
@@ -1957,9 +1952,10 @@ h1, h2, h3, h4, h5, h6 {
 .bg3-card-portrait-wrap {
     position: relative;
     width: 100%;
-    height: 60px;
+    flex: 1;
+    min-height: 0;
     background: #0d0907;
-    border-radius: 4px 4px 0 0;
+    border-radius: 3px 3px 0 0;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -1979,7 +1975,7 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 800;
     font-family: var(--font-title);
     color: #fef3c7;
@@ -2047,8 +2043,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .bg3-card-name-label {
-    padding: 2px 3px;
-    font-size: 11px;
+    padding: 1px 2px;
+    font-size: 9px;
     font-weight: 700;
     font-family: var(--font-title);
     text-align: center;
@@ -2057,12 +2053,13 @@ h1, h2, h3, h4, h5, h6 {
     overflow: hidden;
     text-overflow: ellipsis;
     background: #140e0a;
-    border-radius: 0 0 4px 4px;
+    border-radius: 0 0 3px 3px;
+    flex-shrink: 0;
 }
 
 /* ==================== AKTİF SIRA VURGUSU ==================== */
 .bg3-combat-card.active-turn {
-    transform: translateY(6px) scale(1.16) !important;
+    transform: translateY(4px) scale(1.1) !important;
     border-color: #e5c158 !important;
     box-shadow: 
         0 0 16px rgba(229, 193, 88, 0.9),
@@ -2089,14 +2086,14 @@ h1, h2, h3, h4, h5, h6 {
 
 .bg3-active-name-banner {
     position: absolute;
-    bottom: -25px;
+    bottom: -20px;
     left: 50%;
     transform: translateX(-50%);
     background: linear-gradient(180deg, #2a1f16, #140e0a);
     border: 1px solid var(--border-gold);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 12px;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 10px;
     font-weight: 800;
     font-family: var(--font-title);
     color: #fef3c7;
@@ -2123,11 +2120,10 @@ h1, h2, h3, h4, h5, h6 {
     z-index: 4;
 }
 
-/* ==================== KONTROL BUTONLARI ==================== */
 .bg3-combat-controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
 }
 
@@ -2142,8 +2138,8 @@ h1, h2, h3, h4, h5, h6 {
     background: #241a12;
     color: var(--text-primary);
     border: 1px solid var(--border-default);
-    padding: 7px 10px;
-    font-size: 13px;
+    padding: 5px 7px;
+    font-size: 12px;
 }
 
 .bg3-ctrl-btn:hover {
@@ -2159,8 +2155,9 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid #e5c158;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
     font-weight: 800;
-    gap: 6px;
-    padding: 7px 14px;
+    gap: 4px;
+    padding: 5px 10px;
+    font-size: 11px;
 }
 
 .bg3-btn-next:hover {
@@ -2365,4 +2362,173 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
     border: none;
     border-radius: 2px;
+}
+
+/* ============================================================
+   GALLERY PAGE
+   ============================================================ */
+
+.gallery-body {
+    min-height: 100vh;
+    background: linear-gradient(180deg, var(--bg-deepest) 0%, var(--bg-primary) 40%, var(--bg-secondary) 100%);
+    padding: 32px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.gallery-title {
+    font-family: var(--font-decorative);
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    margin-bottom: 24px;
+    text-align: center;
+    background: linear-gradient(135deg, #fef3c7 0%, #d4af37 50%, #8c6f34 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    filter: drop-shadow(0 2px 8px rgba(197, 160, 89, 0.3));
+}
+
+.search-container {
+    width: 100%;
+    max-width: 520px;
+    margin-bottom: 28px;
+}
+
+.search-container input {
+    width: 100%;
+    padding: 12px 18px;
+    border: 1.5px solid var(--border-default);
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 16px;
+    outline: none;
+    transition: all var(--transition-base);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.search-container input::placeholder {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.search-container input:focus {
+    border-color: var(--accent);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 12px var(--accent-glow);
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 1200px;
+}
+
+.gallery-item {
+    background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-panel) 100%);
+    border: 1.5px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+}
+
+.gallery-item:hover {
+    border-color: var(--border-gold);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md), 0 0 16px var(--accent-glow);
+}
+
+.gallery-item:active {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.gallery-item img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+    background: var(--bg-deepest);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.gallery-item-title {
+    padding: 10px 12px;
+    font-family: var(--font-title);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.3px;
+}
+
+.gallery-grid .loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    font-family: var(--font-body);
+    font-size: 18px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Gallery Toast */
+.toast {
+    visibility: hidden;
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(34, 25, 18, 0.96), rgba(18, 13, 9, 0.98));
+    backdrop-filter: blur(16px);
+    color: var(--text-gold);
+    padding: 14px 28px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-title);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    border: 1.5px solid var(--border-gold);
+    box-shadow: var(--shadow-lg), 0 0 20px var(--accent-glow);
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.toast.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Gallery responsive */
+@media (max-width: 600px) {
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+    }
+
+    .gallery-item img {
+        height: 120px;
+    }
+
+    .gallery-title {
+        font-size: 24px;
+    }
+
+    .gallery-body {
+        padding: 20px 12px 40px;
+    }
 }

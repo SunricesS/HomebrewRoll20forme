@@ -271,18 +271,6 @@
 
       cardsTrack.appendChild(card);
     });
-
-    // Aktif kartı bar içinde görünür alana kaydır
-    const activeCardEl = cardsTrack.querySelector('.active-turn');
-    if (activeCardEl && cardsWrapper) {
-      const cardOffset = activeCardEl.offsetLeft - cardsWrapper.offsetLeft;
-      const cardWidth = activeCardEl.offsetWidth;
-      const wrapperWidth = cardsWrapper.offsetWidth;
-      cardsWrapper.scrollTo({
-        left: cardOffset - (wrapperWidth / 2) + (cardWidth / 2),
-        behavior: 'smooth'
-      });
-    }
   }
 
   // === SOCKET DINLEYICILERI ===
