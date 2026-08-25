@@ -319,19 +319,23 @@ function rollSpellDamage(spell) {
 app.post('/api/combat/attack', (req, res) => {
   try {
     const {
-      attackerStats,     // { stat, bonus } — seçilen yetenek değeri ve bonusu
-      targetAC,          // hedef AC değeri
-      attackType,        // 'physical' | 'spell'
-      advantage,         // bool
-      disadvantage,      // bool
-      attackCount,       // saldırı adedi
-      extraDamage,       // manuel ek hasar
+      attacker,             // { type: 'marker' | 'character', id: '...' }
+      attackerStats,        // { stat, bonus } — seçilen yetenek değeri ve bonusu
+      target,               // { type: 'marker' | 'character', id: '...' }
+      targetAC,             // hedef AC değeri
+      attackType,           // 'physical' | 'spell'
+      advantage,            // bool
+      disadvantage,         // bool
+      attackCount,          // saldırı adedi
+      extraDamage,          // manuel ek hasar
+      halfDamageOnMiss,     // bool — Iska durumunda yarım hasar vurulsun mu
+      statusEffectsToApply, // array — İsabet durumunda hedefe uygulanacak durum efektleri
       // Fiziksel saldırı parametreleri
-      physical,          // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
-      element1,          // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
-      element2,          // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
+      physical,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
+      element1,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
+      element2,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
       // Büyü saldırı parametreleri
-      spell,             // { dice, bonus, min, max, extraMin, extraMax, level }
+      spell,                // { dice, bonus, min, max, extraMin, extraMax, level }
     } = req.body;
 
     const safeAC = clampNumber(targetAC, 0, 50);
@@ -340,15 +344,31 @@ app.post('/api/combat/attack', (req, res) => {
     const safeBonus = clampNumber(attackerStats?.bonus, 0, 30);
     const safeExtra = clampNumber(extraDamage, 0, 1000);
 
+    // Durum Efektlerini Çözümle
+    const attackerEffects = attacker ? getTokenActiveEffects(attacker.type, attacker.id) : [];
+    const targetEffects = target ? getTokenActiveEffects(target.type, target.id) : [];
+
+    const hasAttackerBlind = attackerEffects.some(e => e.effects?.blind);
+    const hasTargetPrepared = targetEffects.some(e => e.effects?.prepared);
+    const hasTargetUnstoppable = targetEffects.some(e => e.effects?.unstoppable);
+    const hasTargetParalyzed = targetEffects.some(e => e.effects?.paralyzed) && !hasTargetUnstoppable;
+
+    let effectiveAdvantage = Boolean(advantage);
+    let effectiveDisadvantage = Boolean(disadvantage);
+
+    if (hasAttackerBlind || hasTargetPrepared) {
+      effectiveDisadvantage = true;
+    }
+
     const attacks = [];
     let totalDamage = 0;
 
     for (let i = 0; i < safeCount; i++) {
       // 1. Vuruş zarı (d20)
       let hitRoll = 0;
-      if (advantage && !disadvantage) {
+      if (effectiveAdvantage && !effectiveDisadvantage) {
         hitRoll = rollAdvantage(1, 20);
-      } else if (disadvantage && !advantage) {
+      } else if (effectiveDisadvantage && !effectiveAdvantage) {
         hitRoll = rollDisadvantage(1, 20);
       } else {
         hitRoll = rollDie(1, 20);
@@ -357,21 +377,63 @@ app.post('/api/combat/attack', (req, res) => {
       // 2. Bonuslu zar = hitRoll + floor((stat + bonus) / 2)
       const modifiedRoll = hitRoll + Math.floor((safeStat + safeBonus) / 2);
 
-      // 3. Vuruş kontrolü
-      const isCritical = hitRoll === 20;
-      const isCritFail = hitRoll === 1;
-      const isHit = isCritical || (!isCritFail && modifiedRoll >= safeAC);
+      // 3. Vuruş kontrolü (Felç: Kesin Vuruş & Kesin Kritik)
+      let isCritical = hitRoll === 20;
+      let isCritFail = hitRoll === 1;
+      let isHit = false;
+
+      if (hasTargetParalyzed) {
+        isHit = true;
+        isCritical = true; // Felçli hedefe yapılan tüm saldırılar kesin vuruş ve kritiktir
+      } else {
+        isHit = isCritical || (!isCritFail && modifiedRoll >= safeAC);
+      }
 
       if (!isHit) {
+        let missDamage = 0;
+        let missReason = 'ISKA';
+
+        if (halfDamageOnMiss) {
+          // Iska durumunda ham hasar hesaplanır ve yarısı uygulanır
+          let rawDmg = 0;
+          const missParts = [];
+
+          if (attackType === 'physical') {
+            const physRes = rollChannelDamage(physical);
+            const elem1Res = rollChannelDamage(element1);
+            const elem2Res = rollChannelDamage(element2);
+
+            if (physRes.breakdown) missParts.push(`Fiziksel: ${physRes.breakdown}`);
+            if (elem1Res.breakdown) missParts.push(`Ateş/El.1: ${elem1Res.breakdown}`);
+            if (elem2Res.breakdown) missParts.push(`Buz/El.2: ${elem2Res.breakdown}`);
+
+            rawDmg = physRes.damage + elem1Res.damage + elem2Res.damage + safeExtra;
+            if (safeExtra > 0) missParts.push(`Manuel Ek: +${safeExtra}`);
+          } else {
+            const spellRes = rollSpellDamage(spell);
+            if (spellRes.breakdown) missParts.push(`Büyü: ${spellRes.breakdown}`);
+            rawDmg = spellRes.damage + safeExtra;
+            if (safeExtra > 0) missParts.push(`Manuel Ek: +${safeExtra}`);
+          }
+
+          missDamage = Math.max(1, Math.floor(rawDmg / 2));
+          totalDamage += missDamage;
+          missReason = `ISKA (½ Hasar: ${missDamage}) [Ham: ${rawDmg}]`;
+        } else {
+          if (hasAttackerBlind) missReason = 'ISKA (Körlük)';
+          else if (hasTargetPrepared) missReason = 'ISKA (Hazır)';
+        }
+
         attacks.push({
           index: i + 1,
           hit: false,
+          halfDamageMiss: Boolean(halfDamageOnMiss && missDamage > 0),
           hitRoll,
           modifiedRoll,
           isCritical: false,
           isCritFail,
-          damage: 0,
-          breakdown: 'ISKA'
+          damage: missDamage,
+          breakdown: missReason
         });
         continue;
       }
@@ -401,7 +463,11 @@ app.post('/api/combat/attack', (req, res) => {
       // 5. Kritik vuruş çarpanı (1.5x)
       if (isCritical) {
         damage = Math.floor(damage * 1.5);
-        breakdownParts.push('(KRİTİK x1.5)');
+        if (hasTargetParalyzed) {
+          breakdownParts.push('(⚡ FELÇ KRİTİK x1.5)');
+        } else {
+          breakdownParts.push('(KRİTİK x1.5)');
+        }
       }
 
       totalDamage += damage;
@@ -409,6 +475,7 @@ app.post('/api/combat/attack', (req, res) => {
       attacks.push({
         index: i + 1,
         hit: true,
+        halfDamageMiss: false,
         hitRoll,
         modifiedRoll,
         isCritical,
@@ -418,7 +485,18 @@ app.post('/api/combat/attack', (req, res) => {
       });
     }
 
-    res.json({ attacks, totalDamage, attackType });
+    res.json({
+      attacks,
+      totalDamage,
+      attackType,
+      statusEffectsToApply: Array.isArray(statusEffectsToApply) ? statusEffectsToApply : [],
+      statusNotes: {
+        attackerBlind: hasAttackerBlind,
+        targetPrepared: hasTargetPrepared,
+        targetParalyzed: hasTargetParalyzed,
+        halfDamageOnMiss: Boolean(halfDamageOnMiss)
+      }
+    });
   } catch (err) {
     console.error('Saldırı hesaplama hatası:', err);
     res.status(500).json({ error: 'Saldırı hesaplanamadı.' });
@@ -428,8 +506,24 @@ app.post('/api/combat/attack', (req, res) => {
 // ---- Hasar Uygula ----
 app.post('/api/combat/apply-damage', async (req, res) => {
   try {
-    const { targetType, targetId, damage } = req.body;
+    const { targetType, targetId, damage, statusEffectsToApply } = req.body;
     const safeDamage = clampNumber(damage, 0, 99999);
+
+    // Barınak (Shelter) kontrolü
+    const targetEffects = getTokenActiveEffects(targetType, targetId);
+    const hasShelter = targetEffects.some(e => e.effects?.shelter);
+
+    if (hasShelter && safeDamage > 0) {
+      io.emit('logMessage', { message: '🛡️ Barınak: Hasar tamamen engellendi (Dokunulmaz)!', color: '#3498db' });
+      return res.json({ success: true, damageApplied: 0, shelterBlocked: true, message: 'Barınak: Hasar engellendi!' });
+    }
+
+    // Durum efektlerini hedefe uygula (varsa)
+    if (Array.isArray(statusEffectsToApply) && statusEffectsToApply.length > 0) {
+      statusEffectsToApply.forEach(eff => {
+        applyStatusEffectToTarget(targetType, targetId, eff);
+      });
+    }
 
     if (targetType === 'character') {
       // Veritabanından mevcut HP'yi çek
@@ -451,7 +545,6 @@ app.post('/api/combat/apply-damage', async (req, res) => {
       if (updateErr) throw updateErr;
 
       // Socket üzerinden tüm istemcilere bildir
-      // Bağlı oyuncunun socket id'sini bul
       const playerEntry = Object.entries(players).find(
         ([, p]) => p.character && p.character.id === targetId
       );
@@ -475,8 +568,6 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         io.emit('updateMarkerData', markers[targetId]);
         syncCombatantHp(targetId, markers[targetId].hp, markers[targetId].maxHp);
         res.json({ success: true, newHp: markers[targetId].hp, targetType: 'marker' });
-      } else {
-        res.status(404).json({ error: 'Marker bulunamadı veya HP yok.' });
       }
     } else {
       res.status(400).json({ error: 'Geçersiz hedef tipi.' });
@@ -612,6 +703,381 @@ const sessionCache = {};
 let mapBgUrl = '';
 let drawHistory = [];
 
+// === STATUS EFFECTS & CUSTOM EFFECT BUILDER MOTORU ===
+let customStatusPresets = [
+  { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 3, effects: { dotDamage: { min: 1, max: 6 } } },
+  { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } },
+  { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 2, effects: { blind: true } },
+  { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } },
+  { id: 'preset_shelter', name: 'Barınak', icon: '🛡️', duration: 1, effects: { shelter: true } },
+  { id: 'preset_prepared', name: 'Hazır', icon: '🎯', duration: 2, effects: { prepared: true } },
+  { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
+  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
+];
+
+// === HAZIR SALDIRI PRESETLERİ (ATTACK PRESETS) ===
+let attackPresets = [
+  {
+    id: 'atk_preset_flame_sword',
+    name: 'Alev Kılıcı',
+    stat: 'STR',
+    attackType: 'physical',
+    spellLevel: 1,
+    dicePools: {
+      phys: { dice: { 6: 1 }, bonus: 2, weakness: false, resistance: false },
+      elem1: { dice: { 6: 1 }, bonus: 0, weakness: false, resistance: false },
+      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      spell: { dice: {}, bonus: 0 }
+    },
+    statusEffectsToApply: [
+      { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 2, effects: { dotDamage: { min: 1, max: 6 } } }
+    ],
+    halfDamageOnMiss: true,
+    extraDamage: 0,
+    attackCount: 1,
+    description: '1d6+2 Fiziksel + 1d6 Ateş. İsabet halinde 2 tur Yanma uygular. Iskalasa bile yarım hasar verir.'
+  },
+  {
+    id: 'atk_preset_heavy_strike',
+    name: 'Güçlü Vuruş',
+    stat: 'STR',
+    attackType: 'physical',
+    spellLevel: 1,
+    dicePools: {
+      phys: { dice: { 8: 2 }, bonus: 3, weakness: false, resistance: false },
+      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      spell: { dice: {}, bonus: 0 }
+    },
+    statusEffectsToApply: [],
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    description: '2d8+3 Ağır fiziksel ezici darbe.'
+  },
+  {
+    id: 'atk_preset_frost_bolt',
+    name: 'Buz Oku',
+    stat: 'INT',
+    attackType: 'spell',
+    spellLevel: 1,
+    dicePools: {
+      phys: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      elem2: { dice: { 8: 1 }, bonus: 2, weakness: false, resistance: false },
+      spell: { dice: { 8: 1 }, bonus: 2 }
+    },
+    statusEffectsToApply: [
+      { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 1, effects: { blind: true } }
+    ],
+    halfDamageOnMiss: true,
+    extraDamage: 0,
+    attackCount: 1,
+    description: '1d8+2 Büyü hasarı. Göz kamaştırıcı soğuklukla 1 tur Körlük uygular, ıskalarsa yarım hasar vurur.'
+  },
+  {
+    id: 'atk_preset_poison_dagger',
+    name: 'Zehirli Hançer',
+    stat: 'DEX',
+    attackType: 'physical',
+    spellLevel: 1,
+    dicePools: {
+      phys: { dice: { 4: 1 }, bonus: 3, weakness: false, resistance: false },
+      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      spell: { dice: {}, bonus: 0 }
+    },
+    statusEffectsToApply: [
+      { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
+    ],
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    description: '1d4+3 Hızlı hançer darbesi. İsabet halinde 3 tur Zehir (1-4 DoT & Körlük) uygular.'
+  },
+  {
+    id: 'atk_preset_holy_smite',
+    name: 'Kutsal Darbe',
+    stat: 'WIS',
+    attackType: 'spell',
+    spellLevel: 2,
+    dicePools: {
+      phys: { dice: { 6: 1 }, bonus: 2, weakness: false, resistance: false },
+      elem1: { dice: { 6: 2 }, bonus: 0, weakness: false, resistance: false },
+      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      spell: { dice: { 6: 2 }, bonus: 2 }
+    },
+    statusEffectsToApply: [
+      { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } }
+    ],
+    halfDamageOnMiss: true,
+    extraDamage: 0,
+    attackCount: 1,
+    description: '2. Seviye kutsal ışık patlaması. İsabet halinde 1 tur Felç uygular, ıskalasa bile yarım hasar vurur.'
+  },
+  {
+    id: 'atk_preset_shadow_strike',
+    name: 'Gölge Darbesi',
+    stat: 'DEX',
+    attackType: 'physical',
+    spellLevel: 1,
+    dicePools: {
+      phys: { dice: { 6: 2 }, bonus: 4, weakness: false, resistance: false },
+      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
+      spell: { dice: {}, bonus: 0 }
+    },
+    statusEffectsToApply: [
+      { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } }
+    ],
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    description: '2d6+4 Sinsi gölge saldırısı. İsabet halinde 2 tur Kanama (2-8 DoT) uygular.'
+  }
+];
+
+/**
+ * Token veya karakterin aktif durum efektlerini döndürür.
+ */
+function getTokenActiveEffects(targetType, targetId) {
+  if (!targetId) return [];
+  if (targetType === 'marker') {
+    return markers[targetId]?.activeEffects || [];
+  } else if (targetType === 'character' || targetType === 'player') {
+    const playerEntry = Object.values(players).find(
+      p => p.id === targetId || (p.character && p.character.id === targetId)
+    );
+    if (playerEntry) {
+      if (!playerEntry.activeEffects) playerEntry.activeEffects = [];
+      return playerEntry.activeEffects;
+    }
+  }
+  const c = combatState.combatants.find(item => item.id === targetId || item.characterId === targetId);
+  return c?.activeEffects || [];
+}
+
+/**
+ * Hedefe durum efekti ekler veya günceller.
+ */
+function applyStatusEffectToTarget(targetType, targetId, effect) {
+  if (!effect || !targetId) return false;
+
+  const currentEffects = getTokenActiveEffects(targetType, targetId);
+  const hasUnstoppable = currentEffects.some(e => e.effects?.unstoppable);
+
+  const effectToApply = JSON.parse(JSON.stringify(effect));
+  effectToApply.id = effectToApply.id || ('eff_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
+
+  // Felç bağışıklığı kontrolü
+  if (effectToApply.effects?.paralyzed && hasUnstoppable) {
+    delete effectToApply.effects.paralyzed;
+    io.emit('logMessage', { message: `🦏 Durdurulamaz: ${effectToApply.name || 'Efekt'} içindeki Felç bağışıklık nedeniyle engellendi!`, color: '#e67e22' });
+  }
+
+  // Token üzerinde kaydet
+  if (targetType === 'marker' && markers[targetId]) {
+    if (!markers[targetId].activeEffects) markers[targetId].activeEffects = [];
+    const idx = markers[targetId].activeEffects.findIndex(e => e.id === effectToApply.id || e.name === effectToApply.name);
+    if (idx >= 0) markers[targetId].activeEffects[idx] = effectToApply;
+    else markers[targetId].activeEffects.push(effectToApply);
+    io.emit('updateMarkerData', markers[targetId]);
+  } else {
+    const playerEntry = Object.entries(players).find(
+      ([, p]) => p.id === targetId || (p.character && p.character.id === targetId)
+    );
+    if (playerEntry) {
+      const [socketId, p] = playerEntry;
+      if (!p.activeEffects) p.activeEffects = [];
+      if (p.character && !p.character.activeEffects) p.character.activeEffects = [];
+
+      const idx = p.activeEffects.findIndex(e => e.id === effectToApply.id || e.name === effectToApply.name);
+      if (idx >= 0) {
+        p.activeEffects[idx] = effectToApply;
+        if (p.character) p.character.activeEffects[idx] = effectToApply;
+      } else {
+        p.activeEffects.push(effectToApply);
+        if (p.character) p.character.activeEffects.push(effectToApply);
+      }
+      io.emit('tokenEffectsUpdated', { id: socketId, characterId: p.character?.id, activeEffects: p.activeEffects });
+    }
+  }
+
+  // Savaşçı listesinde güncelle
+  if (combatState.active) {
+    const c = combatState.combatants.find(item => item.id === targetId || item.characterId === targetId);
+    if (c) {
+      if (!c.activeEffects) c.activeEffects = [];
+      const idx = c.activeEffects.findIndex(e => e.id === effectToApply.id || e.name === effectToApply.name);
+      if (idx >= 0) c.activeEffects[idx] = effectToApply;
+      else c.activeEffects.push(effectToApply);
+      io.emit('combatStateUpdated', combatState);
+    }
+  }
+
+  const targetName = (targetType === 'marker' ? markers[targetId]?.name : Object.values(players).find(p => p.id === targetId || p.character?.id === targetId)?.character?.name) || 'Hedef';
+  io.emit('logMessage', {
+    message: `${effectToApply.icon || '✨'} [${effectToApply.name}]: ${targetName} üzerine uygulandı (${effectToApply.duration ? effectToApply.duration + ' Tur' : 'Kalıcı'}).`,
+    color: '#e5c158'
+  });
+
+  return true;
+}
+
+/**
+ * Hedef üzerinden durum efektini kaldırır.
+ */
+function removeStatusEffectFromTarget(targetType, targetId, effectId) {
+  if (!targetId || !effectId) return false;
+
+  let effectName = 'Efekt';
+
+  if (targetType === 'marker' && markers[targetId] && markers[targetId].activeEffects) {
+    const eff = markers[targetId].activeEffects.find(e => e.id === effectId);
+    if (eff) effectName = eff.name;
+    markers[targetId].activeEffects = markers[targetId].activeEffects.filter(e => e.id !== effectId);
+    io.emit('updateMarkerData', markers[targetId]);
+  } else {
+    const playerEntry = Object.entries(players).find(
+      ([, p]) => p.id === targetId || (p.character && p.character.id === targetId)
+    );
+    if (playerEntry) {
+      const [socketId, p] = playerEntry;
+      if (p.activeEffects) {
+        const eff = p.activeEffects.find(e => e.id === effectId);
+        if (eff) effectName = eff.name;
+        p.activeEffects = p.activeEffects.filter(e => e.id !== effectId);
+      }
+      if (p.character && p.character.activeEffects) {
+        p.character.activeEffects = p.character.activeEffects.filter(e => e.id !== effectId);
+      }
+      io.emit('tokenEffectsUpdated', { id: socketId, characterId: p.character?.id, activeEffects: p.activeEffects || [] });
+    }
+  }
+
+  if (combatState.active) {
+    const c = combatState.combatants.find(item => item.id === targetId || item.characterId === targetId);
+    if (c && c.activeEffects) {
+      const eff = c.activeEffects.find(e => e.id === effectId);
+      if (eff) effectName = eff.name;
+      c.activeEffects = c.activeEffects.filter(e => e.id !== effectId);
+      io.emit('combatStateUpdated', combatState);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Tur biten combatant'ın DoT hasarını uygular ve süreli efektlerinin duration sayacını 1 azaltır.
+ */
+async function processCombatantTurnEnd(combatant) {
+  if (!combatant || !combatant.activeEffects || combatant.activeEffects.length === 0) return;
+
+  const expiredEffects = [];
+  const targetType = combatant.isMarker ? 'marker' : 'character';
+  const targetId = combatant.isMarker ? combatant.id : (combatant.characterId || combatant.id);
+
+  // 1. DoT Hasarı Kontrolü
+  for (const eff of combatant.activeEffects) {
+    if (eff.effects?.dotDamage) {
+      const minDmg = clampNumber(parseInt(eff.effects.dotDamage.min) || 1, 0, 9999);
+      const maxDmg = clampNumber(parseInt(eff.effects.dotDamage.max) || minDmg, minDmg, 9999);
+      const dotDmg = rollDie(minDmg, maxDmg);
+
+      if (dotDmg > 0) {
+        // Hedefte shelter (barınak) var mı?
+        const hasShelter = combatant.activeEffects.some(e => e.effects?.shelter);
+        if (hasShelter) {
+          io.emit('logMessage', {
+            message: `🛡️ [Barınak]: ${combatant.name} üzerindeki ${eff.name} DoT hasarı engellendi!`,
+            color: '#3498db'
+          });
+        } else {
+          // Hasarı uygula
+          if (combatant.isMarker && markers[combatant.id] && markers[combatant.id].hp != null) {
+            markers[combatant.id].hp = Math.max(0, markers[combatant.id].hp - dotDmg);
+            combatant.hpCurrent = markers[combatant.id].hp;
+            combatant.isDead = combatant.hpCurrent <= 0;
+            io.emit('updateMarkerData', markers[combatant.id]);
+            syncCombatantHp(combatant.id, combatant.hpCurrent, combatant.hpMax);
+          } else if (!combatant.isMarker && combatant.characterId) {
+            try {
+              const { data: charData } = await supabase
+                .from('characters')
+                .select('hp_current, hp_max')
+                .eq('id', combatant.characterId)
+                .single();
+              if (charData) {
+                const newHp = Math.max(0, (charData.hp_current || 0) - dotDmg);
+                await supabase.from('characters').update({ hp_current: newHp }).eq('id', combatant.characterId);
+                combatant.hpCurrent = newHp;
+                combatant.isDead = newHp <= 0;
+
+                const playerEntry = Object.entries(players).find(
+                  ([, p]) => p.character && p.character.id === combatant.characterId
+                );
+                if (playerEntry) {
+                  const [socketId, p] = playerEntry;
+                  p.character.hp_current = newHp;
+                  io.emit('characterUpdated', { id: socketId, updates: { hp_current: newHp, hp_max: charData.hp_max } });
+                }
+                syncCombatantHp(combatant.id, newHp, charData.hp_max);
+              }
+            } catch (err) {
+              console.error('DoT character hasar hatası:', err);
+            }
+          }
+
+          io.emit('logMessage', {
+            message: `${eff.icon || '🔥'} [${eff.name}]: ${combatant.name} ${dotDmg} tur sonu hasarı aldı! (Kalan HP: ${combatant.hpCurrent || 0})`,
+            color: '#e74c3c'
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Süre Azaltma & Süresi Dolanları Ayıklama
+  combatant.activeEffects.forEach(eff => {
+    if (eff.duration != null && eff.duration > 0) {
+      eff.duration -= 1;
+      if (eff.duration <= 0) {
+        expiredEffects.push(eff);
+      }
+    }
+  });
+
+  // Süresi dolanları kaldır
+  if (expiredEffects.length > 0) {
+    expiredEffects.forEach(exp => {
+      removeStatusEffectFromTarget(targetType, targetId, exp.id);
+      io.emit('logMessage', {
+        message: `✨ [${exp.name}] etkisi ${combatant.name} üzerinden sona erdi.`,
+        color: '#9b59b6'
+      });
+    });
+  }
+
+  // Senkronizasyon
+  if (combatant.isMarker && markers[combatant.id]) {
+    markers[combatant.id].activeEffects = combatant.activeEffects.filter(e => e.duration == null || e.duration > 0);
+    io.emit('updateMarkerData', markers[combatant.id]);
+  } else {
+    const playerEntry = Object.entries(players).find(
+      ([, p]) => p.id === combatant.id || (p.character && p.character.id === combatant.characterId)
+    );
+    if (playerEntry) {
+      const [socketId, p] = playerEntry;
+      p.activeEffects = combatant.activeEffects.filter(e => e.duration == null || e.duration > 0);
+      if (p.character) p.character.activeEffects = p.activeEffects;
+      io.emit('tokenEffectsUpdated', { id: socketId, characterId: p.character?.id, activeEffects: p.activeEffects });
+    }
+  }
+
+  io.emit('combatStateUpdated', combatState);
+}
+
 // === SAVAŞ / İNİSİYATİF DURUMU (BG3 COMBAT TRACKER) ===
 let combatState = {
   active: false,
@@ -659,7 +1125,8 @@ function calculateInitiativeForCombat() {
       chrMod: chrMod,
       roll: roll,
       total: total,
-      isDead: hpCurrent !== null && hpCurrent <= 0
+      isDead: hpCurrent !== null && hpCurrent <= 0,
+      activeEffects: p.activeEffects || p.character?.activeEffects || []
     });
   });
 
@@ -688,7 +1155,8 @@ function calculateInitiativeForCombat() {
       chrMod: chrMod,
       roll: roll,
       total: total,
-      isDead: hpCurrent !== null && hpCurrent <= 0
+      isDead: hpCurrent !== null && hpCurrent <= 0,
+      activeEffects: m.activeEffects || []
     });
   });
 
@@ -909,12 +1377,49 @@ io.on('connection', (socket) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     if (!data || typeof data !== 'object' || !markers[data.id]) return;
 
-    if (data.hp !== undefined) markers[data.id].hp = clampNumber(data.hp, 0, 99999);
-    if (data.size !== undefined) markers[data.id].size = clampNumber(data.size, 10, 500);
-    io.emit('updateMarkerData', markers[data.id]);
+    const m = markers[data.id];
 
-    if (data.hp !== undefined) {
-      syncCombatantHp(data.id, data.hp, markers[data.id].maxHp);
+    if (data.name !== undefined) m.name = truncateStr(data.name || 'X', 2);
+    if (data.color !== undefined) m.color = truncateStr(data.color || '#f1c40f', 9);
+    if (data.imgUrl !== undefined) m.imgUrl = isValidUrl(data.imgUrl) ? data.imgUrl : null;
+    if (data.hp !== undefined) m.hp = data.hp != null ? clampNumber(data.hp, 0, 99999) : null;
+    if (data.maxHp !== undefined) m.maxHp = data.maxHp != null ? clampNumber(data.maxHp, 0, 99999) : null;
+    if (data.size !== undefined) m.size = clampNumber(data.size, 10, 500);
+    if (data.ac !== undefined) m.ac = clampNumber(data.ac, 0, 50);
+    if (data.ac_bonus !== undefined || data.acBonus !== undefined) {
+      m.ac_bonus = clampNumber(data.ac_bonus ?? data.acBonus, 0, 50);
+    }
+    if (data.stats && typeof data.stats === 'object') {
+      m.stats = {
+        str: clampNumber(data.stats.str, 0, 30),
+        str_bonus: clampNumber(data.stats.str_bonus, 0, 30),
+        dex: clampNumber(data.stats.dex, 0, 30),
+        dex_bonus: clampNumber(data.stats.dex_bonus, 0, 30),
+        int: clampNumber(data.stats.int, 0, 30),
+        int_bonus: clampNumber(data.stats.int_bonus, 0, 30),
+        con: clampNumber(data.stats.con, 0, 30),
+        con_bonus: clampNumber(data.stats.con_bonus, 0, 30),
+        wis: clampNumber(data.stats.wis, 0, 30),
+        wis_bonus: clampNumber(data.stats.wis_bonus, 0, 30),
+        chr: clampNumber(data.stats.chr, 0, 30),
+        chr_bonus: clampNumber(data.stats.chr_bonus, 0, 30),
+      };
+    }
+
+    io.emit('updateMarkerData', m);
+
+    // Savaş aktifse combatant bilgilerini de senkronize et
+    if (combatState.active) {
+      const c = combatState.combatants.find(item => item.id === data.id);
+      if (c) {
+        if (data.name !== undefined) c.name = m.name;
+        if (data.color !== undefined) c.color = m.color;
+        if (data.imgUrl !== undefined) c.imgUrl = m.imgUrl;
+        if (data.hp !== undefined) c.hpCurrent = m.hp;
+        if (data.maxHp !== undefined) c.hpMax = m.maxHp;
+        c.isDead = m.hp !== null && m.hp <= 0;
+      }
+      io.emit('combatStateUpdated', combatState);
     }
   });
 
@@ -1136,9 +1641,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('nextCombatTurn', () => {
+  socket.on('nextCombatTurn', async () => {
     if (!combatState.active || !combatState.combatants.length) return;
-    
+
+    // 1. Sırası biten combatant için DoT hasarını uygula ve süreleri azalt
+    const currentCombatant = combatState.combatants[combatState.currentTurnIndex];
+    if (currentCombatant) {
+      await processCombatantTurnEnd(currentCombatant);
+    }
+
+    // 2. Sıradaki combatant'a geç
     let nextIndex = combatState.currentTurnIndex + 1;
     if (nextIndex >= combatState.combatants.length) {
       nextIndex = 0;
@@ -1160,9 +1672,15 @@ io.on('connection', (socket) => {
     io.emit('combatStateUpdated', combatState);
   });
 
-  socket.on('setCombatTurn', (index) => {
+  socket.on('setCombatTurn', async (index) => {
     if (!combatState.active || !combatState.combatants.length) return;
     const safeIdx = clampNumber(index, 0, combatState.combatants.length - 1);
+    
+    const currentCombatant = combatState.combatants[combatState.currentTurnIndex];
+    if (currentCombatant && safeIdx !== combatState.currentTurnIndex) {
+      await processCombatantTurnEnd(currentCombatant);
+    }
+
     combatState.currentTurnIndex = safeIdx;
     io.emit('combatStateUpdated', combatState);
   });
@@ -1172,6 +1690,88 @@ io.on('connection', (socket) => {
     combatState.combatants = calculateInitiativeForCombat();
     combatState.currentTurnIndex = 0;
     io.emit('combatStateUpdated', combatState);
+  });
+
+  // ---- STATUS EFFECTS & CUSTOM EFFECT BUILDER SOCKET EVENTLERİ ----
+  socket.on('getCustomEffects', () => {
+    socket.emit('customEffectsUpdated', customStatusPresets);
+  });
+
+  socket.on('saveCustomEffect', (effectTemplate) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!effectTemplate || !effectTemplate.name) return;
+
+    const newEffect = {
+      id: effectTemplate.id || ('custom_' + Date.now()),
+      name: truncateStr(effectTemplate.name, 30),
+      icon: effectTemplate.icon || '✨',
+      duration: effectTemplate.duration != null && effectTemplate.duration !== '' ? clampNumber(parseInt(effectTemplate.duration), 1, 99) : null,
+      effects: effectTemplate.effects || {}
+    };
+
+    const existingIdx = customStatusPresets.findIndex(e => e.id === newEffect.id);
+    if (existingIdx >= 0) {
+      customStatusPresets[existingIdx] = newEffect;
+    } else {
+      customStatusPresets.push(newEffect);
+    }
+
+    io.emit('customEffectsUpdated', customStatusPresets);
+  });
+
+  socket.on('deleteCustomEffect', (effectId) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    customStatusPresets = customStatusPresets.filter(e => e.id !== effectId);
+    io.emit('customEffectsUpdated', customStatusPresets);
+  });
+
+  socket.on('applyStatusEffect', ({ targetType, targetId, effect }) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    applyStatusEffectToTarget(targetType, targetId, effect);
+  });
+
+  socket.on('removeStatusEffect', ({ targetType, targetId, effectId }) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    removeStatusEffectFromTarget(targetType, targetId, effectId);
+  });
+
+  // ---- ATTACK PRESETS SOCKET EVENTLERİ ----
+  socket.on('getAttackPresets', () => {
+    socket.emit('attackPresetsUpdated', attackPresets);
+  });
+
+  socket.on('saveAttackPreset', (preset) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!preset || !preset.name) return;
+
+    const newPreset = {
+      id: preset.id || ('atk_custom_' + Date.now()),
+      name: truncateStr(preset.name, 40),
+      stat: preset.stat || 'STR',
+      attackType: preset.attackType === 'spell' ? 'spell' : 'physical',
+      spellLevel: clampNumber(parseInt(preset.spellLevel) || 1, 1, 4),
+      dicePools: preset.dicePools || { phys: {}, elem1: {}, elem2: {}, spell: {} },
+      statusEffectsToApply: Array.isArray(preset.statusEffectsToApply) ? preset.statusEffectsToApply : [],
+      halfDamageOnMiss: Boolean(preset.halfDamageOnMiss),
+      extraDamage: clampNumber(parseInt(preset.extraDamage) || 0, 0, 1000),
+      attackCount: clampNumber(parseInt(preset.attackCount) || 1, 1, 20),
+      description: truncateStr(preset.description || '', 200)
+    };
+
+    const existingIdx = attackPresets.findIndex(p => p.id === newPreset.id);
+    if (existingIdx >= 0) {
+      attackPresets[existingIdx] = newPreset;
+    } else {
+      attackPresets.push(newPreset);
+    }
+
+    io.emit('attackPresetsUpdated', attackPresets);
+  });
+
+  socket.on('deleteAttackPreset', (presetId) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    attackPresets = attackPresets.filter(p => p.id !== presetId);
+    io.emit('attackPresetsUpdated', attackPresets);
   });
 
   // ---- Bağlantı Kopma ----

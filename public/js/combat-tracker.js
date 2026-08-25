@@ -45,6 +45,30 @@
       .replace(/'/g, '&#039;');
   }
 
+  function formatEffectDescription(effRules) {
+    if (!effRules) return '';
+    const parts = [];
+    if (effRules.dotDamage) {
+      parts.push(`Tur sonu ${effRules.dotDamage.min}-${effRules.dotDamage.max} hasar`);
+    }
+    if (effRules.blind) {
+      parts.push('Kendi saldırıları dezavantajlı');
+    }
+    if (effRules.paralyzed) {
+      parts.push('Gelen saldırılar kesin vuruş & kritik');
+    }
+    if (effRules.shelter) {
+      parts.push('Hasar almaz (Dokunulmaz)');
+    }
+    if (effRules.prepared) {
+      parts.push('Gelen saldırılar dezavantajlı');
+    }
+    if (effRules.unstoppable) {
+      parts.push('Felç bağışıklığı');
+    }
+    return parts.join(', ') || 'Özel Efekt';
+  }
+
   /**
    * Haritadaki belirli bir token'a yumuşakça odaklanır ve vurgu efekti uygular.
    */
@@ -239,6 +263,37 @@
         portraitWrap.appendChild(hpBarContainer);
       }
 
+      // 4.5. Aktif Durum Efektleri Şeridi (Status Strip)
+      if (c.activeEffects && c.activeEffects.length > 0) {
+        const statusStrip = document.createElement('div');
+        statusStrip.className = 'bg3-card-status-strip';
+        c.activeEffects.forEach(eff => {
+          const chip = document.createElement('span');
+          chip.className = 'bg3-status-chip';
+          const durText = eff.duration != null ? `${eff.duration}T` : '∞';
+          const desc = formatEffectDescription(eff.effects);
+          chip.title = `${eff.icon || '✨'} ${eff.name} (${durText}): ${desc}\n(DM: Sağ tık ile kaldır)`;
+          chip.innerHTML = `
+            <span class="status-chip-icon">${eff.icon || '✨'}</span>
+            <span class="status-chip-dur">${durText}</span>
+          `;
+
+          // DM sağ tık ile efekti silebilir
+          chip.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof role !== 'undefined' && role === 'dm' && typeof socket !== 'undefined') {
+              const targetType = c.isMarker ? 'marker' : 'character';
+              const targetId = c.isMarker ? c.id : (c.characterId || c.id);
+              socket.emit('removeStatusEffect', { targetType, targetId, effectId: eff.id });
+            }
+          });
+
+          statusStrip.appendChild(chip);
+        });
+        portraitWrap.appendChild(statusStrip);
+      }
+
       card.appendChild(portraitWrap);
 
       // 5. Karakter Adı Etiketi
@@ -261,8 +316,10 @@
         e.stopPropagation();
         focusTokenOnMap(c.id);
 
-        // Eğer DM ise ve farklı bir karta tıkladıysa sırayı o karaktere atayabilir
         if (typeof role !== 'undefined' && role === 'dm') {
+          if (typeof window.__webdnd_onCombatTurnActive === 'function') {
+            window.__webdnd_onCombatTurnActive(c);
+          }
           if (idx !== combatState.currentTurnIndex && typeof socket !== 'undefined') {
             socket.emit('setCombatTurn', idx);
           }
@@ -271,6 +328,14 @@
 
       cardsTrack.appendChild(card);
     });
+
+    // Aktif combatant'ı saldırı panelinde otomatik seç ve presetini yükle
+    if (combatState.active && combatState.combatants.length > 0) {
+      const activeCombatant = combatState.combatants[combatState.currentTurnIndex];
+      if (activeCombatant && typeof window.__webdnd_onCombatTurnActive === 'function') {
+        window.__webdnd_onCombatTurnActive(activeCombatant);
+      }
+    }
   }
 
   // === SOCKET DINLEYICILERI ===
@@ -349,6 +414,17 @@
       e.stopPropagation();
       if (typeof socket !== 'undefined') {
         socket.emit('endCombat');
+      }
+    });
+  }
+
+  // 7. Status Efektleri Butonu
+  const btnStatus = document.getElementById('bg3-btn-status');
+  if (btnStatus) {
+    btnStatus.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof window.__webdnd_openStatusToolbox === 'function') {
+        window.__webdnd_openStatusToolbox();
       }
     });
   }

@@ -16,8 +16,13 @@
   // === STATE ===
   let selectedAttacker = null; // { type, id, name, data }
   let selectedTargets = [];    // Array of { type, id, name, data, tokenEl }
-  let lastAttackResults = [];  // Array of { totalDamage, targetId, targetType, targetName, attackerName }
+  let lastAttackResults = [];  // Array of { totalDamage, targetId, targetType, targetName, attackerName, statusEffectsToApply }
   let allCharactersCache = [];
+
+  // === HAZIR SALDIRI PRESETLERİ STATE ===
+  let attackPresetsCache = [];
+  const lastEquippedAttackByToken = new Map(); // tokenKey ('type:id') -> presetId
+  let activeEquippedPreset = null;
 
   // === SALDIRAN FORM CACHE ===
   // Her saldıran için form değerlerini hafızada tutar (type:id → { field: value, ... })
@@ -26,6 +31,16 @@
   // DOM REFERANSLARI
   const panel = document.getElementById('attack-panel-container');
   if (!panel) return;
+
+  // Preset Referansları
+  const presetSelect = document.getElementById('atk-preset-select');
+  const btnOpenPresets = document.getElementById('btn-open-attack-presets');
+  const presetInfoBanner = document.getElementById('atk-preset-info-banner');
+  const presetBadgeStat = document.getElementById('atk-preset-badge-stat');
+  const presetBadgeType = document.getElementById('atk-preset-badge-type');
+  const presetBadgeHalfMiss = document.getElementById('atk-preset-badge-halfmiss');
+  const presetBadgeStatus = document.getElementById('atk-preset-badge-status');
+  const presetDescText = document.getElementById('atk-preset-desc-text');
 
   const attackerSelect = document.getElementById('atk-attacker-select');
   const attackerInfo = document.getElementById('atk-attacker-info');
@@ -432,6 +447,133 @@
   }
 
   // ============================================================
+  // HAZIR SALDIRI PRESETLERİ (ATTACK PRESETS) & AKILLI KUŞANMA
+  // ============================================================
+
+  /**
+   * Preset dropdown'ını günceller.
+   */
+  function populatePresetSelect() {
+    if (!presetSelect) return;
+    const currentVal = presetSelect.value;
+    presetSelect.innerHTML = '<option value="">— Serbest Saldırı (Özel Zar Havuzu) —</option>';
+
+    attackPresetsCache.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      const typeIcon = p.attackType === 'spell' ? '✨' : '⚔️';
+      const halfIcon = p.halfDamageOnMiss ? ' [½]' : '';
+      const statusIcon = p.statusEffectsToApply?.length ? ` [${p.statusEffectsToApply[0].icon || '✨'}]` : '';
+      opt.textContent = `${typeIcon} ${p.name} (${p.stat})${halfIcon}${statusIcon}`;
+      presetSelect.appendChild(opt);
+    });
+
+    if (currentVal && attackPresetsCache.some(p => p.id === currentVal)) {
+      presetSelect.value = currentVal;
+    }
+  }
+
+  /**
+   * Belirli bir preseti kuşanır ve paneldeki havuz/stat alanlarını doldurur.
+   */
+  function equipPreset(presetOrId, persistForToken = true) {
+    let preset = typeof presetOrId === 'string' ? attackPresetsCache.find(p => p.id === presetOrId) : presetOrId;
+    if (!preset) return;
+
+    activeEquippedPreset = preset;
+
+    // Dropdown seçimi güncelle
+    if (presetSelect) presetSelect.value = preset.id;
+
+    // Stat Modifikatör
+    if (modifierSelect && preset.stat) modifierSelect.value = preset.stat;
+
+    // Büyü Seviyesi
+    if (preset.attackType === 'spell') {
+      const lvl = preset.spellLevel || 1;
+      const radio = document.getElementById(`atk-spell-lvl${lvl}`);
+      if (radio) radio.checked = true;
+    }
+
+    // Zar Havuzları
+    const pools = preset.dicePools || {};
+    dicePools.phys.setState(pools.phys || pools.physical);
+    dicePools.elem1.setState(pools.elem1);
+    dicePools.elem2.setState(pools.elem2);
+    dicePools.spell.setState(pools.spell);
+
+    // Ekstra Parametreler (varsa)
+    if (preset.extraDamage != null && extraDmgInput) extraDmgInput.value = preset.extraDamage;
+    if (preset.attackCount != null && attackCountInput) attackCountInput.value = preset.attackCount;
+
+    // Banner Güncelle
+    updatePresetBanner(preset);
+
+    // Saldıran token için kuşanma hafızasını kaydet
+    if (persistForToken && selectedAttacker) {
+      const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
+      lastEquippedAttackByToken.set(key, preset.id);
+    }
+  }
+
+  /**
+   * Kuşanılmış preseti çıkarır (serbest moda geçer).
+   */
+  function unequipPreset(persistForToken = true) {
+    activeEquippedPreset = null;
+    if (presetSelect) presetSelect.value = '';
+    if (presetInfoBanner) presetInfoBanner.classList.add('hidden');
+
+    if (persistForToken && selectedAttacker) {
+      const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
+      lastEquippedAttackByToken.delete(key);
+    }
+  }
+
+  /**
+   * Kuşanılmış preset bilgi banner'ını günceller.
+   */
+  function updatePresetBanner(preset) {
+    if (!presetInfoBanner) return;
+
+    if (!preset) {
+      presetInfoBanner.classList.add('hidden');
+      return;
+    }
+
+    presetInfoBanner.classList.remove('hidden');
+
+    if (presetBadgeStat) presetBadgeStat.textContent = `Stat: ${preset.stat || 'STR'}`;
+    if (presetBadgeType) {
+      presetBadgeType.textContent = preset.attackType === 'spell' ? `✨ Büyü (Lvl ${preset.spellLevel || 1})` : '⚔️ Fiziksel';
+    }
+
+    if (presetBadgeHalfMiss) {
+      if (preset.halfDamageOnMiss) {
+        presetBadgeHalfMiss.classList.remove('hidden');
+        presetBadgeHalfMiss.textContent = '🛡️ Iska: ½ Hasar';
+      } else {
+        presetBadgeHalfMiss.classList.add('hidden');
+      }
+    }
+
+    if (presetBadgeStatus) {
+      if (preset.statusEffectsToApply && preset.statusEffectsToApply.length > 0) {
+        presetBadgeStatus.classList.remove('hidden');
+        const eff = preset.statusEffectsToApply[0];
+        presetBadgeStatus.textContent = `${eff.icon || '✨'} ${eff.name || 'Durum'}`;
+      } else {
+        presetBadgeStatus.classList.add('hidden');
+      }
+    }
+
+    if (presetDescText) {
+      presetDescText.textContent = preset.description || '';
+      presetDescText.style.display = preset.description ? 'block' : 'none';
+    }
+  }
+
+  // ============================================================
   // SALDIRAN FORM STATE KAYDET / GERİ YÜKLE
   // ============================================================
 
@@ -456,7 +598,7 @@
       elem2: dicePools.elem2.getState(),
       spell: dicePools.spell.getState(),
 
-      // Büyü seviyesi (hangi radio seçili)
+      // Büyü seviyesi
       spellLevel: (function () {
         for (let i = 1; i <= 4; i++) {
           const radio = document.getElementById(`atk-spell-lvl${i}`);
@@ -471,7 +613,6 @@
 
   /**
    * Verilen anahtar için kaydedilmiş form değerlerini geri yükler.
-   * Kayıt yoksa tüm alanları varsayılana (boş/sıfır) döndürür.
    */
   function restoreAttackerForm(key) {
     const state = attackerFormCache.get(key);
@@ -518,7 +659,7 @@
   }
 
   // ============================================================
-  // SALDIRAN SEÇİMİ — Statlarını ve slotlarını gösterir
+  // SALDIRAN SEÇİMİ — Statlarını, slotlarını ve presetini gösterir
   // ============================================================
 
   function onAttackerChange() {
@@ -529,12 +670,21 @@
     if (!selectedAttacker) {
       if (attackerInfo) attackerInfo.innerHTML = '<span class="atk-hint">Saldıran seçilmedi</span>';
       fillSpellSlots(null);
+      unequipPreset(false);
       return;
     }
 
-    // Yeni saldıranın form değerlerini geri yükle
     const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
-    restoreAttackerForm(key);
+
+    // Akıllı Kuşanma: Bu token'ın kayıtlı saldırı preseti var mı?
+    const savedPresetId = lastEquippedAttackByToken.get(key);
+    if (savedPresetId && attackPresetsCache.some(p => p.id === savedPresetId)) {
+      equipPreset(savedPresetId, false);
+    } else {
+      // Yoksa serbest form değerlerini geri yükle
+      restoreAttackerForm(key);
+      unequipPreset(false);
+    }
 
     const d = selectedAttacker.data;
     const stats = d.stats || {};
@@ -837,6 +987,9 @@
     if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
     if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
 
+    const halfDamageOnMiss = Boolean(activeEquippedPreset?.halfDamageOnMiss);
+    const statusEffectsToApply = activeEquippedPreset?.statusEffectsToApply || [];
+
     // Her hedef için ayrı saldırı
     lastAttackResults = [];
     btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
@@ -846,13 +999,17 @@
       const targetAC = selectedTargets.length === 1 ? intVal(targetACInput) : getTargetAC(target);
 
       const body = {
+        attacker: { type: selectedAttacker.type, id: selectedAttacker.id },
         attackerStats: getAttackerStats(),
+        target: { type: target.type, id: target.id },
         targetAC: targetAC,
         attackType: 'physical',
         advantage: advantageCheck?.checked || false,
         disadvantage: disadvantageCheck?.checked || false,
         attackCount: intVal(attackCountInput) || 1,
         extraDamage: intVal(extraDmgInput),
+        halfDamageOnMiss: halfDamageOnMiss,
+        statusEffectsToApply: statusEffectsToApply,
         physical: dicePools.phys.getState(),
         element1: dicePools.elem1.getState(),
         element2: dicePools.elem2.getState()
@@ -886,6 +1043,9 @@
       return;
     }
 
+    const halfDamageOnMiss = Boolean(activeEquippedPreset?.halfDamageOnMiss);
+    const statusEffectsToApply = activeEquippedPreset?.statusEffectsToApply || [];
+
     // Her hedef için ayrı saldırı
     lastAttackResults = [];
     btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
@@ -895,13 +1055,17 @@
       const targetAC = selectedTargets.length === 1 ? intVal(targetACInput) : getTargetAC(target);
 
       const body = {
+        attacker: { type: selectedAttacker.type, id: selectedAttacker.id },
         attackerStats: getAttackerStats(),
+        target: { type: target.type, id: target.id },
         targetAC: targetAC,
         attackType: 'spell',
         advantage: advantageCheck?.checked || false,
         disadvantage: disadvantageCheck?.checked || false,
         attackCount: intVal(attackCountInput) || 1,
         extraDamage: intVal(extraDmgInput),
+        halfDamageOnMiss: halfDamageOnMiss,
+        statusEffectsToApply: statusEffectsToApply,
         spell: {
           ...dicePools.spell.getState(),
           level: spellLevel
@@ -953,12 +1117,20 @@
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || 'Bilinmeyen hata');
 
+      // Durum efektleri bildirim etiketleri
+      const notes = [];
+      if (result.statusNotes?.attackerBlind) notes.push('👁️ Körlük (Dezavantaj)');
+      if (result.statusNotes?.targetPrepared) notes.push('🎯 Hedef Hazır (Dezavantaj)');
+      if (result.statusNotes?.targetParalyzed) notes.push('⚡ Hedef Felçli (Kesin Kritik)');
+      if (result.statusNotes?.halfDamageOnMiss) notes.push('🛡️ Iska: ½ Hasar');
+      const notesLabel = notes.length > 0 ? ` [${notes.join(', ')}]` : '';
+
       // Log başlığı: Saldıran → Hedef
       const atkLabel = body.attackType === 'physical' ? '⚔️ FİZİKSEL' : '✨ BÜYÜ';
       const attackerName = escapeHtml(selectedAttacker?.name || '?');
       const targetName = escapeHtml(target.name || '?');
       addCombatLog(
-        `<span class="atk-log-header">--- ${atkLabel}: ${attackerName} → ${targetName} (${body.attackCount} Vuruş, AC:${body.targetAC}) ---</span>`,
+        `<span class="atk-log-header">--- ${atkLabel}: ${attackerName} → ${targetName} (${body.attackCount} Vuruş, AC:${body.targetAC})${notesLabel} ---</span>`,
         'header'
       );
 
@@ -967,9 +1139,19 @@
           const critTag = atk.isCritical ? ' <span class="atk-crit">KRİTİK!</span>' : '';
           const typeLabel = body.attackType === 'physical' ? 'Saldırı' : 'Büyü Saldırısı';
           const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
+          let statusAppliedTag = '';
+          if (result.statusEffectsToApply && result.statusEffectsToApply.length > 0) {
+            statusAppliedTag = ` <span class="atk-log-status" style="color:#f1c40f; font-weight:bold;">[✨ ${result.statusEffectsToApply.map(e => e.name).join(', ')} uygulandı]</span>`;
+          }
           addCombatLog(
-            `<span class="atk-log-hit">${atk.index}. ${typeLabel}: <strong>${atk.damage}</strong> Hasar${critTag}</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
+            `<span class="atk-log-hit">${atk.index}. ${typeLabel}: <strong>${atk.damage}</strong> Hasar${critTag}${statusAppliedTag}</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
             atk.isCritical ? 'crit' : 'hit'
+          );
+        } else if (atk.halfDamageMiss) {
+          const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
+          addCombatLog(
+            `<span class="atk-log-miss" style="color:#e67e22;">🛡️ ${atk.index}. ISKA (Yarım Hasar): <strong>${atk.damage}</strong> Hasar</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
+            'miss'
           );
         } else {
           const failTag = atk.isCritFail ? ' <span class="atk-critfail">KRİTİK BAŞARISIZLIK!</span>' : '';
@@ -983,13 +1165,14 @@
       addCombatLog(`<span class="atk-log-total">=== ${escapeHtml(target.name)}: TOPLAM HASAR: ${result.totalDamage} ===</span>`, 'total');
 
       // Sonucu sakla (çoklu hasar uygulama için)
-      if (result.totalDamage > 0) {
+      if (result.totalDamage > 0 || (result.statusEffectsToApply && result.statusEffectsToApply.length > 0)) {
         lastAttackResults.push({
           totalDamage: result.totalDamage,
           targetId: target.id,
           targetType: target.type,
           targetName: target.name,
-          attackerName: selectedAttacker?.name
+          attackerName: selectedAttacker?.name,
+          statusEffectsToApply: result.statusEffectsToApply || []
         });
       }
 
@@ -1021,7 +1204,7 @@
   }
 
   /**
-   * Son hesaplanan hasarları tüm hedeflere uygular.
+   * Son hesaplanan hasarları ve bağlı durum efektlerini tüm hedeflere uygular.
    */
   async function applyDamage() {
     if (lastAttackResults.length === 0) {
@@ -1041,7 +1224,8 @@
             body: JSON.stringify({
               targetType: attackResult.targetType,
               targetId: attackResult.targetId,
-              damage: attackResult.totalDamage
+              damage: attackResult.totalDamage,
+              statusEffectsToApply: attackResult.statusEffectsToApply
             })
           });
 
@@ -1066,7 +1250,7 @@
       // Seçicileri yenile
       await loadSelectors();
       if (selectedAttacker) { attackerSelect.value = `${selectedAttacker.type}:${selectedAttacker.id}`; onAttackerChange(); }
-      // Hedef listesini güncelle (HP değişmiş olabilir)
+      // Hedef listesini güncelle
       renderSelectedTargets();
     } catch (err) {
       console.error('Hasar uygulama hatası:', err);
@@ -1086,9 +1270,296 @@
     });
   }
 
+  // ============================================================
+  // HAZIR SALDIRI PRESETLERİ MODAL CONTROLLER
+  // ============================================================
+
+  function formatPoolSummary(pools) {
+    if (!pools) return 'Havuz boş';
+    const parts = [];
+    const formatPool = (p, label) => {
+      if (!p) return;
+      const diceParts = [];
+      const d = p.dice || {};
+      [4, 6, 8, 10, 12, 20].forEach(sides => {
+        const count = d[sides] || d[`d${sides}`] || 0;
+        if (count > 0) diceParts.push(`${count}d${sides}`);
+      });
+      if (p.bonus) diceParts.push(p.bonus > 0 ? `+${p.bonus}` : `${p.bonus}`);
+      if (diceParts.length > 0) parts.push(`${label}: ${diceParts.join('+')}`);
+    };
+
+    formatPool(pools.phys || pools.physical, 'Fiz');
+    formatPool(pools.elem1, 'Ateş');
+    formatPool(pools.elem2, 'Buz');
+    formatPool(pools.spell, 'Büyü');
+
+    return parts.join(' | ') || 'Havuz boş';
+  }
+
+  function renderAttackPresetsCatalog() {
+    const grid = document.getElementById('atk-presets-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    attackPresetsCache.forEach(preset => {
+      const card = document.createElement('div');
+      card.className = 'atk-preset-card';
+      if (activeEquippedPreset && activeEquippedPreset.id === preset.id) {
+        card.classList.add('equipped-active');
+      }
+
+      const typeLabel = preset.attackType === 'spell' ? `✨ Büyü (Lvl ${preset.spellLevel || 1})` : '⚔️ Fiziksel';
+      const halfBadge = preset.halfDamageOnMiss ? `<span class="atk-preset-chip" style="background:rgba(230,126,34,0.2); border-color:#e67e22;">🛡️ Iska: ½ Hasar</span>` : '';
+      const statusBadge = preset.statusEffectsToApply?.length
+        ? `<span class="atk-preset-chip" style="background:rgba(241,196,15,0.2); border-color:#f1c40f;">${preset.statusEffectsToApply[0].icon || '✨'} ${preset.statusEffectsToApply[0].name}</span>`
+        : '';
+
+      card.innerHTML = `
+        <div>
+          <div class="atk-preset-card-header">
+            <span class="atk-preset-card-title">${escapeHtml(preset.name)}</span>
+            <span class="atk-preset-chip">${preset.stat}</span>
+          </div>
+          <div class="atk-preset-badge-row" style="margin: 4px 0;">
+            <span class="atk-preset-chip">${typeLabel}</span>
+            ${halfBadge}
+            ${statusBadge}
+          </div>
+          <div class="atk-preset-card-pools">${formatPoolSummary(preset.dicePools)}</div>
+          ${preset.description ? `<div class="atk-preset-card-desc" style="margin-top:4px;">${escapeHtml(preset.description)}</div>` : ''}
+        </div>
+        <div class="atk-preset-card-actions">
+          <button type="button" class="btn-equip-preset" title="Bu Saldırıyı Kuşan">⚡ Kuşan</button>
+          <button type="button" class="btn-edit-preset" title="Düzenle">✏️</button>
+          <button type="button" class="btn-delete-atk-preset" title="Sil">🗑️</button>
+        </div>
+      `;
+
+      // Kuşan butonu
+      card.querySelector('.btn-equip-preset').addEventListener('click', () => {
+        equipPreset(preset.id, true);
+        closeAttackPresetsModal();
+      });
+
+      // Düzenle butonu
+      card.querySelector('.btn-edit-preset').addEventListener('click', () => {
+        editPresetInBuilder(preset);
+      });
+
+      // Sil butonu
+      card.querySelector('.btn-delete-atk-preset').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`"${preset.name}" presetini silmek istediğinize emin misiniz?`)) {
+          if (typeof socket !== 'undefined') {
+            socket.emit('deleteAttackPreset', preset.id);
+          }
+        }
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  function populateStatusEffectsSelect() {
+    const select = document.getElementById('atk-builder-status-effect');
+    if (!select) return;
+
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">— Durum Etkisi Yok —</option>';
+
+    // Custom status presets listesinden al
+    const statusPresets = (typeof currentStatusPresets !== 'undefined' ? currentStatusPresets : []) || [];
+    statusPresets.forEach(eff => {
+      const opt = document.createElement('option');
+      opt.value = eff.id;
+      opt.textContent = `${eff.icon || '✨'} ${eff.name} (${eff.duration ? eff.duration + ' Tur' : 'Kalıcı'})`;
+      select.appendChild(opt);
+    });
+
+    if (currentVal) select.value = currentVal;
+  }
+
+  function openAttackPresetsModal() {
+    populateStatusEffectsSelect();
+    renderAttackPresetsCatalog();
+    const modal = document.getElementById('dm-attack-presets-modal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeAttackPresetsModal() {
+    const modal = document.getElementById('dm-attack-presets-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function editPresetInBuilder(preset) {
+    if (!preset) return;
+
+    // Builder alanlarını doldur
+    document.getElementById('atk-builder-id').value = preset.id || '';
+    document.getElementById('atk-builder-name').value = preset.name || '';
+    document.getElementById('atk-builder-type').value = preset.attackType || 'physical';
+    document.getElementById('atk-builder-stat').value = preset.stat || 'STR';
+    document.getElementById('atk-builder-spell-level').value = preset.spellLevel || 1;
+    document.getElementById('atk-builder-count').value = preset.attackCount || 1;
+    document.getElementById('atk-builder-half-miss').checked = Boolean(preset.halfDamageOnMiss);
+    document.getElementById('atk-builder-desc').value = preset.description || '';
+
+    // Zar steppers
+    const setSteppers = (channel, prefix) => {
+      const p = (preset.dicePools && (preset.dicePools[channel] || preset.dicePools[channel === 'phys' ? 'physical' : channel])) || {};
+      const d = p.dice || {};
+      [4, 6, 8, 10, 12, 20].forEach(sides => {
+        const el = document.getElementById(`atk-bpool-${prefix}-d${sides}`);
+        if (el) el.value = d[sides] || d[`d${sides}`] || 0;
+      });
+      const bonusEl = document.getElementById(`atk-bpool-${prefix}-bonus`);
+      if (bonusEl) bonusEl.value = p.bonus || 0;
+    };
+
+    setSteppers('phys', 'phys');
+    setSteppers('elem1', 'elem1');
+    setSteppers('elem2', 'elem2');
+    setSteppers('spell', 'spell');
+
+    // Status Effect
+    populateStatusEffectsSelect();
+    const statusSelect = document.getElementById('atk-builder-status-effect');
+    if (statusSelect) {
+      if (preset.statusEffectsToApply && preset.statusEffectsToApply.length > 0) {
+        statusSelect.value = preset.statusEffectsToApply[0].id || '';
+      } else {
+        statusSelect.value = '';
+      }
+    }
+
+    // Builder Sekmesini Aktif Et
+    const builderTabBtn = document.querySelector('.atk-tab-btn[data-tab="builder"]');
+    if (builderTabBtn) builderTabBtn.click();
+  }
+
+  function readPresetFromBuilder() {
+    const id = document.getElementById('atk-builder-id')?.value.trim();
+    const name = document.getElementById('atk-builder-name')?.value.trim();
+    if (!name) {
+      alert('Lütfen saldırı preseti için bir İsim girin!');
+      return null;
+    }
+
+    const attackType = document.getElementById('atk-builder-type')?.value || 'physical';
+    const stat = document.getElementById('atk-builder-stat')?.value || 'STR';
+    const spellLevel = parseInt(document.getElementById('atk-builder-spell-level')?.value) || 1;
+    const attackCount = parseInt(document.getElementById('atk-builder-count')?.value) || 1;
+    const halfDamageOnMiss = document.getElementById('atk-builder-half-miss')?.checked || false;
+    const description = document.getElementById('atk-builder-desc')?.value.trim() || '';
+
+    const readSteppers = (prefix) => {
+      const dice = {};
+      [4, 6, 8, 10, 12, 20].forEach(sides => {
+        const val = parseInt(document.getElementById(`atk-bpool-${prefix}-d${sides}`)?.value) || 0;
+        if (val > 0) dice[sides] = val;
+      });
+      const bonus = parseInt(document.getElementById(`atk-bpool-${prefix}-bonus`)?.value) || 0;
+      return { dice, bonus, weakness: false, resistance: false };
+    };
+
+    const dicePools = {
+      phys: readSteppers('phys'),
+      elem1: readSteppers('elem1'),
+      elem2: readSteppers('elem2'),
+      spell: readSteppers('spell')
+    };
+
+    // Status effect
+    const statusEffectsToApply = [];
+    const statusId = document.getElementById('atk-builder-status-effect')?.value;
+    if (statusId) {
+      const statusPresets = (typeof currentStatusPresets !== 'undefined' ? currentStatusPresets : []) || [];
+      const foundEff = statusPresets.find(e => e.id === statusId);
+      if (foundEff) statusEffectsToApply.push(foundEff);
+    }
+
+    return {
+      id: id || ('atk_custom_' + Date.now()),
+      name,
+      stat,
+      attackType,
+      spellLevel,
+      attackCount,
+      dicePools,
+      statusEffectsToApply,
+      halfDamageOnMiss,
+      extraDamage: 0,
+      description
+    };
+  }
+
+  function savePresetFromBuilder(equipAfter = false) {
+    const preset = readPresetFromBuilder();
+    if (!preset) return;
+
+    if (typeof socket !== 'undefined') {
+      socket.emit('saveAttackPreset', preset);
+    }
+
+    // Yerel önbelleğe de ekle/güncelle
+    const idx = attackPresetsCache.findIndex(p => p.id === preset.id);
+    if (idx >= 0) attackPresetsCache[idx] = preset;
+    else attackPresetsCache.push(preset);
+
+    populatePresetSelect();
+
+    if (equipAfter) {
+      equipPreset(preset, true);
+      closeAttackPresetsModal();
+    } else {
+      alert(`"${preset.name}" saldırı preseti kaydedildi!`);
+      // Katalog sekmesine geç
+      const listTabBtn = document.querySelector('.atk-tab-btn[data-tab="list"]');
+      if (listTabBtn) listTabBtn.click();
+    }
+  }
+
   // === EVENT LISTENERS ===
   attackerSelect?.addEventListener('change', onAttackerChange);
   targetSelect?.addEventListener('change', onTargetChange);
+
+  // Preset seçimi değiştiğinde
+  presetSelect?.addEventListener('change', () => {
+    const val = presetSelect.value;
+    if (val) {
+      equipPreset(val, true);
+    } else {
+      unequipPreset(true);
+    }
+  });
+
+  // Preset modal açma
+  btnOpenPresets?.addEventListener('click', openAttackPresetsModal);
+  document.getElementById('btn-close-attack-presets')?.addEventListener('click', closeAttackPresetsModal);
+  document.getElementById('btn-cancel-attack-presets')?.addEventListener('click', closeAttackPresetsModal);
+
+  // Modal Sekmeleri
+  document.querySelectorAll('.atk-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.atk-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.atk-tab-pane').forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const tabName = btn.dataset.tab;
+      const pane = document.getElementById(`atk-tab-${tabName}`);
+      if (pane) pane.classList.add('active');
+
+      if (tabName === 'list') renderAttackPresetsCatalog();
+    });
+  });
+
+  // Modal builder kaydet butonları
+  document.getElementById('btn-save-atk-preset')?.addEventListener('click', () => savePresetFromBuilder(false));
+  document.getElementById('btn-equip-and-save-preset')?.addEventListener('click', () => savePresetFromBuilder(true));
+
+  // Saldırı butonları
   btnPhysicalAttack?.addEventListener('click', performPhysicalAttack);
   btnSpellAttack?.addEventListener('click', performSpellAttack);
   btnApplyDamage?.addEventListener('click', applyDamage);
@@ -1115,8 +1586,27 @@
     }
   });
 
+  // Dışa açılan API'ler
+  window.__webdnd_onCombatTurnActive = function (combatant) {
+    if (!combatant) return;
+    const targetKey = combatant.isMarker ? `marker:${combatant.id}` : `character:${combatant.characterId || combatant.id}`;
+    if (typeof window.__webdnd_selectAttacker === 'function') {
+      window.__webdnd_selectAttacker(targetKey);
+    }
+  };
+
+  window.__webdnd_openAttackPresetsModal = openAttackPresetsModal;
+
   // === SOCKET SENKRONİZASYON ===
   if (typeof socket !== 'undefined') {
+    socket.on('attackPresetsUpdated', (presets) => {
+      if (Array.isArray(presets)) {
+        attackPresetsCache = presets;
+        populatePresetSelect();
+        renderAttackPresetsCatalog();
+      }
+    });
+
     socket.on('currentPlayers', () => setTimeout(loadSelectors, 500));
     socket.on('newPlayer', () => loadSelectors());
     socket.on('playerDisconnected', () => loadSelectors());
@@ -1127,6 +1617,9 @@
       if (selectedAttacker) setTimeout(onAttackerChange, 300);
       if (selectedTargets.length > 0) setTimeout(renderSelectedTargets, 300);
     });
+
+    // İlk yüklemede presetleri sorgula
+    socket.emit('getAttackPresets');
   }
 
   setTimeout(loadSelectors, 1000);

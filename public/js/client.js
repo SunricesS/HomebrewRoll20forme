@@ -362,9 +362,13 @@ function addToken(playerData) {
     setupDragHandlers(t, playerData.id);
   }
 
-  // Çift tıklama — Eğer canı olan bir marker ve kullanıcı DM ise
-  if (role === 'dm' && playerData.isMarker && playerData.hp != null) {
-    t.addEventListener('dblclick', () => openMarkerEditor(playerData));
+  // Çift tıklama — DM için marker veya oyuncu düzenleme penceresini aç
+  if (role === 'dm') {
+    if (playerData.isMarker) {
+      t.addEventListener('dblclick', () => openMarkerEditor(playerData.id));
+    } else if (playerData.character) {
+      t.addEventListener('dblclick', () => showDmEditor(playerData.id));
+    }
   }
 
   // Ctrl+Click ile hedef seçimi (DM için)
@@ -402,6 +406,9 @@ function addToken(playerData) {
     updateHpBadge(t, hpCurrent, hpMax);
   }
 
+  // Durum Efekt Rozetleri
+  updateTokenStatusBadges(t, playerData);
+
   gameMap.appendChild(t);
   tokens[playerData.id] = t;
 }
@@ -420,11 +427,71 @@ function updateToken(playerData) {
   // Stil güncelle
   applyTokenStyles(t, playerData);
 
+  // Başlık / İsim güncelle
+  if (playerData.isMarker) {
+    t.title = 'İşaret: ' + escapeHtml(playerData.name || '');
+  } else {
+    t.title = escapeHtml(getPlayerDisplayName(playerData));
+  }
+
+  // Text Node / İsim harfini güvenle güncelle (HP badge'i bozmadan)
+  if (!playerData.imgUrl) {
+    let hasText = false;
+    t.childNodes.forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.nodeValue = getTokenInitial(playerData);
+        hasText = true;
+      }
+    });
+    if (!hasText) {
+      t.insertBefore(document.createTextNode(getTokenInitial(playerData)), t.firstChild);
+    }
+  } else {
+    t.childNodes.forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) node.remove();
+    });
+  }
+
   // HP Badge güncelle
   const { hpCurrent, hpMax } = extractHp(playerData);
   if (hpCurrent !== null && hpMax !== null) {
     updateHpBadge(t, hpCurrent, hpMax);
+  } else {
+    const badge = t.querySelector('.token-hp-badge');
+    if (badge) badge.remove();
   }
+
+  // Durum Efekt Rozetleri güncelle
+  updateTokenStatusBadges(t, playerData);
+}
+
+/**
+ * Token üzerindeki aktif durum efekt rozetlerini günceller.
+ */
+function updateTokenStatusBadges(tokenEl, playerData) {
+  let badgeWrap = tokenEl.querySelector('.token-status-badges');
+  const activeEffects = playerData.activeEffects || (playerData.character && playerData.character.activeEffects) || [];
+
+  if (!activeEffects || activeEffects.length === 0) {
+    if (badgeWrap) badgeWrap.remove();
+    return;
+  }
+
+  if (!badgeWrap) {
+    badgeWrap = document.createElement('div');
+    badgeWrap.className = 'token-status-badges';
+    tokenEl.appendChild(badgeWrap);
+  }
+
+  badgeWrap.innerHTML = '';
+  activeEffects.forEach(eff => {
+    const badge = document.createElement('span');
+    badge.className = 'token-status-badge';
+    const durText = eff.duration != null ? `${eff.duration}T` : '∞';
+    badge.title = `${eff.icon || '✨'} ${eff.name || 'Efekt'} (${durText})`;
+    badge.innerHTML = `<span class="eff-icon">${eff.icon || '✨'}</span><span class="eff-dur">${durText}</span>`;
+    badgeWrap.appendChild(badge);
+  });
 }
 
 /**
@@ -596,11 +663,64 @@ if (btnAddMarker) {
 // ---- Marker Düzenleme Modalı ----
 let editingMarkerId = null;
 
-function openMarkerEditor(markerData) {
+function openMarkerEditor(markerInput) {
+  const markerId = typeof markerInput === 'string' ? markerInput : (markerInput ? markerInput.id : null);
+  if (!markerId) return;
+
+  // Her zaman window.__webdnd_markers içerisindeki en güncel (o anki) veriyi al
+  const markerData = (window.__webdnd_markers && window.__webdnd_markers[markerId]) 
+    || (typeof markerInput === 'object' ? markerInput : null);
+  if (!markerData) return;
+
   editingMarkerId = markerData.id;
-  document.getElementById('dm-marker-edit-title').textContent = `"${markerData.name}" Düzenle`;
-  document.getElementById('dm-marker-edit-hp').value = markerData.hp;
-  document.getElementById('dm-marker-edit-size').value = markerData.size || 50;
+
+  const titleEl = document.getElementById('dm-marker-edit-title');
+  if (titleEl) titleEl.textContent = `"${markerData.name || 'Token'}" Düzenle`;
+
+  const nameEl = document.getElementById('dm-marker-edit-name');
+  if (nameEl) nameEl.value = markerData.name || '';
+
+  const imgEl = document.getElementById('dm-marker-edit-img');
+  if (imgEl) imgEl.value = markerData.imgUrl || '';
+
+  const colorEl = document.getElementById('dm-marker-edit-color');
+  if (colorEl) colorEl.value = markerData.color || '#f1c40f';
+
+  const hpEl = document.getElementById('dm-marker-edit-hp');
+  if (hpEl) hpEl.value = markerData.hp != null ? markerData.hp : '';
+
+  const maxHpEl = document.getElementById('dm-marker-edit-max-hp');
+  if (maxHpEl) maxHpEl.value = markerData.maxHp != null ? markerData.maxHp : '';
+
+  const sizeEl = document.getElementById('dm-marker-edit-size');
+  if (sizeEl) sizeEl.value = markerData.size || 50;
+
+  const acEl = document.getElementById('dm-marker-edit-ac');
+  if (acEl) acEl.value = markerData.ac != null ? markerData.ac : 10;
+
+  const acBonusEl = document.getElementById('dm-marker-edit-ac-bonus');
+  if (acBonusEl) acBonusEl.value = markerData.ac_bonus != null ? markerData.ac_bonus : (markerData.acBonus != null ? markerData.acBonus : 0);
+
+  // Stat değerleri
+  const stats = markerData.stats || {};
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = (val !== undefined && val !== null) ? val : 0;
+  };
+
+  setVal('dm-marker-edit-str', stats.str);
+  setVal('dm-marker-edit-str-bonus', stats.str_bonus);
+  setVal('dm-marker-edit-dex', stats.dex);
+  setVal('dm-marker-edit-dex-bonus', stats.dex_bonus);
+  setVal('dm-marker-edit-int', stats.int);
+  setVal('dm-marker-edit-int-bonus', stats.int_bonus);
+  setVal('dm-marker-edit-con', stats.con);
+  setVal('dm-marker-edit-con-bonus', stats.con_bonus);
+  setVal('dm-marker-edit-wis', stats.wis);
+  setVal('dm-marker-edit-wis-bonus', stats.wis_bonus);
+  setVal('dm-marker-edit-chr', stats.chr);
+  setVal('dm-marker-edit-chr-bonus', stats.chr_bonus);
+
   document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
 }
 
@@ -616,16 +736,56 @@ const btnSaveMarkerEdit = document.getElementById('btn-save-marker-edit');
 if (btnSaveMarkerEdit) {
   btnSaveMarkerEdit.addEventListener('click', () => {
     if (!editingMarkerId) return;
-    const newHp = parseInt(document.getElementById('dm-marker-edit-hp').value);
-    const newSize = parseInt(document.getElementById('dm-marker-edit-size').value);
 
-    if (!isNaN(newHp) && !isNaN(newSize)) {
-      socket.emit('editMarker', { id: editingMarkerId, hp: newHp, size: newSize });
-      document.getElementById('dm-marker-editor-modal').classList.add('hidden');
-      editingMarkerId = null;
-    } else {
-      alert('Lütfen geçerli sayılar girin.');
-    }
+    const nameEl = document.getElementById('dm-marker-edit-name');
+    const imgEl = document.getElementById('dm-marker-edit-img');
+    const colorEl = document.getElementById('dm-marker-edit-color');
+    const hpEl = document.getElementById('dm-marker-edit-hp');
+    const maxHpEl = document.getElementById('dm-marker-edit-max-hp');
+    const sizeEl = document.getElementById('dm-marker-edit-size');
+    const acEl = document.getElementById('dm-marker-edit-ac');
+    const acBonusEl = document.getElementById('dm-marker-edit-ac-bonus');
+
+    const name = nameEl ? (nameEl.value || 'X').substring(0, 2) : 'X';
+    const imgUrl = imgEl ? imgEl.value : '';
+    const color = colorEl ? colorEl.value : '#f1c40f';
+    const hp = hpEl && hpEl.value !== '' ? parseInt(hpEl.value) : null;
+    const maxHp = maxHpEl && maxHpEl.value !== '' ? parseInt(maxHpEl.value) : null;
+    const size = sizeEl && sizeEl.value !== '' ? parseInt(sizeEl.value) : 50;
+    const ac = acEl && acEl.value !== '' ? parseInt(acEl.value) : 10;
+    const ac_bonus = acBonusEl && acBonusEl.value !== '' ? parseInt(acBonusEl.value) : 0;
+
+    const getNum = (id) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : 0; };
+    const stats = {
+      str: getNum('dm-marker-edit-str'),
+      str_bonus: getNum('dm-marker-edit-str-bonus'),
+      dex: getNum('dm-marker-edit-dex'),
+      dex_bonus: getNum('dm-marker-edit-dex-bonus'),
+      int: getNum('dm-marker-edit-int'),
+      int_bonus: getNum('dm-marker-edit-int-bonus'),
+      con: getNum('dm-marker-edit-con'),
+      con_bonus: getNum('dm-marker-edit-con-bonus'),
+      wis: getNum('dm-marker-edit-wis'),
+      wis_bonus: getNum('dm-marker-edit-wis-bonus'),
+      chr: getNum('dm-marker-edit-chr'),
+      chr_bonus: getNum('dm-marker-edit-chr-bonus'),
+    };
+
+    socket.emit('editMarker', {
+      id: editingMarkerId,
+      name,
+      imgUrl,
+      color,
+      hp,
+      maxHp,
+      size,
+      ac,
+      ac_bonus,
+      stats
+    });
+
+    document.getElementById('dm-marker-editor-modal').classList.add('hidden');
+    editingMarkerId = null;
   });
 }
 
@@ -832,8 +992,14 @@ function renderMyCharacterCard() {
 let editingPlayerId = null;
 let dmEditTimeout = null;
 
-function showDmEditor(playerData) {
+function showDmEditor(playerInput) {
   if (typeof flushDmEdit === 'function') flushDmEdit();
+
+  const playerId = typeof playerInput === 'string' ? playerInput : (playerInput ? playerInput.id : null);
+  if (!playerId) return;
+
+  const playerData = (allPlayers && allPlayers[playerId]) || (typeof playerInput === 'object' ? playerInput : null);
+  if (!playerData || !playerData.character) return;
 
   editingPlayerId = playerData.id;
   const c = playerData.character;
@@ -1227,6 +1393,428 @@ socket.on('diceRolled', (data) => {
     setTimeout(() => {
       if (toast.parentNode) toast.parentNode.removeChild(toast);
     }, 2000);
+  }
+});
+
+// ============================================================
+// STATUS EFFECTS & CUSTOM EFFECT BUILDER (DM TOOLBOX)
+// ============================================================
+
+let currentStatusPresets = [
+  { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 3, effects: { dotDamage: { min: 1, max: 6 } } },
+  { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } },
+  { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 2, effects: { blind: true } },
+  { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } },
+  { id: 'preset_shelter', name: 'Barınak', icon: '🛡️', duration: 1, effects: { shelter: true } },
+  { id: 'preset_prepared', name: 'Hazır', icon: '🎯', duration: 2, effects: { prepared: true } },
+  { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
+  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
+];
+
+// Socket senkronizasyonu
+socket.on('customEffectsUpdated', (presets) => {
+  if (Array.isArray(presets)) {
+    currentStatusPresets = presets;
+    renderStatusPresets();
+  }
+});
+
+socket.on('tokenEffectsUpdated', (data) => {
+  if (allPlayers[data.id]) {
+    allPlayers[data.id].activeEffects = data.activeEffects;
+    if (allPlayers[data.id].character) {
+      allPlayers[data.id].character.activeEffects = data.activeEffects;
+    }
+    updateToken(allPlayers[data.id]);
+  }
+  refreshStatusToolboxTargets();
+});
+
+socket.on('logMessage', (data) => {
+  if (!data || !data.message) return;
+  addLog(data.message, data.color || '#e5c158');
+});
+
+/**
+ * Durum efekti kural özetini metin olarak üretir.
+ */
+function describeStatusRules(effects) {
+  if (!effects) return '';
+  const parts = [];
+  if (effects.dotDamage) parts.push(`🔥 Tur sonu ${effects.dotDamage.min}-${effects.dotDamage.max} hasar`);
+  if (effects.blind) parts.push('👁️ Kendi saldırıları dezavantajlı');
+  if (effects.paralyzed) parts.push('⚡ Gelen saldırılar kesin vuruş & kritik');
+  if (effects.shelter) parts.push('🛡️ Hasar almaz (Dokunulmaz)');
+  if (effects.prepared) parts.push('🎯 Gelen saldırılar dezavantajlı');
+  if (effects.unstoppable) parts.push('🦏 Felç bağışıklığı');
+  return parts.join(' | ') || 'Özel Efekt';
+}
+
+/**
+ * Hedef seçim kutusunu doldurur.
+ */
+function populateStatusTargetSelect() {
+  const select = document.getElementById('status-target-select');
+  if (!select) return;
+
+  const currentVal = select.value;
+  select.innerHTML = '<option value="selected">-- Seçili Hedefler (Haritadakiler) --</option>';
+
+  // Markerlar
+  const markerGroup = document.createElement('optgroup');
+  markerGroup.label = '👾 Canavarlar / Markerlar';
+  Object.values(window.__webdnd_markers || {}).forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = `marker:${m.id}`;
+    opt.textContent = `[Marker] ${m.name || 'NPC'} (HP: ${m.hp ?? '?'})`;
+    markerGroup.appendChild(opt);
+  });
+  if (markerGroup.children.length > 0) select.appendChild(markerGroup);
+
+  // Oyuncular
+  const playerGroup = document.createElement('optgroup');
+  playerGroup.label = '🛡️ Oyuncular';
+  Object.values(allPlayers).forEach(p => {
+    if (p.role === 'dm' || !p.character) return;
+    const opt = document.createElement('option');
+    opt.value = `character:${p.character.id || p.id}`;
+    opt.textContent = `[Oyuncu] ${p.character.name} (HP: ${p.character.hp_current}/${p.character.hp_max})`;
+    playerGroup.appendChild(opt);
+  });
+  if (playerGroup.children.length > 0) select.appendChild(playerGroup);
+
+  if (currentVal) select.value = currentVal;
+  renderTargetActiveEffectsList();
+}
+
+/**
+ * Seçili hedefin üzerindeki aktif efektleri listeler.
+ */
+function renderTargetActiveEffectsList() {
+  const container = document.getElementById('status-target-active-effects');
+  const select = document.getElementById('status-target-select');
+  if (!container || !select) return;
+
+  container.innerHTML = '';
+  const val = select.value;
+  const targets = resolveStatusSelectedTargets(val);
+
+  if (targets.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Hedef seçilmedi veya efekt yok.</span>';
+    return;
+  }
+
+  targets.forEach(t => {
+    const activeEffects = t.data?.activeEffects || (t.data?.character && t.data.character.activeEffects) || [];
+    if (activeEffects.length === 0) return;
+
+    activeEffects.forEach(eff => {
+      const chip = document.createElement('span');
+      chip.className = 'status-target-chip';
+      const durText = eff.duration != null ? `${eff.duration}T` : '∞';
+      chip.innerHTML = `
+        <span>${eff.icon || '✨'}</span>
+        <strong>${escapeHtml(t.name)}:</strong>
+        <span>${escapeHtml(eff.name)} (${durText})</span>
+        <span class="chip-del-btn" title="Efekti Kaldır">✕</span>
+      `;
+
+      chip.querySelector('.chip-del-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        socket.emit('removeStatusEffect', {
+          targetType: t.type,
+          targetId: t.id,
+          effectId: eff.id
+        });
+      });
+
+      container.appendChild(chip);
+    });
+  });
+
+  if (container.children.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Seçili hedef(ler) üzerinde aktif efekt yok.</span>';
+  }
+}
+
+/**
+ * Seçim string'ini hedef nesnelerine dönüştürür.
+ */
+function resolveStatusSelectedTargets(selectVal) {
+  const results = [];
+  if (selectVal === 'selected') {
+    // Saldırı panelinde veya haritada seçili hedefler varsa onları al
+    if (typeof selectedTargets !== 'undefined' && Array.isArray(selectedTargets) && selectedTargets.length > 0) {
+      selectedTargets.forEach(st => {
+        const liveData = st.type === 'marker' ? window.__webdnd_markers[st.id] : (allPlayers[st.id] || Object.values(allPlayers).find(p => p.character?.id === st.id));
+        results.push({ type: st.type, id: st.id, name: st.name, data: liveData || st.data });
+      });
+    } else {
+      // Haritadaki tüm tokenlar arasından ilki veya varsa seçili
+      Object.values(window.__webdnd_markers || {}).forEach(m => {
+        results.push({ type: 'marker', id: m.id, name: m.name, data: m });
+      });
+      Object.values(allPlayers).forEach(p => {
+        if (p.role !== 'dm' && p.character) {
+          results.push({ type: 'character', id: p.character.id || p.id, name: p.character.name, data: p });
+        }
+      });
+    }
+  } else if (selectVal && selectVal.includes(':')) {
+    const [type, id] = selectVal.split(':');
+    if (type === 'marker') {
+      const m = window.__webdnd_markers[id];
+      if (m) results.push({ type: 'marker', id: m.id, name: m.name, data: m });
+    } else if (type === 'character') {
+      const p = Object.values(allPlayers).find(item => item.id === id || item.character?.id === id);
+      if (p && p.character) results.push({ type: 'character', id: p.character.id || p.id, name: p.character.name, data: p });
+    }
+  }
+  return results;
+}
+
+/**
+ * Hazır ve Özel Efekt Şablonlarını çizer.
+ */
+function renderStatusPresets() {
+  const grid = document.getElementById('status-presets-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+
+  currentStatusPresets.forEach(preset => {
+    const card = document.createElement('div');
+    card.className = 'status-preset-card';
+
+    const durLabel = preset.duration != null ? `${preset.duration} Tur` : 'Kalıcı';
+    const isCustom = Boolean(preset.id && preset.id.startsWith('custom_'));
+
+    card.innerHTML = `
+      <div>
+        <div class="preset-header">
+          <span class="preset-icon">${preset.icon || '✨'}</span>
+          <div class="preset-title-wrap">
+            <div class="preset-name">${escapeHtml(preset.name)}</div>
+          </div>
+          <span class="preset-dur-badge">${durLabel}</span>
+        </div>
+        <div class="preset-desc">${describeStatusRules(preset.effects)}</div>
+      </div>
+      <div class="preset-actions">
+        <button type="button" class="btn-apply-preset" title="Hedefe Uygula">⚡ Uygula</button>
+        ${isCustom ? `<button type="button" class="btn-del-preset" title="Şablonu Sil">🗑️</button>` : ''}
+      </div>
+    `;
+
+    // Uygula butonu
+    card.querySelector('.btn-apply-preset').addEventListener('click', () => {
+      applyEffectToCurrentTargets(preset);
+    });
+
+    // Sil butonu (Özel efektler için)
+    if (isCustom) {
+      card.querySelector('.btn-del-preset').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`"${preset.name}" özel şablonunu silmek istediğinize emin misiniz?`)) {
+          socket.emit('deleteCustomEffect', preset.id);
+        }
+      });
+    }
+
+    grid.appendChild(card);
+  });
+}
+
+/**
+ * Belirli bir efekti o an seçili hedeflere uygular.
+ */
+function applyEffectToCurrentTargets(effect) {
+  const select = document.getElementById('status-target-select');
+  const targets = resolveStatusSelectedTargets(select ? select.value : 'selected');
+
+  if (targets.length === 0) {
+    alert('Lütfen efekti uygulamak için en az bir HEDEF seçin!');
+    return;
+  }
+
+  targets.forEach(t => {
+    socket.emit('applyStatusEffect', {
+      targetType: t.type,
+      targetId: t.id,
+      effect: effect
+    });
+  });
+
+  setTimeout(renderTargetActiveEffectsList, 300);
+}
+
+/**
+ * Status Toolbox Modalı açılış fonksiyonu
+ */
+function openStatusToolboxModal() {
+  populateStatusTargetSelect();
+  renderStatusPresets();
+  const modal = document.getElementById('dm-status-toolbox-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function refreshStatusToolboxTargets() {
+  const modal = document.getElementById('dm-status-toolbox-modal');
+  if (modal && !modal.classList.contains('hidden')) {
+    populateStatusTargetSelect();
+    renderTargetActiveEffectsList();
+  }
+}
+
+// Global köprüler
+window.__webdnd_openStatusToolbox = openStatusToolboxModal;
+window.__webdnd_refreshStatusToolbox = refreshStatusToolboxTargets;
+
+// UI Olay Dinleyicileri
+document.addEventListener('DOMContentLoaded', () => {
+  // Modal açma & kapama
+  const btnOpenToolbox = document.getElementById('btn-dm-status-toolbox');
+  if (btnOpenToolbox) {
+    btnOpenToolbox.addEventListener('click', openStatusToolboxModal);
+  }
+
+  const btnCloseToolbox = document.getElementById('btn-close-status-toolbox');
+  if (btnCloseToolbox) {
+    btnCloseToolbox.addEventListener('click', () => {
+      document.getElementById('dm-status-toolbox-modal').classList.add('hidden');
+    });
+  }
+
+  const btnCancelToolbox = document.getElementById('btn-cancel-status-toolbox');
+  if (btnCancelToolbox) {
+    btnCancelToolbox.addEventListener('click', () => {
+      document.getElementById('dm-status-toolbox-modal').classList.add('hidden');
+    });
+  }
+
+  // Hedef değişimi
+  const targetSelect = document.getElementById('status-target-select');
+  if (targetSelect) {
+    targetSelect.addEventListener('change', renderTargetActiveEffectsList);
+  }
+
+  // Tab Geçişleri
+  document.querySelectorAll('.status-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.status-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.status-tab-pane').forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      const tabName = btn.dataset.tab;
+      const pane = document.getElementById(`status-tab-${tabName}`);
+      if (pane) pane.classList.add('active');
+    });
+  });
+
+  // Hızlı Emoji Seçici
+  const iconInput = document.getElementById('status-builder-icon');
+  document.querySelectorAll('.quick-icon-btn').forEach(qBtn => {
+    qBtn.addEventListener('click', () => {
+      if (iconInput) iconInput.value = qBtn.textContent.trim();
+    });
+  });
+
+  // DoT Checkbox Toggle
+  const dotCheck = document.getElementById('status-rule-dot');
+  const dotRow = document.getElementById('status-dot-inputs-row');
+  if (dotCheck && dotRow) {
+    dotCheck.addEventListener('change', () => {
+      if (dotCheck.checked) dotRow.classList.remove('hidden');
+      else dotRow.classList.add('hidden');
+    });
+  }
+
+  // Süresiz Checkbox Toggle
+  const permCheck = document.getElementById('status-builder-permanent');
+  const durInput = document.getElementById('status-builder-duration');
+  if (permCheck && durInput) {
+    permCheck.addEventListener('change', () => {
+      durInput.disabled = permCheck.checked;
+    });
+  }
+
+  // Özel Efekti Kaydet
+  const btnSaveCustom = document.getElementById('btn-save-custom-status');
+  if (btnSaveCustom) {
+    btnSaveCustom.addEventListener('click', () => {
+      const name = document.getElementById('status-builder-name')?.value.trim();
+      if (!name) {
+        alert('Lütfen efekte bir İsim verin!');
+        return;
+      }
+
+      const icon = document.getElementById('status-builder-icon')?.value.trim() || '✨';
+      const isPermanent = document.getElementById('status-builder-permanent')?.checked;
+      const duration = isPermanent ? null : (parseInt(document.getElementById('status-builder-duration')?.value) || 2);
+
+      const hasDot = document.getElementById('status-rule-dot')?.checked;
+      const dotMin = parseInt(document.getElementById('status-builder-dot-min')?.value) || 1;
+      const dotMax = parseInt(document.getElementById('status-builder-dot-max')?.value) || dotMin;
+
+      const effects = {};
+      if (hasDot) effects.dotDamage = { min: dotMin, max: dotMax };
+      if (document.getElementById('status-rule-blind')?.checked) effects.blind = true;
+      if (document.getElementById('status-rule-paralyzed')?.checked) effects.paralyzed = true;
+      if (document.getElementById('status-rule-shelter')?.checked) effects.shelter = true;
+      if (document.getElementById('status-rule-prepared')?.checked) effects.prepared = true;
+      if (document.getElementById('status-rule-unstoppable')?.checked) effects.unstoppable = true;
+
+      const effectObj = {
+        name,
+        icon,
+        duration,
+        effects
+      };
+
+      socket.emit('saveCustomEffect', effectObj);
+      alert(`"${name}" özel efekt şablonu kaydedildi!`);
+
+      // Şablonlar sekmesine dön
+      const presetTabBtn = document.querySelector('.status-tab-btn[data-tab="presets"]');
+      if (presetTabBtn) presetTabBtn.click();
+    });
+  }
+
+  // Özel Efekti Doğrudan Hedefe Uygula
+  const btnApplyCustom = document.getElementById('btn-apply-custom-status');
+  if (btnApplyCustom) {
+    btnApplyCustom.addEventListener('click', () => {
+      const name = document.getElementById('status-builder-name')?.value.trim() || 'Özel Efekt';
+      const icon = document.getElementById('status-builder-icon')?.value.trim() || '✨';
+      const isPermanent = document.getElementById('status-builder-permanent')?.checked;
+      const duration = isPermanent ? null : (parseInt(document.getElementById('status-builder-duration')?.value) || 2);
+
+      const hasDot = document.getElementById('status-rule-dot')?.checked;
+      const dotMin = parseInt(document.getElementById('status-builder-dot-min')?.value) || 1;
+      const dotMax = parseInt(document.getElementById('status-builder-dot-max')?.value) || dotMin;
+
+      const effects = {};
+      if (hasDot) effects.dotDamage = { min: dotMin, max: dotMax };
+      if (document.getElementById('status-rule-blind')?.checked) effects.blind = true;
+      if (document.getElementById('status-rule-paralyzed')?.checked) effects.paralyzed = true;
+      if (document.getElementById('status-rule-shelter')?.checked) effects.shelter = true;
+      if (document.getElementById('status-rule-prepared')?.checked) effects.prepared = true;
+      if (document.getElementById('status-rule-unstoppable')?.checked) effects.unstoppable = true;
+
+      const effectObj = {
+        name,
+        icon,
+        duration,
+        effects
+      };
+
+      applyEffectToCurrentTargets(effectObj);
+    });
+  }
+
+  // İlk yüklemede özel efektleri sorgula
+  if (typeof socket !== 'undefined') {
+    socket.emit('getCustomEffects');
   }
 });
 

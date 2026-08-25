@@ -40,6 +40,7 @@
 
                     <!-- Sağ Kontrol Butonları -->
                     <div class="bg3-combat-controls">
+                        <button type="button" class="bg3-ctrl-btn bg3-btn-status" id="bg3-btn-status" title="✨ Status Efektleri Paneli">✨</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-prev" id="bg3-btn-prev" title="Önceki Tur">‹</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-next" id="bg3-btn-next" title="Sonraki Tur (Space / N)">
                             <span class="bg3-next-text">›</span>
@@ -84,6 +85,7 @@
                     <h4>DM Araçları</h4>
                     <div class="dm-tools-actions">
                         <button class="btn warning action-btn dm-combat-btn" id="btn-dm-toggle-combat" title="Combat Modunu Başlat / Kapat">⚔️ Combat Modu</button>
+                        <button class="btn secondary action-btn dm-status-btn" id="btn-dm-status-toolbox" title="Durum Efektleri ve Yaratıcı">✨ Status Efektleri</button>
                         <button class="btn primary action-btn dm-save-btn" id="btn-force-save">Harita Kaydet</button>
                         <button class="btn secondary dm-gallery-btn"
                             onclick="window.open('/gallery.html', '_blank')">Galeriyi Aç</button>
@@ -203,6 +205,26 @@
                 <details class="dm-collapsible atk-panel-collapsible" id="attack-panel-container">
                     <summary>⚔️ Saldırı / Hasar Paneli</summary>
                     <div class="dm-collapsible-body attack-panel">
+
+                        <!-- Kuşanılmış Saldırı Preseti -->
+                        <div class="atk-section atk-preset-section">
+                            <div class="atk-section-header">
+                                <h5>🎯 Kuşanılmış Saldırı Preseti</h5>
+                                <button type="button" id="btn-open-attack-presets" class="atk-mini-btn" title="Hazır Saldırılar & Preset Yöneticisi">⚙️ Presetler</button>
+                            </div>
+                            <select id="atk-preset-select" class="atk-select">
+                                <option value="">— Serbest Saldırı (Özel Zar Havuzu) —</option>
+                            </select>
+                            <div id="atk-preset-info-banner" class="atk-preset-info-banner hidden">
+                                <div class="atk-preset-badge-row">
+                                    <span id="atk-preset-badge-stat" class="atk-preset-chip">STR</span>
+                                    <span id="atk-preset-badge-type" class="atk-preset-chip">Fiziksel</span>
+                                    <span id="atk-preset-badge-halfmiss" class="atk-preset-chip hidden">🛡️ Iska: ½ Hasar</span>
+                                    <span id="atk-preset-badge-status" class="atk-preset-chip hidden">✨ Durum</span>
+                                </div>
+                                <div id="atk-preset-desc-text" class="atk-preset-desc-text"></div>
+                            </div>
+                        </div>
 
                         <!-- Saldıran & Hedef Seçimi -->
                         <div class="atk-section">
@@ -505,16 +527,356 @@
         <div class="modal-box dm-modal-box">
             <h3 id="dm-marker-edit-title" class="dm-modal-title">Token Düzenle</h3>
             <div class="form-group">
-                <label>Mevcut HP:</label>
-                <input type="number" id="dm-marker-edit-hp">
+                <label>İşaret/Token Adı (harf):</label>
+                <input type="text" id="dm-marker-edit-name" maxlength="2" placeholder="Ör: G" class="input-light">
+            </div>
+            <div class="form-group form-group-relative">
+                <label>İşaret Resim URL:</label>
+                <input type="text" id="dm-marker-edit-img" placeholder="URL girin..." class="input-light">
             </div>
             <div class="form-group">
-                <label>Boyut (px):</label>
-                <input type="number" id="dm-marker-edit-size">
+                <label>Renk:</label>
+                <input type="color" id="dm-marker-edit-color" value="#f1c40f">
             </div>
-            <div class="button-group button-group-row">
+            <div class="stats-grid stats-grid-3col">
+                <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-edit-hp"></div>
+                <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-marker-edit-max-hp"></div>
+                <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-marker-edit-size"></div>
+            </div>
+            <div class="stats-grid stats-grid-2col">
+                <div class="form-group"><label>AC:</label><input type="number" id="dm-marker-edit-ac"></div>
+                <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-marker-edit-ac-bonus"></div>
+            </div>
+            <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;">Stat / Bonus</p>
+            <div class="stats-grid">
+                <div class="form-group"><label>STR:</label><input type="number" id="dm-marker-edit-str" placeholder="0"><input type="number" id="dm-marker-edit-str-bonus" placeholder="B" style="margin-top:2px;"></div>
+                <div class="form-group"><label>DEX:</label><input type="number" id="dm-marker-edit-dex" placeholder="0"><input type="number" id="dm-marker-edit-dex-bonus" placeholder="B" style="margin-top:2px;"></div>
+                <div class="form-group"><label>INT:</label><input type="number" id="dm-marker-edit-int" placeholder="0"><input type="number" id="dm-marker-edit-int-bonus" placeholder="B" style="margin-top:2px;"></div>
+                <div class="form-group"><label>CON:</label><input type="number" id="dm-marker-edit-con" placeholder="0"><input type="number" id="dm-marker-edit-con-bonus" placeholder="B" style="margin-top:2px;"></div>
+                <div class="form-group"><label>WIS:</label><input type="number" id="dm-marker-edit-wis" placeholder="0"><input type="number" id="dm-marker-edit-wis-bonus" placeholder="B" style="margin-top:2px;"></div>
+                <div class="form-group"><label>CHR:</label><input type="number" id="dm-marker-edit-chr" placeholder="0"><input type="number" id="dm-marker-edit-chr-bonus" placeholder="B" style="margin-top:2px;"></div>
+            </div>
+            <div class="button-group button-group-row" style="margin-top: 12px;">
                 <button id="btn-save-marker-edit" class="btn success action-btn dm-edit-action-btn">Kaydet</button>
                 <button id="btn-cancel-marker-edit" class="btn back-btn action-btn dm-edit-action-btn">İptal</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DM Status Efektleri & Custom Effect Builder Modalı -->
+    <div id="dm-status-toolbox-modal" class="hidden dm-modal-overlay">
+        <div class="modal-box dm-modal-box status-toolbox-modal-box">
+            <div class="status-modal-header">
+                <h3 class="dm-modal-title" style="margin-bottom:0;">✨ Status Efektleri & Yaratıcı</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-status-toolbox" title="Kapat">✕</button>
+            </div>
+
+            <!-- 1. Hedef Seçim Alanı -->
+            <div class="status-target-section">
+                <div class="status-target-header">
+                    <label class="status-section-label">🎯 Hedef Token:</label>
+                    <span class="status-target-hint">💡 Ctrl+Click ile haritadan da hedef seçebilirsiniz</span>
+                </div>
+                <select id="status-target-select" class="atk-select status-target-select">
+                    <option value="selected">-- Seçili Hedefler (Haritadakiler) --</option>
+                </select>
+                <div id="status-target-active-effects" class="status-target-effects-list">
+                    <!-- Hedefin üzerindeki aktif efektler ve silme butonları buraya gelir -->
+                </div>
+            </div>
+
+            <!-- 2. Sekmeler (Tabs) -->
+            <div class="status-tabs-nav">
+                <button type="button" class="status-tab-btn active" data-tab="presets">📜 Hazır & Özel Şablonlar</button>
+                <button type="button" class="status-tab-btn" data-tab="builder">🛠️ Özel Efekt Yarat (Builder)</button>
+            </div>
+
+            <!-- Tab 1: Şablonlar Kataloğu -->
+            <div id="status-tab-presets" class="status-tab-pane active">
+                <div class="status-presets-grid" id="status-presets-grid">
+                    <!-- JS ile dinamik doldurulacak -->
+                </div>
+            </div>
+
+            <!-- Tab 2: Custom Effect Builder Formu -->
+            <div id="status-tab-builder" class="status-tab-pane">
+                <div class="status-builder-form">
+                    <div class="form-group">
+                        <label>Efekt Adı:</label>
+                        <input type="text" id="status-builder-name" placeholder="Örn: Alevli Lanet, Kutsal Koruma" class="input-light">
+                    </div>
+
+                    <div class="form-group">
+                        <label>İkon / Emoji:</label>
+                        <div class="status-icon-picker-row">
+                            <input type="text" id="status-builder-icon" value="✨" maxlength="4" class="status-icon-input input-light">
+                            <div class="status-quick-icons" id="status-quick-icons">
+                                <span class="quick-icon-btn">🔥</span>
+                                <span class="quick-icon-btn">🩸</span>
+                                <span class="quick-icon-btn">⚡</span>
+                                <span class="quick-icon-btn">👁️</span>
+                                <span class="quick-icon-btn">🛡️</span>
+                                <span class="quick-icon-btn">🎯</span>
+                                <span class="quick-icon-btn">🦏</span>
+                                <span class="quick-icon-btn">☠️</span>
+                                <span class="quick-icon-btn">❄️</span>
+                                <span class="quick-icon-btn">💫</span>
+                                <span class="quick-icon-btn">💤</span>
+                                <span class="quick-icon-btn">🧪</span>
+                                <span class="quick-icon-btn">🔮</span>
+                                <span class="quick-icon-btn">⛓️</span>
+                                <span class="quick-icon-btn">🌪️</span>
+                                <span class="quick-icon-btn">💚</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="status-section-label">Modifikatör Kuralları:</label>
+                        <div class="status-rules-checklist">
+                            <!-- DoT Hasarı -->
+                            <div class="status-rule-item">
+                                <label class="status-checkbox-label">
+                                    <input type="checkbox" id="status-rule-dot">
+                                    <span>🔥 Tur Sonu Hasar (DoT)</span>
+                                </label>
+                                <div class="status-dot-inputs hidden" id="status-dot-inputs-row">
+                                    <input type="number" id="status-builder-dot-min" placeholder="Min" value="1" min="1" class="atk-input status-mini-input">
+                                    <span>-</span>
+                                    <input type="number" id="status-builder-dot-max" placeholder="Maks" value="6" min="1" class="atk-input status-mini-input">
+                                    <span style="font-size:11px; color:#bdc3c7;">Hasar</span>
+                                </div>
+                            </div>
+
+                            <!-- Körlük -->
+                            <div class="status-rule-item">
+                                <label class="status-checkbox-label">
+                                    <input type="checkbox" id="status-rule-blind">
+                                    <span>👁️ Körlük <small style="color:#bdc3c7;">(Kendi yapacağı saldırılar dezavantajlı)</small></span>
+                                </label>
+                            </div>
+
+                            <!-- Felç -->
+                            <div class="status-rule-item">
+                                <label class="status-checkbox-label">
+                                    <input type="checkbox" id="status-rule-paralyzed">
+                                    <span>⚡ Felç <small style="color:#bdc3c7;">(Gelen tüm saldırılar kesin vurur & kritik)</small></span>
+                                </label>
+                            </div>
+
+                            <!-- Barınak -->
+                            <div class="status-rule-item">
+                                <label class="status-checkbox-label">
+                                    <input type="checkbox" id="status-rule-shelter">
+                                    <span>🛡️ Barınak <small style="color:#bdc3c7;">(Hasar almaz - Dokunulmaz)</small></span>
+                                </label>
+                            </div>
+
+                            <!-- Hazır -->
+                            <div class="status-rule-item">
+                                <label class="status-checkbox-label">
+                                    <input type="checkbox" id="status-rule-prepared">
+                                    <span>🎯 Hazır <small style="color:#bdc3c7;">(Gelen saldırılar dezavantajlı olur)</small></span>
+                                </label>
+                            </div>
+
+                            <!-- Sabitlenemez / Durdurulamaz -->
+                            <div class="status-rule-item">
+                                <label class="status-checkbox-label">
+                                    <input type="checkbox" id="status-rule-unstoppable">
+                                    <span>🦏 Durdurulamaz <small style="color:#bdc3c7;">(Felç etkisine bağışıklık)</small></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Süre Ayarı -->
+                    <div class="form-group status-duration-group">
+                        <label>Süre:</label>
+                        <div class="status-duration-row">
+                            <div class="status-dur-input-wrap">
+                                <input type="number" id="status-builder-duration" value="2" min="1" max="50" class="input-light" style="width: 80px;">
+                                <span>Tur / Round</span>
+                            </div>
+                            <label class="status-checkbox-label" style="margin-left: 14px;">
+                                <input type="checkbox" id="status-builder-permanent">
+                                <span>Süresiz / Kalıcı</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Butonlar -->
+                    <div class="button-group button-group-row status-builder-actions">
+                        <button type="button" id="btn-save-custom-status" class="btn primary action-btn">💾 Şablonu Kaydet</button>
+                        <button type="button" id="btn-apply-custom-status" class="btn success action-btn">⚡ Hedefe Uygula</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-group button-group-row" style="margin-top: 14px; justify-content: flex-end;">
+                <button type="button" class="btn back-btn action-btn" id="btn-cancel-status-toolbox">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DM Hazır Saldırı Presetleri & Yaratıcı Modalı -->
+    <div id="dm-attack-presets-modal" class="hidden dm-modal-overlay">
+        <div class="modal-box dm-modal-box attack-presets-modal-box">
+            <div class="status-modal-header">
+                <h3 class="dm-modal-title" style="margin-bottom:0;">🎯 Hazır Saldırı Presetleri & Yöneticisi</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-attack-presets" title="Kapat">✕</button>
+            </div>
+
+            <!-- Sekmeler (Tabs) -->
+            <div class="status-tabs-nav">
+                <button type="button" class="atk-tab-btn active" data-tab="list">📜 Saldırı Presetleri Kataloğu</button>
+                <button type="button" class="atk-tab-btn" data-tab="builder">🛠️ Yeni Saldırı Yarat (Builder)</button>
+            </div>
+
+            <!-- Tab 1: Preset Kataloğu Listesi -->
+            <div id="atk-tab-list" class="atk-tab-pane active">
+                <div class="atk-presets-grid" id="atk-presets-grid">
+                    <!-- JS ile dinamik doldurulacak -->
+                </div>
+            </div>
+
+            <!-- Tab 2: Preset Creator Builder Formu -->
+            <div id="atk-tab-builder" class="atk-tab-pane">
+                <div class="atk-builder-form">
+                    <input type="hidden" id="atk-builder-id" value="">
+                    
+                    <div class="stats-grid stats-grid-2col">
+                        <div class="form-group">
+                            <label>Saldırı Adı:</label>
+                            <input type="text" id="atk-builder-name" placeholder="Örn: Alev Kılıcı, Yıldırım Oku" class="input-light">
+                        </div>
+                        <div class="form-group">
+                            <label>Saldırı Türü:</label>
+                            <select id="atk-builder-type" class="atk-select">
+                                <option value="physical">⚔️ Fiziksel Saldırı</option>
+                                <option value="spell">✨ Büyü Saldırısı</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid stats-grid-3col">
+                        <div class="form-group">
+                            <label>ZarStat (Bonus):</label>
+                            <select id="atk-builder-stat" class="atk-select">
+                                <option value="STR">STR</option>
+                                <option value="DEX">DEX</option>
+                                <option value="INT">INT</option>
+                                <option value="CON">CON</option>
+                                <option value="WIS">WIS</option>
+                                <option value="CHR">CHR</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="atk-builder-spell-level-group">
+                            <label>Büyü Seviyesi:</label>
+                            <select id="atk-builder-spell-level" class="atk-select">
+                                <option value="1">Seviye 1 (1x)</option>
+                                <option value="2">Seviye 2 (1.5x)</option>
+                                <option value="3">Seviye 3 (2x)</option>
+                                <option value="4">Seviye 4 (2.5x)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Saldırı Adedi:</label>
+                            <input type="number" id="atk-builder-count" value="1" min="1" max="20" class="input-light">
+                        </div>
+                    </div>
+
+                    <!-- Zar Havuzları Yapılandırması -->
+                    <div class="atk-builder-pools-section">
+                        <label class="status-section-label">🎲 Zar Havuzları:</label>
+
+                        <!-- Fiziksel Havuz -->
+                        <div class="atk-builder-pool-row" id="atk-builder-phys-row">
+                            <span class="pool-row-label">Fiziksel:</span>
+                            <div class="pool-dice-steppers">
+                                <span class="stepper-item">d4:<input type="number" id="atk-bpool-phys-d4" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d6:<input type="number" id="atk-bpool-phys-d6" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d8:<input type="number" id="atk-bpool-phys-d8" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d10:<input type="number" id="atk-bpool-phys-d10" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d12:<input type="number" id="atk-bpool-phys-d12" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d20:<input type="number" id="atk-bpool-phys-d20" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-phys-bonus" value="0" class="mini-num"></span>
+                            </div>
+                        </div>
+
+                        <!-- Ateş/Elem1 Havuz -->
+                        <div class="atk-builder-pool-row" id="atk-builder-elem1-row">
+                            <span class="pool-row-label">Ateş/El.1:</span>
+                            <div class="pool-dice-steppers">
+                                <span class="stepper-item">d4:<input type="number" id="atk-bpool-elem1-d4" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d6:<input type="number" id="atk-bpool-elem1-d6" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d8:<input type="number" id="atk-bpool-elem1-d8" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d10:<input type="number" id="atk-bpool-elem1-d10" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d12:<input type="number" id="atk-bpool-elem1-d12" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d20:<input type="number" id="atk-bpool-elem1-d20" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-elem1-bonus" value="0" class="mini-num"></span>
+                            </div>
+                        </div>
+
+                        <!-- Buz/Elem2 Havuz -->
+                        <div class="atk-builder-pool-row" id="atk-builder-elem2-row">
+                            <span class="pool-row-label">Buz/El.2:</span>
+                            <div class="pool-dice-steppers">
+                                <span class="stepper-item">d4:<input type="number" id="atk-bpool-elem2-d4" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d6:<input type="number" id="atk-bpool-elem2-d6" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d8:<input type="number" id="atk-bpool-elem2-d8" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d10:<input type="number" id="atk-bpool-elem2-d10" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d12:<input type="number" id="atk-bpool-elem2-d12" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d20:<input type="number" id="atk-bpool-elem2-d20" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-elem2-bonus" value="0" class="mini-num"></span>
+                            </div>
+                        </div>
+
+                        <!-- Büyü Havuzu -->
+                        <div class="atk-builder-pool-row" id="atk-builder-spell-row">
+                            <span class="pool-row-label">Büyü:</span>
+                            <div class="pool-dice-steppers">
+                                <span class="stepper-item">d4:<input type="number" id="atk-bpool-spell-d4" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d6:<input type="number" id="atk-bpool-spell-d6" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d8:<input type="number" id="atk-bpool-spell-d8" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d10:<input type="number" id="atk-bpool-spell-d10" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d12:<input type="number" id="atk-bpool-spell-d12" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d20:<input type="number" id="atk-bpool-spell-d20" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-spell-bonus" value="0" class="mini-num"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ekstra Seçenekler: Durum Etkisi & Iska Yarım Hasar -->
+                    <div class="stats-grid stats-grid-2col" style="margin-top:10px;">
+                        <div class="form-group">
+                            <label>İsabet Halinde Durum Etkisi Bağla:</label>
+                            <select id="atk-builder-status-effect" class="atk-select">
+                                <option value="">— Durum Etkisi Yok —</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
+                            <label class="status-checkbox-label" style="margin-top:16px;">
+                                <input type="checkbox" id="atk-builder-half-miss">
+                                <span>🛡️ Iska Olsa Bile Yarım Hasar Vur</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Açıklama / Not:</label>
+                        <input type="text" id="atk-builder-desc" placeholder="Örn: 1d6+2 Fiziksel + 1d6 Ateş. Yanma uygular." class="input-light">
+                    </div>
+
+                    <div class="button-group button-group-row status-builder-actions">
+                        <button type="button" id="btn-save-atk-preset" class="btn primary action-btn">💾 Preseti Kaydet</button>
+                        <button type="button" id="btn-equip-and-save-preset" class="btn success action-btn">⚡ Kuşan & Kaydet</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-group button-group-row" style="margin-top: 14px; justify-content: flex-end;">
+                <button type="button" class="btn back-btn action-btn" id="btn-cancel-attack-presets">Kapat</button>
             </div>
         </div>
     </div>
@@ -525,9 +887,9 @@
 
     <!-- Socket.io istemci scripti -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/client.js?v=5"></script>
-    <script src="js/attack-panel.js?v=2"></script>
-    <script src="js/combat-tracker.js?v=1"></script>
+    <script src="js/client.js?v=8"></script>
+    <script src="js/attack-panel.js?v=4"></script>
+    <script src="js/combat-tracker.js?v=3"></script>
     <script>
         // Mobile sidebar toggle
         (function() {
