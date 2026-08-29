@@ -241,7 +241,10 @@
                                 <span class="atk-hint">Saldıran seçilmedi</span>
                             </div>
 
-                            <label class="atk-field-label" style="margin-top:8px;">🎯 Hedef (AC'si kontrol edilir, hasarı alır):</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                                <label class="atk-field-label" style="margin: 0;">🎯 Hedef (AC'si kontrol edilir, hasarı alır):</label>
+                                <button type="button" id="atk-btn-clear-targets" class="atk-mini-btn" title="Tüm hedefleri ve seçim çerçevelerini temizle">❌ Temizle</button>
+                            </div>
                             <select id="atk-target-select" class="atk-select">
                                 <option value="">— Hedef Seç —</option>
                             </select>

@@ -752,9 +752,27 @@
   // ============================================================
 
   /**
-   * Combobox'tan hedef seçildiğinde: Eski hedefleri temizler, tek hedef ekler.
+   * Tüm seçili hedefleri ve haritadaki seçim halkalarını sıfırlar.
+   */
+  function clearAllTargets() {
+    clearAllTargetHighlights();
+    selectedTargets = [];
+    lastAttackResults = [];
+    if (targetSelect) targetSelect.value = '';
+    renderSelectedTargets();
+    if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
+      window.__webdnd_refreshStatusToolbox();
+    }
+  }
+
+  /**
+   * Combobox'tan hedef seçildiğinde: Eski hedefleri temizler, seçileni ekler.
    */
   function onTargetChange() {
+    if (!targetSelect?.value) {
+      clearAllTargets();
+      return;
+    }
     const resolved = resolveSelection(targetSelect?.value);
     if (!resolved) return;
 
@@ -770,13 +788,26 @@
    * Hedefe karşılık gelen DOM token elemanını bulur.
    */
   function findTokenElForTarget(targetInfo) {
+    if (!targetInfo) return null;
+    const targetIdStr = String(targetInfo.id);
+
     if (typeof tokens !== 'undefined') {
       if (tokens[targetInfo.id]) return tokens[targetInfo.id];
+      if (tokens[targetIdStr]) return tokens[targetIdStr];
       if (typeof allPlayers !== 'undefined') {
-        const p = Object.values(allPlayers).find(p => p.character && p.character.id === targetInfo.id);
+        const p = Object.values(allPlayers).find(p => {
+          if (p.character && String(p.character.id) === targetIdStr) return true;
+          if (String(p.id) === targetIdStr) return true;
+          return false;
+        });
         if (p && tokens[p.id]) return tokens[p.id];
       }
     }
+
+    const byDataId = document.querySelector(`.token[data-id="${targetIdStr}"]`) ||
+                     document.querySelector(`.token[data-character-id="${targetIdStr}"]`);
+    if (byDataId) return byDataId;
+
     return null;
   }
 
@@ -784,14 +815,19 @@
    * Ctrl+Click ile haritadan hedef eklenir/kaldırılır (toggle).
    */
   function onCtrlClickTarget(targetInfo, tokenEl) {
-    // Zaten seçili mi kontrol et
-    const existingIdx = selectedTargets.findIndex(t => t.type === targetInfo.type && t.id === targetInfo.id);
+    if (!targetInfo) return;
+    const targetIdStr = String(targetInfo.id);
+
+    // Zaten seçili mi kontrol et (tip ve string ID bazlı)
+    const existingIdx = selectedTargets.findIndex(t => t.type === targetInfo.type && String(t.id) === targetIdStr);
 
     if (existingIdx >= 0) {
       // Kaldır (toggle off)
       const removed = selectedTargets.splice(existingIdx, 1)[0];
-      const el = removed.tokenEl || findTokenElForTarget(removed);
+      const el = tokenEl || removed.tokenEl || findTokenElForTarget(removed);
       if (el) el.classList.remove('token-target-selected');
+      const freshEl = findTokenElForTarget(removed);
+      if (freshEl) freshEl.classList.remove('token-target-selected');
     } else {
       // Ekle
       addTargetToList(targetInfo, tokenEl);
@@ -800,14 +836,20 @@
     renderSelectedTargets();
     // Combobox'u temizle (çoklu seçim Ctrl+Click üzerinden yönetiliyor)
     if (targetSelect) targetSelect.value = '';
+    if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
+      window.__webdnd_refreshStatusToolbox();
+    }
   }
 
   /**
    * Hedef listesine yeni bir hedef ekler.
    */
   function addTargetToList(targetInfo, tokenEl) {
+    if (!targetInfo) return;
+    const targetIdStr = String(targetInfo.id);
+
     // Duplicate kontrolü
-    const exists = selectedTargets.some(t => t.type === targetInfo.type && t.id === targetInfo.id);
+    const exists = selectedTargets.some(t => t.type === targetInfo.type && String(t.id) === targetIdStr);
     if (exists) return;
 
     const resolvedTokenEl = tokenEl || findTokenElForTarget(targetInfo);
@@ -824,18 +866,28 @@
     if (resolvedTokenEl) resolvedTokenEl.classList.add('token-target-selected');
 
     renderSelectedTargets();
+    if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
+      window.__webdnd_refreshStatusToolbox();
+    }
   }
 
   /**
    * Hedef listesinden belirli bir hedefi kaldırır.
    */
   function removeTargetById(type, id) {
-    const idx = selectedTargets.findIndex(t => t.type === type && t.id === id);
+    if (id == null) return;
+    const idStr = String(id);
+    const idx = selectedTargets.findIndex(t => t.type === type && String(t.id) === idStr);
     if (idx >= 0) {
       const removed = selectedTargets.splice(idx, 1)[0];
       const el = removed.tokenEl || findTokenElForTarget(removed);
       if (el) el.classList.remove('token-target-selected');
+      const freshEl = findTokenElForTarget(removed);
+      if (freshEl) freshEl.classList.remove('token-target-selected');
       renderSelectedTargets();
+      if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
+        window.__webdnd_refreshStatusToolbox();
+      }
     }
   }
 
@@ -847,7 +899,18 @@
       const el = t.tokenEl || findTokenElForTarget(t);
       if (el) el.classList.remove('token-target-selected');
     });
-    document.querySelectorAll('.token-target-selected').forEach(el => el.classList.remove('token-target-selected'));
+    document.querySelectorAll('.token.token-target-selected, .token-target-selected').forEach(el => {
+      el.classList.remove('token-target-selected');
+    });
+  }
+
+  /**
+   * Belirli bir hedefin seçili olup olmadığını kontrol eder.
+   */
+  function isTargetSelected(type, id) {
+    if (id == null) return false;
+    const idStr = String(id);
+    return selectedTargets.some(t => t.type === type && String(t.id) === idStr);
   }
 
   /**
@@ -1586,9 +1649,19 @@
     }
   });
 
+  // Clear Targets Butonu
+  document.getElementById('atk-btn-clear-targets')?.addEventListener('click', clearAllTargets);
+
   // Dışa açılan API'ler
+  window.__webdnd_clearTargets = clearAllTargets;
+  window.__webdnd_removeTarget = removeTargetById;
+  window.__webdnd_isTargetSelected = isTargetSelected;
+
   window.__webdnd_onCombatTurnActive = function (combatant) {
     if (!combatant) return;
+    // Tur değiştiğinde / geçtiğinde önceki hedefleri ve seçim halkalarını temizle
+    clearAllTargets();
+
     const targetKey = combatant.isMarker ? `marker:${combatant.id}` : `character:${combatant.characterId || combatant.id}`;
     if (typeof window.__webdnd_selectAttacker === 'function') {
       window.__webdnd_selectAttacker(targetKey);
@@ -1607,11 +1680,43 @@
       }
     });
 
+    socket.on('combatStarted', () => {
+      clearAllTargets();
+    });
+
+    socket.on('combatEnded', () => {
+      clearAllTargets();
+    });
+
     socket.on('currentPlayers', () => setTimeout(loadSelectors, 500));
     socket.on('newPlayer', () => loadSelectors());
-    socket.on('playerDisconnected', () => loadSelectors());
+    socket.on('playerDisconnected', (id) => {
+      if (typeof allPlayers !== 'undefined' && allPlayers[id]) {
+        const p = allPlayers[id];
+        const charId = p?.character?.id;
+        if (charId) {
+          removeTargetById('character', charId);
+          if (selectedAttacker && selectedAttacker.type === 'character' && String(selectedAttacker.id) === String(charId)) {
+            selectedAttacker = null;
+            if (attackerSelect) attackerSelect.value = '';
+            onAttackerChange();
+          }
+        }
+      }
+      loadSelectors();
+    });
     socket.on('newMarker', () => loadSelectors());
-    socket.on('removeMarker', () => loadSelectors());
+    socket.on('removeMarker', (markerId) => {
+      if (markerId) {
+        removeTargetById('marker', markerId);
+        if (selectedAttacker && selectedAttacker.type === 'marker' && String(selectedAttacker.id) === String(markerId)) {
+          selectedAttacker = null;
+          if (attackerSelect) attackerSelect.value = '';
+          onAttackerChange();
+        }
+      }
+      loadSelectors();
+    });
     socket.on('updateMarkerData', () => loadSelectors());
     socket.on('characterUpdated', () => {
       if (selectedAttacker) setTimeout(onAttackerChange, 300);

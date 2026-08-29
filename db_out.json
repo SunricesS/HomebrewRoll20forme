@@ -1,50 +1,126 @@
 [
   {
-    "id": "ed81fe2c-248b-448a-97b1-50d534b38fda",
-    "user_id": "f5ebacf8-9440-4327-a0fc-b18c914fb5c4",
-    "name": "Patos",
-    "hp_current": 180,
-    "hp_max": 180,
-    "stats": {
-      "chr": 0,
-      "con": 4,
-      "dex": 1,
-      "int": 0,
-      "str": 4,
-      "wis": 1
-    },
-    "avatar_url": "https://biresim.com.tr/upload/img_69bed7e104b08.png"
-  },
-  {
-    "id": "0f7bb871-bea7-4430-9d20-e52e891fda91",
+    "id": "57490e31-85aa-45fa-bed7-54adcc2015df",
     "user_id": "98e3f693-f05a-4382-896b-b4809eb02bde",
     "name": "Macbeth",
-    "hp_current": 120,
-    "hp_max": 120,
+    "hp_current": 64,
+    "hp_max": 64,
     "stats": {
-      "chr": 3,
-      "con": 1,
-      "dex": 1,
-      "int": 1,
-      "str": 3,
-      "wis": 1
-    },
-    "avatar_url": null
-  },
-  {
-    "id": "1b07b8df-97aa-4a9f-9e63-61b1ef2f85f3",
-    "user_id": "5a5d3eb9-8c8a-4a69-ab25-aac6ab7f74e2",
-    "name": "Süperius Mükemmelius Maximus",
-    "hp_current": 180,
-    "hp_max": 180,
-    "stats": {
-      "chr": 0,
+      "chr": 4,
       "con": 4,
       "dex": 0,
       "int": 0,
-      "str": 6,
-      "wis": 0
+      "str": 4,
+      "wis": 0,
+      "chr_bonus": 0,
+      "con_bonus": 0,
+      "dex_bonus": 0,
+      "int_bonus": 0,
+      "str_bonus": 0,
+      "wis_bonus": 0
     },
-    "avatar_url": null
+    "avatar_url": null,
+    "ac": 16,
+    "ac_bonus": 0,
+    "corruption": 3,
+    "spell_slots": {
+      "lvl1": 6,
+      "lvl2": 0,
+      "lvl3": 0,
+      "lvl4": 0
+    }
+  },
+  {
+    "id": "f3aecd98-a300-4a16-8098-f22d8ae42d90",
+    "user_id": "5a5d3eb9-8c8a-4a69-ab25-aac6ab7f74e2",
+    "name": "Taş-Şaklar",
+    "hp_current": 64,
+    "hp_max": 64,
+    "stats": {
+      "chr": 4,
+      "con": 4,
+      "dex": 0,
+      "int": 0,
+      "str": 4,
+      "wis": 0,
+      "chr_bonus": 0,
+      "con_bonus": 0,
+      "dex_bonus": 0,
+      "int_bonus": 0,
+      "str_bonus": 1,
+      "wis_bonus": 0
+    },
+    "avatar_url": null,
+    "ac": 19,
+    "ac_bonus": 0,
+    "corruption": 1,
+    "spell_slots": {
+      "lvl1": 5,
+      "lvl2": 3,
+      "lvl3": 0,
+      "lvl4": 0
+    }
+  },
+  {
+    "id": "a3f04133-552b-4c5f-858e-99314c3125b1",
+    "user_id": "8427cf29-61a6-496e-bf8f-76e6df6c7156",
+    "name": "Sen",
+    "hp_current": 48,
+    "hp_max": 48,
+    "stats": {
+      "chr": 0,
+      "con": 4,
+      "dex": 2,
+      "int": 0,
+      "str": 1,
+      "wis": 1,
+      "chr_bonus": 0,
+      "con_bonus": 0,
+      "dex_bonus": 0,
+      "int_bonus": 0,
+      "str_bonus": 0,
+      "wis_bonus": 0
+    },
+    "avatar_url": null,
+    "ac": 10,
+    "ac_bonus": 0,
+    "corruption": 0,
+    "spell_slots": {
+      "lvl1": 3,
+      "lvl2": 0,
+      "lvl3": 0,
+      "lvl4": 0
+    }
+  },
+  {
+    "id": "1e17ac0b-8457-4161-b8b3-f76673caf4da",
+    "user_id": "e781db8a-51b5-4139-91fe-a359a46cad82",
+    "name": "Bandur",
+    "hp_current": 50,
+    "hp_max": 50,
+    "stats": {
+      "chr": 2,
+      "con": 2,
+      "dex": 6,
+      "int": 2,
+      "str": 0,
+      "wis": 2,
+      "chr_bonus": 0,
+      "con_bonus": 0,
+      "dex_bonus": 0,
+      "int_bonus": 0,
+      "str_bonus": 0,
+      "wis_bonus": 0
+    },
+    "avatar_url": "https://i.ibb.co/1fJct9PV/mert-png.png",
+    "ac": 12,
+    "ac_bonus": 4,
+    "corruption": 1,
+    "spell_slots": {
+      "lvl1": 5,
+      "lvl2": 3,
+      "lvl3": 1,
+      "lvl4": 0
+    }
   }
 ]

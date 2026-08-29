@@ -201,6 +201,9 @@ socket.on('removeMarker', (markerId) => {
     tokens[markerId].remove();
     delete tokens[markerId];
   }
+  if (typeof window.__webdnd_removeTarget === 'function') {
+    window.__webdnd_removeTarget('marker', markerId);
+  }
 });
 
 socket.on('updateMarkerData', (markerData) => {
@@ -237,6 +240,10 @@ socket.on('playerDisconnected', (id) => {
     delete tokens[id];
   }
   if (allPlayers[id]) {
+    const charId = allPlayers[id]?.character?.id;
+    if (charId && typeof window.__webdnd_removeTarget === 'function') {
+      window.__webdnd_removeTarget('character', charId);
+    }
     delete allPlayers[id];
     renderPlayerInfo();
     if (editingPlayerId === id) {
@@ -325,6 +332,19 @@ function addToken(playerData) {
   const t = document.createElement('div');
   t.className = 'token';
   t.dataset.id = playerData.id;
+  if (playerData.character?.id) {
+    t.dataset.characterId = playerData.character.id;
+  }
+
+  // Eğer bu token hedef olarak seçiliyse hedef çerçevesini koru
+  if (typeof window.__webdnd_isTargetSelected === 'function') {
+    const isMarker = Boolean(playerData.isMarker);
+    const targetId = isMarker ? playerData.id : (playerData.character?.id || playerData.id);
+    const targetType = isMarker ? 'marker' : 'character';
+    if (window.__webdnd_isTargetSelected(targetType, targetId)) {
+      t.classList.add('token-target-selected');
+    }
+  }
 
   // Eğer bu token bize aitse
   if (playerData.id === myId) {
@@ -422,6 +442,22 @@ function updateToken(playerData) {
     // Token yoksa yeni oluştur
     addToken(playerData);
     return;
+  }
+
+  if (playerData.character?.id) {
+    t.dataset.characterId = playerData.character.id;
+  }
+
+  // Hedef seçim durumunu güncelle
+  if (typeof window.__webdnd_isTargetSelected === 'function') {
+    const isMarker = Boolean(playerData.isMarker);
+    const targetId = isMarker ? playerData.id : (playerData.character?.id || playerData.id);
+    const targetType = isMarker ? 'marker' : 'character';
+    if (window.__webdnd_isTargetSelected(targetType, targetId)) {
+      t.classList.add('token-target-selected');
+    } else {
+      t.classList.remove('token-target-selected');
+    }
   }
 
   // Stil güncelle

@@ -716,7 +716,7 @@ let customStatusPresets = [
 ];
 
 // === HAZIR SALDIRI PRESETLERİ (ATTACK PRESETS) ===
-let attackPresets = [
+const defaultAttackPresets = [
   {
     id: 'atk_preset_flame_sword',
     name: 'Alev Kılıcı',
@@ -836,6 +836,7 @@ let attackPresets = [
     description: '2d6+4 Sinsi gölge saldırısı. İsabet halinde 2 tur Kanama (2-8 DoT) uygular.'
   }
 ];
+let attackPresets = [...defaultAttackPresets];
 
 /**
  * Token veya karakterin aktif durum efektlerini döndürür.
@@ -1740,7 +1741,7 @@ io.on('connection', (socket) => {
     socket.emit('attackPresetsUpdated', attackPresets);
   });
 
-  socket.on('saveAttackPreset', (preset) => {
+  socket.on('saveAttackPreset', async (preset) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     if (!preset || !preset.name) return;
 
@@ -1766,12 +1767,45 @@ io.on('connection', (socket) => {
     }
 
     io.emit('attackPresetsUpdated', attackPresets);
+
+    // Supabase veritabanına kaydet (upsert)
+    try {
+      const dbRecord = {
+        id: newPreset.id,
+        name: newPreset.name,
+        stat: newPreset.stat,
+        attack_type: newPreset.attackType,
+        spell_level: newPreset.spellLevel,
+        dice_pools: newPreset.dicePools,
+        status_effects_to_apply: newPreset.statusEffectsToApply,
+        half_damage_on_miss: newPreset.halfDamageOnMiss,
+        extra_damage: newPreset.extraDamage,
+        attack_count: newPreset.attackCount,
+        description: newPreset.description
+      };
+      const { error } = await supabase.from('attack_presets').upsert(dbRecord);
+      if (error && error.code !== 'PGRST205') {
+        console.error('Supabase attack preset kaydetme hatası:', error.message);
+      }
+    } catch (err) {
+      console.error('Supabase attack preset kaydetme istisnası:', err.message);
+    }
   });
 
-  socket.on('deleteAttackPreset', (presetId) => {
+  socket.on('deleteAttackPreset', async (presetId) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     attackPresets = attackPresets.filter(p => p.id !== presetId);
     io.emit('attackPresetsUpdated', attackPresets);
+
+    // Supabase veritabanından sil
+    try {
+      const { error } = await supabase.from('attack_presets').delete().eq('id', presetId);
+      if (error && error.code !== 'PGRST205') {
+        console.error('Supabase attack preset silme hatası:', error.message);
+      }
+    } catch (err) {
+      console.error('Supabase attack preset silme istisnası:', err.message);
+    }
   });
 
   // ---- Bağlantı Kopma ----
@@ -1886,6 +1920,75 @@ async function backupMapState() {
   }
 }
 
+// === ATTACK PRESETS RESTORE VE SEED ===
+async function restoreAttackPresets() {
+  try {
+    const { data, error } = await supabase
+      .from('attack_presets')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Attack presets yüklenirken Supabase hatası:', error.message);
+      } else if (error.code === 'PGRST205') {
+        console.log('attack_presets tablosu henüz veritabanında oluşturulmamış. Tablo oluşturulduğunda otomatik senkronize edilecektir.');
+      }
+      return;
+    }
+
+    if (data && data.length > 0) {
+      attackPresets = data.map(row => ({
+        id: row.id,
+        name: row.name,
+        stat: row.stat || 'STR',
+        attackType: row.attack_type || row.attackType || 'physical',
+        spellLevel: row.spell_level ?? row.spellLevel ?? 1,
+        dicePools: row.dice_pools || row.dicePools || { phys: {}, elem1: {}, elem2: {}, spell: {} },
+        statusEffectsToApply: Array.isArray(row.status_effects_to_apply) ? row.status_effects_to_apply : (Array.isArray(row.statusEffectsToApply) ? row.statusEffectsToApply : []),
+        halfDamageOnMiss: Boolean(row.half_damage_on_miss ?? row.halfDamageOnMiss),
+        extraDamage: row.extra_damage ?? row.extraDamage ?? 0,
+        attackCount: row.attack_count ?? row.attackCount ?? 1,
+        description: row.description || ''
+      }));
+      console.log(`Supabase'den ${attackPresets.length} adet saldırı preseti başarıyla yüklendi.`);
+    } else {
+      console.log('Supabase attack_presets tablosu boş, varsayılan presetler tohumlanıyor...');
+      await seedDefaultAttackPresets();
+    }
+  } catch (err) {
+    console.error('Attack presets geri yüklenirken beklenmeyen hata:', err.message);
+  }
+}
+
+async function seedDefaultAttackPresets() {
+  try {
+    const rowsToInsert = defaultAttackPresets.map(p => ({
+      id: p.id,
+      name: p.name,
+      stat: p.stat,
+      attack_type: p.attackType,
+      spell_level: p.spellLevel,
+      dice_pools: p.dicePools,
+      status_effects_to_apply: p.statusEffectsToApply,
+      half_damage_on_miss: p.halfDamageOnMiss,
+      extra_damage: p.extraDamage,
+      attack_count: p.attackCount,
+      description: p.description
+    }));
+    const { error } = await supabase.from('attack_presets').upsert(rowsToInsert);
+    if (error) {
+      if (error.code !== 'PGRST205') {
+        console.error('Varsayılan attack presetleri tohumlanırken hata:', error.message);
+      }
+    } else {
+      console.log('Varsayılan attack presetleri Supabase veritabanına kaydedildi.');
+    }
+  } catch (err) {
+    console.error('Default attack presets seed istisnası:', err.message);
+  }
+}
+
 // === SESSION CACHE TEMİZLİĞİ ===
 function cleanupSessionCache() {
   const now = Date.now();
@@ -1902,8 +2005,8 @@ setInterval(cleanupSessionCache, 60 * 60 * 1000); // Her saat cache temizliği
 
 const PORT = process.env.PORT || 3000;
 
-// Sunucu başlamadan önce durumu geri yükle
-restoreMapState().then(() => {
+// Sunucu başlamadan önce durumları geri yükle
+Promise.all([restoreMapState(), restoreAttackPresets()]).then(() => {
   server.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda aktif!`);
   });

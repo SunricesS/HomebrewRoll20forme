@@ -75,6 +75,21 @@ Mevcut oyun oturumunun harita durumunu (çizimler, tokenlar vb.) düzenli aralı
   - `drawHistory`: Çizim geçmişi listesi.
   - `mapBgUrl`: Geçerli harita arka plan resmi.
 
+### 3.5. `attack_presets` Tablosu
+DM'in saldırı panelinde kullandığı ve özelleştirdiği hazır saldırı presetlerini saklar.
+- `id` (text, Primary Key) - Preset benzersiz kimliği (Örn: `atk_preset_flame_sword`, `atk_custom_...`).
+- `name` (text) - Saldırı / Preset adı.
+- `stat` (text) - Saldırının temel statı (`STR`, `DEX`, `CON`, `INT`, `WIS`, `CHA`).
+- `attack_type` (text) - Saldırı türü (`physical` veya `spell`).
+- `spell_level` (int) - Büyü seviyesi (1-4).
+- `dice_pools` (jsonb) - Fiziksel, elementel ve büyü zar havuzları ve bonusları (`{ phys: {}, elem1: {}, elem2: {}, spell: {} }`).
+- `status_effects_to_apply` (jsonb) - Vuruş sonrası hedefe uygulanacak durum efektleri listesi.
+- `half_damage_on_miss` (boolean) - Iskalama durumunda yarım hasar vurulsun mu?
+- `extra_damage` (int) - Ekstra sabit hasar.
+- `attack_count` (int) - Saldırı adedi (Multi-attack).
+- `description` (text) - Saldırı açıklaması / notları.
+- `created_at` (timestamptz) - Oluşturulma tarihi.
+
 ---
 
 ## 4. REST API Endpoint'leri

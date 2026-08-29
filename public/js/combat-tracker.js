@@ -103,8 +103,6 @@
    * Haritadaki tüm tokenlar arasından sadece aktif sıradakine tur vurgusu halkası ekler.
    */
   function updateMapActiveTokenHighlight(activeCombatantId) {
-    if (typeof tokens === 'undefined') return;
-
     // Önceki tüm aktif halkaları temizle
     document.querySelectorAll('.combat-active-token').forEach(el => {
       el.classList.remove('combat-active-token');
@@ -112,7 +110,27 @@
 
     if (!combatState.active || !activeCombatantId) return;
 
-    const activeEl = tokens[activeCombatantId];
+    const idStr = String(activeCombatantId);
+    let activeEl = null;
+
+    if (typeof tokens !== 'undefined') {
+      if (tokens[activeCombatantId]) activeEl = tokens[activeCombatantId];
+      else if (tokens[idStr]) activeEl = tokens[idStr];
+      else if (typeof allPlayers !== 'undefined') {
+        const p = Object.values(allPlayers).find(p => {
+          if (p.character && String(p.character.id) === idStr) return true;
+          if (String(p.id) === idStr) return true;
+          return false;
+        });
+        if (p && tokens[p.id]) activeEl = tokens[p.id];
+      }
+    }
+
+    if (!activeEl) {
+      activeEl = document.querySelector(`.token[data-id="${idStr}"]`) ||
+                 document.querySelector(`.token[data-character-id="${idStr}"]`);
+    }
+
     if (activeEl) {
       activeEl.classList.add('combat-active-token');
     }
@@ -159,15 +177,12 @@
     if (activeCombatant) {
       updateMapActiveTokenHighlight(activeCombatant.id);
 
-      // Turu olan tokeni otomatik olarak DM saldırı panelinde "Saldıran" olarak seç
+      // Turu olan tokeni otomatik olarak DM saldırı panelinde "Saldıran" olarak seç ve önceki hedefleri temizle
       const currentTurnKey = `${combatState.round}:${activeIdx}:${activeCombatant.id}`;
       if (lastSyncedAttackerTurnKey !== currentTurnKey) {
         lastSyncedAttackerTurnKey = currentTurnKey;
-        if (typeof role !== 'undefined' && role === 'dm' && typeof window.__webdnd_selectAttacker === 'function') {
-          const selectKey = activeCombatant.isMarker 
-            ? `marker:${activeCombatant.id}` 
-            : `character:${activeCombatant.characterId || activeCombatant.id}`;
-          window.__webdnd_selectAttacker(selectKey);
+        if (typeof role !== 'undefined' && role === 'dm' && typeof window.__webdnd_onCombatTurnActive === 'function') {
+          window.__webdnd_onCombatTurnActive(activeCombatant);
         }
       }
     } else {
@@ -329,13 +344,7 @@
       cardsTrack.appendChild(card);
     });
 
-    // Aktif combatant'ı saldırı panelinde otomatik seç ve presetini yükle
-    if (combatState.active && combatState.combatants.length > 0) {
-      const activeCombatant = combatState.combatants[combatState.currentTurnIndex];
-      if (activeCombatant && typeof window.__webdnd_onCombatTurnActive === 'function') {
-        window.__webdnd_onCombatTurnActive(activeCombatant);
-      }
-    }
+    // Kartların çizimi tamamlandı
   }
 
   // === SOCKET DINLEYICILERI ===
@@ -354,6 +363,10 @@
     });
 
     socket.on('combatEnded', () => {
+      updateMapActiveTokenHighlight(null);
+      if (typeof window.__webdnd_clearTargets === 'function') {
+        window.__webdnd_clearTargets();
+      }
       if (typeof addLogHtml === 'function') {
         addLogHtml('<span style="color:var(--text-muted, #94a3b8);">🏳️ Savaş Modu Sonlandırıldı.</span>');
       }
