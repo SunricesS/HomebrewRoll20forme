@@ -87,7 +87,13 @@ DM'in saldırı panelinde kullandığı ve özelleştirdiği hazır saldırı pr
 - `half_damage_on_miss` (boolean) - Iskalama durumunda yarım hasar vurulsun mu?
 - `extra_damage` (int) - Ekstra sabit hasar.
 - `attack_count` (int) - Saldırı adedi (Multi-attack).
-- `description` (text) - Saldırı açıklaması / notları.
+### 3.6. `status_presets` Tablosu
+DM'in durum efektleri panelinde oluşturduğu ve özelleştirdiği durum etkisi şablonlarını saklar.
+- `id` (text, Primary Key) - Durum efekti benzersiz kimliği (Örn: `preset_burn`, `custom_...`).
+- `name` (text) - Durum efekti adı (Örn: `Yanma`, `Kanama`, `Körlük`).
+- `icon` (text) - Görsel emoji / simge (Örn: `🔥`, `🩸`, `👁️`).
+- `duration` (int, nullable) - Etki süresi (Tur cinsinden. NULL ise kalıcı etki).
+- `effects` (jsonb) - Etki parametreleri (Örn: `{ dotDamage: { min: 1, max: 6 }, blind: true, paralyzed: true }`).
 - `created_at` (timestamptz) - Oluşturulma tarihi.
 
 ---

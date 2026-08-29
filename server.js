@@ -704,7 +704,7 @@ let mapBgUrl = '';
 let drawHistory = [];
 
 // === STATUS EFFECTS & CUSTOM EFFECT BUILDER MOTORU ===
-let customStatusPresets = [
+const defaultStatusPresets = [
   { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 3, effects: { dotDamage: { min: 1, max: 6 } } },
   { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } },
   { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 2, effects: { blind: true } },
@@ -714,6 +714,7 @@ let customStatusPresets = [
   { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
   { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
 ];
+let customStatusPresets = [...defaultStatusPresets];
 
 // === HAZIR SALDIRI PRESETLERİ (ATTACK PRESETS) ===
 const defaultAttackPresets = [
@@ -1698,7 +1699,7 @@ io.on('connection', (socket) => {
     socket.emit('customEffectsUpdated', customStatusPresets);
   });
 
-  socket.on('saveCustomEffect', (effectTemplate) => {
+  socket.on('saveCustomEffect', async (effectTemplate) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     if (!effectTemplate || !effectTemplate.name) return;
 
@@ -1718,12 +1719,39 @@ io.on('connection', (socket) => {
     }
 
     io.emit('customEffectsUpdated', customStatusPresets);
+
+    // Supabase veritabanına kaydet (upsert)
+    try {
+      const dbRecord = {
+        id: newEffect.id,
+        name: newEffect.name,
+        icon: newEffect.icon,
+        duration: newEffect.duration,
+        effects: newEffect.effects
+      };
+      const { error } = await supabase.from('status_presets').upsert(dbRecord);
+      if (error && error.code !== 'PGRST205') {
+        console.error('Supabase status preset kaydetme hatası:', error.message);
+      }
+    } catch (err) {
+      console.error('Supabase status preset kaydetme istisnası:', err.message);
+    }
   });
 
-  socket.on('deleteCustomEffect', (effectId) => {
+  socket.on('deleteCustomEffect', async (effectId) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     customStatusPresets = customStatusPresets.filter(e => e.id !== effectId);
     io.emit('customEffectsUpdated', customStatusPresets);
+
+    // Supabase veritabanından sil
+    try {
+      const { error } = await supabase.from('status_presets').delete().eq('id', effectId);
+      if (error && error.code !== 'PGRST205') {
+        console.error('Supabase status preset silme hatası:', error.message);
+      }
+    } catch (err) {
+      console.error('Supabase status preset silme istisnası:', err.message);
+    }
   });
 
   socket.on('applyStatusEffect', ({ targetType, targetId, effect }) => {
@@ -1989,6 +2017,63 @@ async function seedDefaultAttackPresets() {
   }
 }
 
+// === STATUS PRESETS RESTORE VE SEED ===
+async function restoreStatusPresets() {
+  try {
+    const { data, error } = await supabase
+      .from('status_presets')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Status presets yüklenirken Supabase hatası:', error.message);
+      } else if (error.code === 'PGRST205') {
+        console.log('status_presets tablosu henüz veritabanında oluşturulmamış. Tablo oluşturulduğunda otomatik senkronize edilecektir.');
+      }
+      return;
+    }
+
+    if (data && data.length > 0) {
+      customStatusPresets = data.map(row => ({
+        id: row.id,
+        name: row.name,
+        icon: row.icon || '✨',
+        duration: row.duration != null ? row.duration : null,
+        effects: row.effects || {}
+      }));
+      console.log(`Supabase'den ${customStatusPresets.length} adet durum efekti preseti başarıyla yüklendi.`);
+    } else {
+      console.log('Supabase status_presets tablosu boş, varsayılan presetler tohumlanıyor...');
+      await seedDefaultStatusPresets();
+    }
+  } catch (err) {
+    console.error('Status presets geri yüklenirken beklenmeyen hata:', err.message);
+  }
+}
+
+async function seedDefaultStatusPresets() {
+  try {
+    const rowsToInsert = defaultStatusPresets.map(p => ({
+      id: p.id,
+      name: p.name,
+      icon: p.icon,
+      duration: p.duration,
+      effects: p.effects
+    }));
+    const { error } = await supabase.from('status_presets').upsert(rowsToInsert);
+    if (error) {
+      if (error.code !== 'PGRST205') {
+        console.error('Varsayılan status presetleri tohumlanırken hata:', error.message);
+      }
+    } else {
+      console.log('Varsayılan status presetleri Supabase veritabanına kaydedildi.');
+    }
+  } catch (err) {
+    console.error('Default status presets seed istisnası:', err.message);
+  }
+}
+
 // === SESSION CACHE TEMİZLİĞİ ===
 function cleanupSessionCache() {
   const now = Date.now();
@@ -2006,7 +2091,7 @@ setInterval(cleanupSessionCache, 60 * 60 * 1000); // Her saat cache temizliği
 const PORT = process.env.PORT || 3000;
 
 // Sunucu başlamadan önce durumları geri yükle
-Promise.all([restoreMapState(), restoreAttackPresets()]).then(() => {
+Promise.all([restoreMapState(), restoreAttackPresets(), restoreStatusPresets()]).then(() => {
   server.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda aktif!`);
   });
