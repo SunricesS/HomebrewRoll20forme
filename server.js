@@ -1948,7 +1948,7 @@ async function backupMapState() {
   }
 }
 
-// === ATTACK PRESETS RESTORE VE SEED ===
+// === ATTACK PRESETS RESTORE ===
 async function restoreAttackPresets() {
   try {
     const { data, error } = await supabase
@@ -1960,12 +1960,12 @@ async function restoreAttackPresets() {
       if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
         console.error('Attack presets yüklenirken Supabase hatası:', error.message);
       } else if (error.code === 'PGRST205') {
-        console.log('attack_presets tablosu henüz veritabanında oluşturulmamış. Tablo oluşturulduğunda otomatik senkronize edilecektir.');
+        console.log('attack_presets tablosu henüz veritabanında oluşturulmamış.');
       }
       return;
     }
 
-    if (data && data.length > 0) {
+    if (data) {
       attackPresets = data.map(row => ({
         id: row.id,
         name: row.name,
@@ -1980,44 +1980,13 @@ async function restoreAttackPresets() {
         description: row.description || ''
       }));
       console.log(`Supabase'den ${attackPresets.length} adet saldırı preseti başarıyla yüklendi.`);
-    } else {
-      console.log('Supabase attack_presets tablosu boş, varsayılan presetler tohumlanıyor...');
-      await seedDefaultAttackPresets();
     }
   } catch (err) {
     console.error('Attack presets geri yüklenirken beklenmeyen hata:', err.message);
   }
 }
 
-async function seedDefaultAttackPresets() {
-  try {
-    const rowsToInsert = defaultAttackPresets.map(p => ({
-      id: p.id,
-      name: p.name,
-      stat: p.stat,
-      attack_type: p.attackType,
-      spell_level: p.spellLevel,
-      dice_pools: p.dicePools,
-      status_effects_to_apply: p.statusEffectsToApply,
-      half_damage_on_miss: p.halfDamageOnMiss,
-      extra_damage: p.extraDamage,
-      attack_count: p.attackCount,
-      description: p.description
-    }));
-    const { error } = await supabase.from('attack_presets').upsert(rowsToInsert);
-    if (error) {
-      if (error.code !== 'PGRST205') {
-        console.error('Varsayılan attack presetleri tohumlanırken hata:', error.message);
-      }
-    } else {
-      console.log('Varsayılan attack presetleri Supabase veritabanına kaydedildi.');
-    }
-  } catch (err) {
-    console.error('Default attack presets seed istisnası:', err.message);
-  }
-}
-
-// === STATUS PRESETS RESTORE VE SEED ===
+// === STATUS PRESETS RESTORE ===
 async function restoreStatusPresets() {
   try {
     const { data, error } = await supabase
@@ -2029,12 +1998,12 @@ async function restoreStatusPresets() {
       if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
         console.error('Status presets yüklenirken Supabase hatası:', error.message);
       } else if (error.code === 'PGRST205') {
-        console.log('status_presets tablosu henüz veritabanında oluşturulmamış. Tablo oluşturulduğunda otomatik senkronize edilecektir.');
+        console.log('status_presets tablosu henüz veritabanında oluşturulmamış.');
       }
       return;
     }
 
-    if (data && data.length > 0) {
+    if (data) {
       customStatusPresets = data.map(row => ({
         id: row.id,
         name: row.name,
@@ -2043,34 +2012,9 @@ async function restoreStatusPresets() {
         effects: row.effects || {}
       }));
       console.log(`Supabase'den ${customStatusPresets.length} adet durum efekti preseti başarıyla yüklendi.`);
-    } else {
-      console.log('Supabase status_presets tablosu boş, varsayılan presetler tohumlanıyor...');
-      await seedDefaultStatusPresets();
     }
   } catch (err) {
     console.error('Status presets geri yüklenirken beklenmeyen hata:', err.message);
-  }
-}
-
-async function seedDefaultStatusPresets() {
-  try {
-    const rowsToInsert = defaultStatusPresets.map(p => ({
-      id: p.id,
-      name: p.name,
-      icon: p.icon,
-      duration: p.duration,
-      effects: p.effects
-    }));
-    const { error } = await supabase.from('status_presets').upsert(rowsToInsert);
-    if (error) {
-      if (error.code !== 'PGRST205') {
-        console.error('Varsayılan status presetleri tohumlanırken hata:', error.message);
-      }
-    } else {
-      console.log('Varsayılan status presetleri Supabase veritabanına kaydedildi.');
-    }
-  } catch (err) {
-    console.error('Default status presets seed istisnası:', err.message);
   }
 }
 

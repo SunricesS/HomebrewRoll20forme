@@ -1623,7 +1623,6 @@ function renderStatusPresets() {
     card.className = 'status-preset-card';
 
     const durLabel = preset.duration != null ? `${preset.duration} Tur` : 'Kalıcı';
-    const isCustom = Boolean(preset.id && preset.id.startsWith('custom_'));
 
     card.innerHTML = `
       <div>
@@ -1638,7 +1637,7 @@ function renderStatusPresets() {
       </div>
       <div class="preset-actions">
         <button type="button" class="btn-apply-preset" title="Hedefe Uygula">⚡ Uygula</button>
-        ${isCustom ? `<button type="button" class="btn-del-preset" title="Şablonu Sil">🗑️</button>` : ''}
+        <button type="button" class="btn-del-preset" title="Şablonu Sil">🗑️</button>
       </div>
     `;
 
@@ -1647,15 +1646,13 @@ function renderStatusPresets() {
       applyEffectToCurrentTargets(preset);
     });
 
-    // Sil butonu (Özel efektler için)
-    if (isCustom) {
-      card.querySelector('.btn-del-preset').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm(`"${preset.name}" özel şablonunu silmek istediğinize emin misiniz?`)) {
-          socket.emit('deleteCustomEffect', preset.id);
-        }
-      });
-    }
+    // Sil butonu
+    card.querySelector('.btn-del-preset').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`"${preset.name}" şablonunu silmek istediğinize emin misiniz?`)) {
+        socket.emit('deleteCustomEffect', preset.id);
+      }
+    });
 
     grid.appendChild(card);
   });
