@@ -514,6 +514,11 @@
       const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
       lastEquippedAttackByToken.set(key, preset.id);
     }
+
+    // Alt hotbar ile senkronizasyon
+    if (typeof window.__webdnd_onPresetEquipped === 'function') {
+      window.__webdnd_onPresetEquipped(preset.id);
+    }
   }
 
   /**
@@ -527,6 +532,11 @@
     if (persistForToken && selectedAttacker) {
       const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
       lastEquippedAttackByToken.delete(key);
+    }
+
+    // Alt hotbar ile senkronizasyon
+    if (typeof window.__webdnd_onPresetEquipped === 'function') {
+      window.__webdnd_onPresetEquipped(null);
     }
   }
 
@@ -1656,6 +1666,10 @@
   window.__webdnd_clearTargets = clearAllTargets;
   window.__webdnd_removeTarget = removeTargetById;
   window.__webdnd_isTargetSelected = isTargetSelected;
+  window.__webdnd_equipAttackPreset = equipPreset;
+  window.__webdnd_unequipAttackPreset = unequipPreset;
+  window.__webdnd_getAttackPresets = () => attackPresetsCache;
+  window.__webdnd_getActiveEquippedPreset = () => activeEquippedPreset;
 
   window.__webdnd_onCombatTurnActive = function (combatant) {
     if (!combatant) return;
@@ -1665,6 +1679,17 @@
     const targetKey = combatant.isMarker ? `marker:${combatant.id}` : `character:${combatant.characterId || combatant.id}`;
     if (typeof window.__webdnd_selectAttacker === 'function') {
       window.__webdnd_selectAttacker(targetKey);
+    }
+
+    // Atanmış saldırılardan hafızada olanı veya ilkini kuşan
+    if (combatant.assignedAttacks && combatant.assignedAttacks.length > 0) {
+      const rememberedId = lastEquippedAttackByToken.get(targetKey);
+      const targetPresetId = (rememberedId && combatant.assignedAttacks.includes(rememberedId))
+        ? rememberedId
+        : combatant.assignedAttacks[0];
+      if (targetPresetId) {
+        equipPreset(targetPresetId);
+      }
     }
   };
 

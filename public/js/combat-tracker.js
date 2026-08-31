@@ -28,6 +28,13 @@
   const dmCombatBtn = document.getElementById('btn-dm-toggle-combat');
   const gameMap = document.getElementById('game-map');
 
+  // Alt Hotbar Elementleri
+  const bottomHotbar = document.getElementById('bg3-bottom-hotbar');
+  const hotbarAvatarWrap = document.getElementById('bg3-hotbar-avatar-wrap');
+  const hotbarCharName = document.getElementById('bg3-hotbar-char-name');
+  const hotbarSlotsTrack = document.getElementById('bg3-hotbar-slots-track');
+  const hotbarOpenPanelBtn = document.getElementById('bg3-hotbar-open-panel-btn');
+
   if (!container || !cardsTrack) {
     console.warn('BG3 Combat Bar elementleri bulunamadı.');
     return;
@@ -146,6 +153,7 @@
   function renderCombatBar() {
     if (!combatState.active || !combatState.combatants || combatState.combatants.length === 0) {
       container.classList.add('hidden');
+      if (bottomHotbar) bottomHotbar.classList.add('hidden');
       if (floatingBtn) floatingBtn.classList.remove('active');
       if (floatingBtnBadge) floatingBtnBadge.classList.add('hidden');
       if (dmCombatBtn) dmCombatBtn.classList.remove('active');
@@ -176,6 +184,7 @@
 
     if (activeCombatant) {
       updateMapActiveTokenHighlight(activeCombatant.id);
+      renderBottomHotbar(activeCombatant);
 
       // Turu olan tokeni otomatik olarak DM saldırı panelinde "Saldıran" olarak seç ve önceki hedefleri temizle
       const currentTurnKey = `${combatState.round}:${activeIdx}:${activeCombatant.id}`;
@@ -187,6 +196,7 @@
       }
     } else {
       lastSyncedAttackerTurnKey = null;
+      if (bottomHotbar) bottomHotbar.classList.add('hidden');
     }
 
     combatState.combatants.forEach((c, idx) => {
@@ -347,6 +357,173 @@
     // Kartların çizimi tamamlandı
   }
 
+  /**
+   * Belirli bir presetin kısa zar özetini üretir (örn: 2d6+STR).
+   */
+  function formatPresetShortDice(preset) {
+    if (!preset) return '';
+    const parts = [];
+    const pools = preset.dicePools || {};
+
+    if (pools.phys && pools.phys.count > 0 && pools.phys.sides > 0) {
+      parts.push(`${pools.phys.count}d${pools.phys.sides}`);
+    }
+    if (pools.elem1 && pools.elem1.count > 0 && pools.elem1.sides > 0) {
+      parts.push(`${pools.elem1.count}d${pools.elem1.sides}`);
+    }
+    if (pools.elem2 && pools.elem2.count > 0 && pools.elem2.sides > 0) {
+      parts.push(`${pools.elem2.count}d${pools.elem2.sides}`);
+    }
+    if (pools.spell && pools.spell.count > 0 && pools.spell.sides > 0) {
+      parts.push(`${pools.spell.count}d${pools.spell.sides}`);
+    }
+
+    let diceStr = parts.join('+') || '1d20';
+    if (preset.stat) {
+      diceStr += `+${preset.stat}`;
+    }
+    if (preset.extraDamage) {
+      const sign = preset.extraDamage > 0 ? `+${preset.extraDamage}` : `${preset.extraDamage}`;
+      diceStr += sign;
+    }
+    return diceStr;
+  }
+
+  /**
+   * Baldur's Gate 3 Alt Aksiyon / Yetenek Barını Çizer
+   */
+  function renderBottomHotbar(activeCombatant) {
+    if (!bottomHotbar) return;
+
+    if (!combatState.active || !activeCombatant) {
+      bottomHotbar.classList.add('hidden');
+      return;
+    }
+
+    bottomHotbar.classList.remove('hidden');
+
+    // 1. Portre & İsim
+    if (hotbarCharName) {
+      hotbarCharName.textContent = activeCombatant.name || 'Karakter';
+      hotbarCharName.title = activeCombatant.name || 'Karakter';
+    }
+
+    if (hotbarAvatarWrap) {
+      hotbarAvatarWrap.innerHTML = '';
+      if (activeCombatant.imgUrl) {
+        const img = document.createElement('img');
+        img.className = 'bg3-hotbar-avatar';
+        img.src = activeCombatant.imgUrl;
+        img.alt = activeCombatant.name || '';
+        img.onerror = () => {
+          img.style.display = 'none';
+          const init = document.createElement('span');
+          init.className = 'bg3-hotbar-initial';
+          init.textContent = (activeCombatant.name || '?').charAt(0).toUpperCase();
+          hotbarAvatarWrap.appendChild(init);
+        };
+        hotbarAvatarWrap.appendChild(img);
+      } else {
+        const init = document.createElement('span');
+        init.className = 'bg3-hotbar-initial';
+        init.style.backgroundColor = activeCombatant.color || '#3498db';
+        init.textContent = (activeCombatant.name || '?').charAt(0).toUpperCase();
+        hotbarAvatarWrap.appendChild(init);
+      }
+    }
+
+    // 2. Saldırı Slotları
+    if (hotbarSlotsTrack) {
+      hotbarSlotsTrack.innerHTML = '';
+
+      const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+      const currentEquipped = typeof window.__webdnd_getActiveEquippedPreset === 'function' ? window.__webdnd_getActiveEquippedPreset() : null;
+      const equippedId = currentEquipped ? currentEquipped.id : null;
+
+      const assignedIds = activeCombatant.assignedAttacks || [];
+
+      if (!assignedIds || assignedIds.length === 0) {
+        const notice = document.createElement('span');
+        notice.className = 'bg3-hotbar-empty-notice';
+        notice.textContent = '⚠️ Bu karaktere özel saldırı atanmadı (Panelden seçin).';
+        hotbarSlotsTrack.appendChild(notice);
+      } else {
+        assignedIds.forEach(presetId => {
+          const preset = allPresets.find(p => p.id === presetId);
+          if (!preset) return;
+
+          const slot = document.createElement('div');
+          slot.className = 'bg3-hotbar-slot';
+          slot.dataset.presetId = preset.id;
+
+          if (equippedId && equippedId === preset.id) {
+            slot.classList.add('is-equipped');
+          }
+
+          const typeIcon = preset.attackType === 'spell' ? '✨' : '⚔️';
+          const diceFormula = formatPresetShortDice(preset);
+          const hasHalfDamage = Boolean(preset.halfDamageOnMiss);
+          const statusIcon = preset.statusEffectsToApply?.length ? (preset.statusEffectsToApply[0].icon || '✨') : null;
+
+          let badgesHtml = '';
+          if (hasHalfDamage) badgesHtml += '<span class="bg3-hotbar-slot-badge" title="Iska durumunda yarı hasar">½ Iska</span>';
+          if (statusIcon) badgesHtml += `<span class="bg3-hotbar-slot-badge" title="Durum efekti uygular">${statusIcon}</span>`;
+
+          slot.title = `${preset.name} (${preset.attackType === 'spell' ? 'Büyü' : 'Fiziksel'})\nZar: ${diceFormula}${preset.halfDamageOnMiss ? '\nIska: 1/2 Hasar' : ''}`;
+
+          slot.innerHTML = `
+            <div class="bg3-hotbar-slot-icon">${typeIcon}</div>
+            <div class="bg3-hotbar-slot-body">
+              <span class="bg3-hotbar-slot-name">${escapeHtml(preset.name)}</span>
+              <div class="bg3-hotbar-slot-meta">
+                <span class="bg3-hotbar-slot-dice">${diceFormula}</span>
+                ${badgesHtml}
+              </div>
+            </div>
+          `;
+
+          // Slot Tıklama
+          slot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof window.__webdnd_equipAttackPreset === 'function') {
+              window.__webdnd_equipAttackPreset(preset.id);
+            }
+            if (hotbarSlotsTrack) {
+              hotbarSlotsTrack.querySelectorAll('.bg3-hotbar-slot').forEach(s => s.classList.remove('is-equipped'));
+            }
+            slot.classList.add('is-equipped');
+          });
+
+          hotbarSlotsTrack.appendChild(slot);
+        });
+      }
+    }
+  }
+
+  // Preset kuşanıldığında hotbar'daki seçili slotu güncelleme
+  window.__webdnd_onPresetEquipped = function (presetId) {
+    if (!hotbarSlotsTrack) return;
+    const slots = hotbarSlotsTrack.querySelectorAll('.bg3-hotbar-slot');
+    slots.forEach(slot => {
+      if (presetId && slot.dataset.presetId === presetId) {
+        slot.classList.add('is-equipped');
+      } else {
+        slot.classList.remove('is-equipped');
+      }
+    });
+  };
+
+  // Saldırı panelini aç / odakla butonu
+  if (hotbarOpenPanelBtn) {
+    hotbarOpenPanelBtn.addEventListener('click', () => {
+      const atkPanelContainer = document.getElementById('attack-panel-container');
+      if (atkPanelContainer) {
+        atkPanelContainer.open = true;
+        atkPanelContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+
   // === SOCKET DINLEYICILERI ===
 
   if (typeof socket !== 'undefined') {
@@ -354,6 +531,13 @@
       if (!state) return;
       combatState = state;
       renderCombatBar();
+    });
+
+    socket.on('attackPresetsUpdated', () => {
+      if (combatState.active && combatState.combatants) {
+        const activeC = combatState.combatants[combatState.currentTurnIndex];
+        if (activeC) renderBottomHotbar(activeC);
+      }
     });
 
     socket.on('combatStarted', (data) => {
@@ -364,6 +548,9 @@
 
     socket.on('combatEnded', () => {
       updateMapActiveTokenHighlight(null);
+      if (bottomHotbar) {
+        bottomHotbar.classList.add('hidden');
+      }
       if (typeof window.__webdnd_clearTargets === 'function') {
         window.__webdnd_clearTargets();
       }

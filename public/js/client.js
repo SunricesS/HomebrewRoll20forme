@@ -209,6 +209,10 @@ socket.on('removeMarker', (markerId) => {
 socket.on('updateMarkerData', (markerData) => {
   window.__webdnd_markers[markerData.id] = markerData;
   updateToken(markerData);
+  if (editingMarkerId === markerData.id) {
+    renderMarkerEditorActiveEffects(markerData);
+    renderMarkerAssignedAttacks(markerData);
+  }
 });
 
 socket.on('updateBg', (url) => {
@@ -300,6 +304,10 @@ socket.on('characterUpdated', (data) => {
   if (btn && !dmEditTimeout) {
     btn.innerText = "Kayıtlı";
     btn.style.backgroundColor = '#27ae60';
+  }
+
+  if (editingPlayerId === data.id) {
+    renderPlayerAssignedAttacks(allPlayers[data.id]);
   }
 
   // Kendi hesabıysa SessionStorage da güncelleyelim.
@@ -524,8 +532,20 @@ function updateTokenStatusBadges(tokenEl, playerData) {
     const badge = document.createElement('span');
     badge.className = 'token-status-badge';
     const durText = eff.duration != null ? `${eff.duration}T` : '∞';
-    badge.title = `${eff.icon || '✨'} ${eff.name || 'Efekt'} (${durText})`;
+    const ruleDesc = typeof describeStatusRules === 'function' ? describeStatusRules(eff.effects) : '';
+    badge.title = `${eff.icon || '✨'} ${eff.name || 'Efekt'} (${durText})${ruleDesc ? ': ' + ruleDesc : ''}${role === 'dm' ? ' (Sağ tık: Kaldır)' : ''}`;
     badge.innerHTML = `<span class="eff-icon">${eff.icon || '✨'}</span><span class="eff-dur">${durText}</span>`;
+
+    if (role === 'dm') {
+      badge.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetType = playerData.isMarker ? 'marker' : 'character';
+        const targetId = playerData.isMarker ? playerData.id : (playerData.character?.id || playerData.id);
+        socket.emit('removeStatusEffect', { targetType, targetId, effectId: eff.id });
+      });
+    }
+
     badgeWrap.appendChild(badge);
   });
 }
@@ -757,7 +777,112 @@ function openMarkerEditor(markerInput) {
   setVal('dm-marker-edit-chr', stats.chr);
   setVal('dm-marker-edit-chr-bonus', stats.chr_bonus);
 
+  renderMarkerEditorActiveEffects(markerData);
+  renderMarkerAssignedAttacks(markerData);
+
   document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
+}
+
+/**
+ * Marker düzenleme modalındaki atanmış saldırı presetlerini listeler ve seçim sunar.
+ */
+function renderMarkerAssignedAttacks(markerData) {
+  const container = document.getElementById('dm-marker-assigned-attacks');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+  const currentMarker = (window.__webdnd_markers && window.__webdnd_markers[markerData.id]) || markerData;
+  const assigned = currentMarker.assignedAttacks || [];
+
+  if (allPresets.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Kayıtlı saldırı preseti bulunamadı.</span>';
+    return;
+  }
+
+  allPresets.forEach(preset => {
+    const isSelected = assigned.includes(preset.id);
+    const item = document.createElement('label');
+    item.className = 'assigned-attack-item' + (isSelected ? ' is-selected' : '');
+    
+    const typeIcon = preset.attackType === 'spell' ? '✨' : '⚔️';
+    item.innerHTML = `
+      <input type="checkbox" value="${preset.id}" ${isSelected ? 'checked' : ''}>
+      <span>${typeIcon}</span>
+      <span class="assigned-attack-name" title="${escapeHtml(preset.name)}">${escapeHtml(preset.name)}</span>
+      <span class="assigned-attack-stat">${preset.stat || 'STR'}</span>
+    `;
+
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', () => {
+      item.classList.toggle('is-selected', checkbox.checked);
+    });
+
+    container.appendChild(item);
+  });
+}
+
+/**
+ * Marker düzenleme modalındaki aktif durum efektlerini listeler ve silme seçeneği sunar.
+ */
+function renderMarkerEditorActiveEffects(markerData) {
+  const container = document.getElementById('dm-marker-active-effects');
+  const clearAllBtn = document.getElementById('dm-marker-clear-all-effects');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const currentMarker = (window.__webdnd_markers && window.__webdnd_markers[markerData.id]) || markerData;
+  const activeEffects = currentMarker.activeEffects || [];
+
+  if (clearAllBtn) {
+    clearAllBtn.style.display = activeEffects.length > 0 ? 'inline-block' : 'none';
+    clearAllBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      socket.emit('removeStatusEffect', {
+        targetType: 'marker',
+        targetId: currentMarker.id,
+        effectId: 'all'
+      });
+      currentMarker.activeEffects = [];
+      renderMarkerEditorActiveEffects(currentMarker);
+    };
+  }
+
+  if (activeEffects.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Aktif durum efekti yok.</span>';
+    return;
+  }
+
+  activeEffects.forEach(eff => {
+    const chip = document.createElement('span');
+    chip.className = 'status-target-chip';
+    const durText = eff.duration != null ? `${eff.duration}T` : '∞';
+    const ruleDesc = typeof describeStatusRules === 'function' ? describeStatusRules(eff.effects) : '';
+    chip.title = `${eff.icon || '✨'} ${eff.name || 'Efekt'} (${durText})${ruleDesc ? ': ' + ruleDesc : ''}`;
+    chip.innerHTML = `
+      <span>${eff.icon || '✨'}</span>
+      <strong>${escapeHtml(eff.name || 'Efekt')}</strong>
+      <span style="font-size:10px; opacity:0.8;">(${durText})</span>
+      <span class="chip-del-btn" title="Efekti Kaldır">✕</span>
+    `;
+
+    const delBtn = chip.querySelector('.chip-del-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        socket.emit('removeStatusEffect', {
+          targetType: 'marker',
+          targetId: currentMarker.id,
+          effectId: eff.id
+        });
+        currentMarker.activeEffects = currentMarker.activeEffects.filter(item => item.id !== eff.id);
+        renderMarkerEditorActiveEffects(currentMarker);
+      });
+    }
+
+    container.appendChild(chip);
+  });
 }
 
 const btnCancelMarkerEdit = document.getElementById('btn-cancel-marker-edit');
@@ -807,6 +932,9 @@ if (btnSaveMarkerEdit) {
       chr_bonus: getNum('dm-marker-edit-chr-bonus'),
     };
 
+    const assignedCheckboxes = document.querySelectorAll('#dm-marker-assigned-attacks input[type="checkbox"]:checked');
+    const assignedAttacks = Array.from(assignedCheckboxes).map(cb => cb.value);
+
     socket.emit('editMarker', {
       id: editingMarkerId,
       name,
@@ -817,7 +945,8 @@ if (btnSaveMarkerEdit) {
       size,
       ac,
       ac_bonus,
-      stats
+      stats,
+      assignedAttacks
     });
 
     document.getElementById('dm-marker-editor-modal').classList.add('hidden');
@@ -1084,11 +1213,124 @@ function showDmEditor(playerInput) {
   if (sl3) sl3.value = slots.lvl3 ?? 0;
   if (sl4) sl4.value = slots.lvl4 ?? 0;
 
+  renderPlayerEditorActiveEffects(playerData);
+  renderPlayerAssignedAttacks(playerData);
+
   document.getElementById('dm-player-editor').classList.remove('hidden');
+}
+
+/**
+ * Oyuncu düzenleme modalındaki atanmış saldırı presetlerini listeler ve seçim sunar.
+ */
+function renderPlayerAssignedAttacks(playerData) {
+  const container = document.getElementById('dm-player-assigned-attacks');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+  const current = (allPlayers && allPlayers[playerData.id]) || playerData;
+  const assigned = current.assignedAttacks || (current.character && current.character.assignedAttacks) || [];
+
+  if (allPresets.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Kayıtlı saldırı preseti bulunamadı.</span>';
+    return;
+  }
+
+  allPresets.forEach(preset => {
+    const isSelected = assigned.includes(preset.id);
+    const item = document.createElement('label');
+    item.className = 'assigned-attack-item' + (isSelected ? ' is-selected' : '');
+    
+    const typeIcon = preset.attackType === 'spell' ? '✨' : '⚔️';
+    item.innerHTML = `
+      <input type="checkbox" value="${preset.id}" ${isSelected ? 'checked' : ''}>
+      <span>${typeIcon}</span>
+      <span class="assigned-attack-name" title="${escapeHtml(preset.name)}">${escapeHtml(preset.name)}</span>
+      <span class="assigned-attack-stat">${preset.stat || 'STR'}</span>
+    `;
+
+    const checkbox = item.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', () => {
+      item.classList.toggle('is-selected', checkbox.checked);
+      if (typeof flushDmEdit === 'function') {
+        saveDmEditorState(editingPlayerId);
+      }
+    });
+
+    container.appendChild(item);
+  });
+}
+
+/**
+ * DM Oyuncu düzenleme panelindeki aktif durum efektlerini listeler ve silme seçeneği sunar.
+ */
+function renderPlayerEditorActiveEffects(playerData) {
+  const container = document.getElementById('dm-player-active-effects');
+  const clearAllBtn = document.getElementById('dm-player-clear-all-effects');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const current = (allPlayers && allPlayers[playerData.id]) || playerData;
+  const activeEffects = current.activeEffects || (current.character && current.character.activeEffects) || [];
+
+  if (clearAllBtn) {
+    clearAllBtn.style.display = activeEffects.length > 0 ? 'inline-block' : 'none';
+    clearAllBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      socket.emit('removeStatusEffect', {
+        targetType: 'player',
+        targetId: current.id,
+        effectId: 'all'
+      });
+      current.activeEffects = [];
+      if (current.character) current.character.activeEffects = [];
+      renderPlayerEditorActiveEffects(current);
+    };
+  }
+
+  if (activeEffects.length === 0) {
+    container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Aktif durum efekti yok.</span>';
+    return;
+  }
+
+  activeEffects.forEach(eff => {
+    const chip = document.createElement('span');
+    chip.className = 'status-target-chip';
+    const durText = eff.duration != null ? `${eff.duration}T` : '∞';
+    const ruleDesc = typeof describeStatusRules === 'function' ? describeStatusRules(eff.effects) : '';
+    chip.title = `${eff.icon || '✨'} ${eff.name || 'Efekt'} (${durText})${ruleDesc ? ': ' + ruleDesc : ''}`;
+    chip.innerHTML = `
+      <span>${eff.icon || '✨'}</span>
+      <strong>${escapeHtml(eff.name || 'Efekt')}</strong>
+      <span style="font-size:10px; opacity:0.8;">(${durText})</span>
+      <span class="chip-del-btn" title="Efekti Kaldır">✕</span>
+    `;
+
+    const delBtn = chip.querySelector('.chip-del-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        socket.emit('removeStatusEffect', {
+          targetType: 'player',
+          targetId: current.id,
+          effectId: eff.id
+        });
+        current.activeEffects = activeEffects.filter(item => item.id !== eff.id);
+        if (current.character) current.character.activeEffects = current.activeEffects;
+        renderPlayerEditorActiveEffects(current);
+      });
+    }
+
+    container.appendChild(chip);
+  });
 }
 
 function saveDmEditorState(playerId) {
   if (!playerId || !allPlayers[playerId] || !allPlayers[playerId].character) return;
+
+  const assignedCheckboxes = document.querySelectorAll('#dm-player-assigned-attacks input[type="checkbox"]:checked');
+  const assignedAttacks = Array.from(assignedCheckboxes).map(cb => cb.value);
 
   const updatedData = {
     id: playerId,
@@ -1112,6 +1354,7 @@ function saveDmEditorState(playerId) {
     ac: parseInt(document.getElementById('dm-edit-ac')?.value) || 10,
     ac_bonus: parseInt(document.getElementById('dm-edit-ac-bonus')?.value) || 0,
     corruption: parseInt(document.getElementById('dm-edit-corruption')?.value) || 0,
+    assignedAttacks: assignedAttacks
   };
 
   // Spell slots
@@ -1462,6 +1705,9 @@ socket.on('tokenEffectsUpdated', (data) => {
       allPlayers[data.id].character.activeEffects = data.activeEffects;
     }
     updateToken(allPlayers[data.id]);
+    if (editingPlayerId === data.id) {
+      renderPlayerEditorActiveEffects(allPlayers[data.id]);
+    }
   }
   refreshStatusToolboxTargets();
 });

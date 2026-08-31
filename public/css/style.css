@@ -2629,6 +2629,12 @@ input[type="color"]::-webkit-color-swatch {
     font-size: 11px;
     color: var(--text-gold);
     animation: fadeIn 0.2s ease;
+    transition: all 0.2s ease;
+}
+
+.status-target-chip:hover {
+    background: rgba(255, 255, 255, 0.13);
+    border-color: rgba(229, 193, 88, 0.6);
 }
 
 .status-target-chip .chip-del-btn {
@@ -2636,11 +2642,51 @@ input[type="color"]::-webkit-color-swatch {
     color: #e74c3c;
     font-weight: bold;
     margin-left: 2px;
-    transition: color 0.15s;
+    padding: 0 3px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    user-select: none;
 }
 
 .status-target-chip .chip-del-btn:hover {
-    color: #ff7675;
+    color: #fff;
+    background: #e74c3c;
+}
+
+/* Token Editor Status Effects Section */
+.token-status-effects-section {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(229, 193, 88, 0.2);
+}
+
+.token-status-effects-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.token-status-effects-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: var(--text-gold);
+    font-family: var(--font-title, 'Cinzel', serif);
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.token-clear-all-effects-btn {
+    color: #e74c3c !important;
+    border-color: rgba(231, 76, 60, 0.4) !important;
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    cursor: pointer;
+}
+
+.token-clear-all-effects-btn:hover {
+    background: rgba(231, 76, 60, 0.15) !important;
+    color: #ff7675 !important;
 }
 
 /* Tabs Navigation */
@@ -3281,4 +3327,371 @@ input[type="color"]::-webkit-color-swatch {
     color: #f1c40f !important;
     border: 1px solid #333 !important;
     border-radius: 2px !important;
+}
+
+/* ============================================================
+   BALDUR'S GATE 3 — ALT AKSİYON & SALDIRI BARI (BOTTOM HOTBAR)
+   ============================================================ */
+
+.bg3-hotbar-container {
+    position: fixed;
+    bottom: 18px;
+    left: 40%;
+    transform: translateX(-50%);
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: calc(100vw - 360px);
+    pointer-events: auto;
+    animation: bg3SlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.95));
+}
+
+@keyframes bg3SlideUp {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 30px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1);
+    }
+}
+
+.bg3-hotbar-decor-left,
+.bg3-hotbar-decor-right {
+    width: 18px;
+    height: 52px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.bg3-hotbar-decor-left::before,
+.bg3-hotbar-decor-right::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #c5a059, #8c6f34, transparent);
+    clip-path: polygon(100% 0, 0 50%, 100% 100%, 75% 50%);
+    filter: drop-shadow(0 0 6px rgba(197, 160, 89, 0.7));
+}
+
+.bg3-hotbar-decor-right::before {
+    transform: translateY(-50%) scaleX(-1);
+}
+
+.bg3-hotbar-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(180deg, rgba(34, 25, 18, 0.96) 0%, rgba(18, 13, 9, 0.98) 100%);
+    border: 2px solid var(--border-gold, #c5a059);
+    border-radius: 12px;
+    padding: 6px 12px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 
+        inset 0 1px 0 rgba(229, 193, 88, 0.35),
+        inset 0 0 20px rgba(0, 0, 0, 0.8),
+        0 10px 35px rgba(0, 0, 0, 0.9);
+    max-width: 100%;
+}
+
+.bg3-hotbar-portrait-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(229, 193, 88, 0.25);
+    flex-shrink: 0;
+}
+
+.bg3-hotbar-avatar-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid var(--border-gold, #c5a059);
+    background: #2c1a0f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.4);
+    flex-shrink: 0;
+}
+
+.bg3-hotbar-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bg3-hotbar-initial {
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-weight: 800;
+    font-size: 16px;
+    color: #fff;
+}
+
+.bg3-hotbar-char-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 70px;
+    max-width: 120px;
+}
+
+.bg3-hotbar-char-name {
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-gold, #e5c158);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bg3-hotbar-char-turn-badge {
+    font-size: 9px;
+    color: #22c55e;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.bg3-hotbar-divider {
+    width: 1px;
+    height: 36px;
+    background: linear-gradient(180deg, transparent, rgba(229, 193, 88, 0.4), transparent);
+    flex-shrink: 0;
+}
+
+.bg3-hotbar-slots-wrapper {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 600px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(229, 193, 88, 0.3) transparent;
+}
+
+.bg3-hotbar-slots-track {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.bg3-hotbar-slot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: linear-gradient(180deg, rgba(30, 22, 16, 0.95), rgba(16, 11, 8, 0.98));
+    border: 1px solid rgba(229, 193, 88, 0.35);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    user-select: none;
+    position: relative;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.bg3-hotbar-slot:hover {
+    transform: translateY(-2px);
+    border-color: rgba(229, 193, 88, 0.85);
+    background: linear-gradient(180deg, rgba(50, 36, 22, 0.95), rgba(24, 16, 10, 0.98));
+    box-shadow: 0 4px 14px rgba(229, 193, 88, 0.3);
+}
+
+.bg3-hotbar-slot.is-equipped {
+    border: 2px solid #e5c158;
+    background: linear-gradient(180deg, rgba(65, 48, 20, 0.95), rgba(30, 20, 10, 0.98));
+    box-shadow: 0 0 16px rgba(229, 193, 88, 0.5), inset 0 0 8px rgba(229, 193, 88, 0.25);
+    animation: hotbarEquippedPulse 2s infinite ease-in-out;
+}
+
+@keyframes hotbarEquippedPulse {
+    0%, 100% {
+        border-color: #e5c158;
+        box-shadow: 0 0 14px rgba(229, 193, 88, 0.45);
+    }
+    50% {
+        border-color: #ffeaa7;
+        box-shadow: 0 0 22px rgba(229, 193, 88, 0.7);
+    }
+}
+
+.bg3-hotbar-slot-icon {
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bg3-hotbar-slot-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.bg3-hotbar-slot-name {
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11px;
+    font-weight: 700;
+    color: #f1f2f6;
+    letter-spacing: 0.3px;
+}
+
+.bg3-hotbar-slot.is-equipped .bg3-hotbar-slot-name {
+    color: #ffeaa7;
+}
+
+.bg3-hotbar-slot-meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: #a4b0be;
+}
+
+.bg3-hotbar-slot-dice {
+    color: #e5c158;
+    font-weight: 600;
+}
+
+.bg3-hotbar-slot-badge {
+    background: rgba(229, 193, 88, 0.2);
+    border: 1px solid rgba(229, 193, 88, 0.3);
+    border-radius: 4px;
+    padding: 0 3px;
+    font-size: 9px;
+    color: #f1c40f;
+}
+
+.bg3-hotbar-empty-notice {
+    font-size: 11px;
+    color: #a4b0be;
+    font-style: italic;
+    padding: 6px 12px;
+}
+
+.bg3-hotbar-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: linear-gradient(180deg, rgba(40, 30, 20, 0.8), rgba(20, 15, 10, 0.9));
+    border: 1px solid rgba(229, 193, 88, 0.35);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text-gold, #e5c158);
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.bg3-hotbar-action-btn:hover {
+    background: rgba(229, 193, 88, 0.2);
+    border-color: var(--text-gold, #e5c158);
+    color: #fff;
+}
+
+/* ==================== ASSIGNED ATTACKS (LOADOUT) EDITOR UI ==================== */
+
+.token-assigned-attacks-section {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(229, 193, 88, 0.2);
+}
+
+.token-assigned-attacks-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.token-assigned-attacks-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: var(--text-gold, #e5c158);
+    font-family: var(--font-title, 'Cinzel', serif);
+    letter-spacing: 0.5px;
+    margin: 0;
+}
+
+.token-assigned-attacks-hint {
+    font-size: 10px;
+    color: #888;
+    font-style: italic;
+}
+
+.assigned-attacks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 6px;
+    max-height: 120px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.assigned-attack-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    padding: 3px 6px;
+    font-size: 11px;
+    color: #ddd;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+
+.assigned-attack-item:hover {
+    background: rgba(229, 193, 88, 0.15);
+    border-color: rgba(229, 193, 88, 0.4);
+}
+
+.assigned-attack-item.is-selected {
+    background: rgba(229, 193, 88, 0.22);
+    border-color: rgba(229, 193, 88, 0.7);
+    color: #ffeaa7;
+    font-weight: 600;
+}
+
+.assigned-attack-item input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+    accent-color: #e5c158;
+}
+
+.assigned-attack-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.assigned-attack-stat {
+    font-size: 9px;
+    color: #e5c158;
+    font-weight: bold;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 1px 3px;
+    border-radius: 3px;
 }

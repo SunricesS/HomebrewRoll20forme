@@ -52,6 +52,43 @@
                 <div class="bg3-combat-decor-right"></div>
             </div>
 
+            <!-- ==================== BG3 COMBAT BOTTOM HOTBAR (AKSIYON & SALDIRI BARI) ==================== -->
+            <div id="bg3-bottom-hotbar" class="bg3-hotbar-container hidden">
+                <div class="bg3-hotbar-decor-left"></div>
+                <div class="bg3-hotbar-inner">
+                    <!-- Aktif Karakter Portresi & Bilgi -->
+                    <div class="bg3-hotbar-portrait-section" id="bg3-hotbar-portrait-section" title="Sırası Gelen Karakter">
+                        <div class="bg3-hotbar-avatar-wrap" id="bg3-hotbar-avatar-wrap">
+                            <!-- JS ile avatar / harf render edilir -->
+                        </div>
+                        <div class="bg3-hotbar-char-meta">
+                            <span class="bg3-hotbar-char-name" id="bg3-hotbar-char-name">Karakter</span>
+                            <span class="bg3-hotbar-char-turn-badge">⚔️ Aktif Sıra</span>
+                        </div>
+                    </div>
+
+                    <div class="bg3-hotbar-divider"></div>
+
+                    <!-- Atanmış Saldırı Slotları Şeridi -->
+                    <div class="bg3-hotbar-slots-wrapper" id="bg3-hotbar-slots-wrapper">
+                        <div class="bg3-hotbar-slots-track" id="bg3-hotbar-slots-track">
+                            <!-- JS ile saldırı kartları (slot butonları) dinamik doldurulur -->
+                        </div>
+                    </div>
+
+                    <div class="bg3-hotbar-divider"></div>
+
+                    <!-- Hızlı Aksiyon / Saldırı Paneli Aç Butonu -->
+                    <div class="bg3-hotbar-actions-end">
+                        <button type="button" class="bg3-hotbar-action-btn" id="bg3-hotbar-open-panel-btn" title="⚔️ Saldırı Panelini Aç / Odakla">
+                            <span class="hotbar-action-icon">⚔️</span>
+                            <span class="hotbar-action-text">Saldırı Paneli</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="bg3-hotbar-decor-right"></div>
+            </div>
+
             <!-- Sol Alt Tetikleyici Buton -->
             <button id="combat-mode-toggle-btn" class="combat-mode-floating-btn" title="Combat Modunu Aç / Kapat (Kısayol: C)">
                 <span class="combat-btn-icon">⚔️</span>
@@ -187,10 +224,33 @@
                             <div class="form-group"><label>Lvl3:</label><input type="number" id="dm-edit-spell-lvl3" min="0"></div>
                             <div class="form-group"><label>Lvl4:</label><input type="number" id="dm-edit-spell-lvl4" min="0"></div>
                         </div>
+
+                        <!-- Aktif Durum Efektleri -->
+                        <div class="token-status-effects-section">
+                            <div class="token-status-effects-header">
+                                <label class="token-status-effects-label">✨ Aktif Durum Efektleri:</label>
+                                <button type="button" id="dm-player-clear-all-effects" class="atk-mini-btn token-clear-all-effects-btn" style="display:none;">Tümünü Kaldır</button>
+                            </div>
+                            <div id="dm-player-active-effects" class="status-target-effects-list">
+                                <!-- JS ile doldurulacak -->
+                            </div>
+                        </div>
+
+                        <!-- Atanmış Saldırılar (Attack Loadout) -->
+                        <div class="token-assigned-attacks-section">
+                            <div class="token-assigned-attacks-header">
+                                <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
+                                <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin</span>
+                            </div>
+                            <div id="dm-player-assigned-attacks" class="assigned-attacks-grid">
+                                <!-- JS ile tüm presetler checkbox listesi olarak doldurulacak -->
+                            </div>
+                        </div>
+
                         <div class="button-group button-group-row">
                             <button type="button" id="dm-edit-save-btn" class="btn success action-btn dm-edit-action-btn" disabled>Kayıtlı</button>
                             <button type="button" class="btn back-btn action-btn dm-edit-action-btn"
-                                onclick="if(typeof flushDmEdit === 'function') flushDmEdit(); document.getElementById('dm-player-editor').classList.add('hidden')">Kapat</button>
+                                onclick="if(typeof flushDmEdit === 'function') flushDmEdit(); document.getElementById('dm-player-editor').classList.add('hidden'); editingPlayerId = null;">Kapat</button>
                         </div>
                     </form>
                 </div>
@@ -559,6 +619,29 @@
                 <div class="form-group"><label>WIS:</label><input type="number" id="dm-marker-edit-wis" placeholder="0"><input type="number" id="dm-marker-edit-wis-bonus" placeholder="B" style="margin-top:2px;"></div>
                 <div class="form-group"><label>CHR:</label><input type="number" id="dm-marker-edit-chr" placeholder="0"><input type="number" id="dm-marker-edit-chr-bonus" placeholder="B" style="margin-top:2px;"></div>
             </div>
+
+            <!-- Aktif Durum Efektleri -->
+            <div class="token-status-effects-section">
+                <div class="token-status-effects-header">
+                    <label class="token-status-effects-label">✨ Aktif Durum Efektleri:</label>
+                    <button type="button" id="dm-marker-clear-all-effects" class="atk-mini-btn token-clear-all-effects-btn" style="display:none;">Tümünü Kaldır</button>
+                </div>
+                <div id="dm-marker-active-effects" class="status-target-effects-list">
+                    <!-- JS ile doldurulacak -->
+                </div>
+            </div>
+
+            <!-- Atanmış Saldırılar (Attack Loadout) -->
+            <div class="token-assigned-attacks-section">
+                <div class="token-assigned-attacks-header">
+                    <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
+                    <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin</span>
+                </div>
+                <div id="dm-marker-assigned-attacks" class="assigned-attacks-grid">
+                    <!-- JS ile tüm presetler checkbox listesi olarak doldurulacak -->
+                </div>
+            </div>
+
             <div class="button-group button-group-row" style="margin-top: 12px;">
                 <button id="btn-save-marker-edit" class="btn success action-btn dm-edit-action-btn">Kaydet</button>
                 <button id="btn-cancel-marker-edit" class="btn back-btn action-btn dm-edit-action-btn">İptal</button>

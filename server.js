@@ -590,6 +590,9 @@ app.put('/api/characters/:charId', async (req, res) => {
     if (ac !== undefined) updates.ac = clampNumber(ac, 0, 50);
     if (ac_bonus !== undefined) updates.ac_bonus = clampNumber(ac_bonus, 0, 50);
     if (corruption !== undefined) updates.corruption = clampNumber(corruption, 0, 100);
+    if (req.body.assignedAttacks !== undefined && Array.isArray(req.body.assignedAttacks)) {
+      updates.assignedAttacks = req.body.assignedAttacks;
+    }
     if (spell_slots !== undefined) {
       updates.spell_slots = {
         lvl1: clampNumber(spell_slots?.lvl1, 0, 20),
@@ -933,11 +936,21 @@ function removeStatusEffectFromTarget(targetType, targetId, effectId) {
   if (!targetId || !effectId) return false;
 
   let effectName = 'Efekt';
+  let targetName = 'Hedef';
 
-  if (targetType === 'marker' && markers[targetId] && markers[targetId].activeEffects) {
-    const eff = markers[targetId].activeEffects.find(e => e.id === effectId);
-    if (eff) effectName = eff.name;
-    markers[targetId].activeEffects = markers[targetId].activeEffects.filter(e => e.id !== effectId);
+  const isMarker = targetType === 'marker' || !!markers[targetId];
+
+  if (isMarker && markers[targetId]) {
+    targetName = markers[targetId].name || 'Token';
+    if (!markers[targetId].activeEffects) markers[targetId].activeEffects = [];
+
+    if (effectId === 'all') {
+      markers[targetId].activeEffects = [];
+    } else {
+      const eff = markers[targetId].activeEffects.find(e => e.id === effectId);
+      if (eff) effectName = eff.name;
+      markers[targetId].activeEffects = markers[targetId].activeEffects.filter(e => e.id !== effectId);
+    }
     io.emit('updateMarkerData', markers[targetId]);
   } else {
     const playerEntry = Object.entries(players).find(
@@ -945,13 +958,20 @@ function removeStatusEffectFromTarget(targetType, targetId, effectId) {
     );
     if (playerEntry) {
       const [socketId, p] = playerEntry;
-      if (p.activeEffects) {
-        const eff = p.activeEffects.find(e => e.id === effectId);
-        if (eff) effectName = eff.name;
-        p.activeEffects = p.activeEffects.filter(e => e.id !== effectId);
-      }
-      if (p.character && p.character.activeEffects) {
-        p.character.activeEffects = p.character.activeEffects.filter(e => e.id !== effectId);
+      targetName = p.character?.name || p.username || 'Oyuncu';
+
+      if (effectId === 'all') {
+        p.activeEffects = [];
+        if (p.character) p.character.activeEffects = [];
+      } else {
+        if (p.activeEffects) {
+          const eff = p.activeEffects.find(e => e.id === effectId);
+          if (eff) effectName = eff.name;
+          p.activeEffects = p.activeEffects.filter(e => e.id !== effectId);
+        }
+        if (p.character && p.character.activeEffects) {
+          p.character.activeEffects = p.character.activeEffects.filter(e => e.id !== effectId);
+        }
       }
       io.emit('tokenEffectsUpdated', { id: socketId, characterId: p.character?.id, activeEffects: p.activeEffects || [] });
     }
@@ -960,11 +980,27 @@ function removeStatusEffectFromTarget(targetType, targetId, effectId) {
   if (combatState.active) {
     const c = combatState.combatants.find(item => item.id === targetId || item.characterId === targetId);
     if (c && c.activeEffects) {
-      const eff = c.activeEffects.find(e => e.id === effectId);
-      if (eff) effectName = eff.name;
-      c.activeEffects = c.activeEffects.filter(e => e.id !== effectId);
+      if (effectId === 'all') {
+        c.activeEffects = [];
+      } else {
+        const eff = c.activeEffects.find(e => e.id === effectId);
+        if (eff) effectName = eff.name;
+        c.activeEffects = c.activeEffects.filter(e => e.id !== effectId);
+      }
       io.emit('combatStateUpdated', combatState);
     }
+  }
+
+  if (effectId === 'all') {
+    io.emit('logMessage', {
+      message: `✨ [${targetName}]: Tüm durum efektleri kaldırıldı.`,
+      color: '#95a5a6'
+    });
+  } else {
+    io.emit('logMessage', {
+      message: `✨ [${effectName}]: ${targetName} üzerinden kaldırıldı.`,
+      color: '#95a5a6'
+    });
   }
 
   return true;
@@ -1128,7 +1164,8 @@ function calculateInitiativeForCombat() {
       roll: roll,
       total: total,
       isDead: hpCurrent !== null && hpCurrent <= 0,
-      activeEffects: p.activeEffects || p.character?.activeEffects || []
+      activeEffects: p.activeEffects || p.character?.activeEffects || [],
+      assignedAttacks: p.assignedAttacks || p.character?.assignedAttacks || []
     });
   });
 
@@ -1158,7 +1195,8 @@ function calculateInitiativeForCombat() {
       roll: roll,
       total: total,
       isDead: hpCurrent !== null && hpCurrent <= 0,
-      activeEffects: m.activeEffects || []
+      activeEffects: m.activeEffects || [],
+      assignedAttacks: m.assignedAttacks || []
     });
   });
 
@@ -1323,7 +1361,8 @@ io.on('connection', (socket) => {
         chr_bonus: clampNumber(markerData.stats?.chr_bonus, 0, 30),
       } : null,
       size: clampNumber(markerData.size || 50, 10, 500),
-      isMarker: true
+      isMarker: true,
+      assignedAttacks: Array.isArray(markerData.assignedAttacks) ? markerData.assignedAttacks : []
     };
     markers[markerId] = newMarker;
     io.emit('newMarker', newMarker);
@@ -1349,7 +1388,9 @@ io.on('connection', (socket) => {
         chrMod,
         roll,
         total,
-        isDead: newMarker.hp !== null && newMarker.hp <= 0
+        isDead: newMarker.hp !== null && newMarker.hp <= 0,
+        activeEffects: newMarker.activeEffects || [],
+        assignedAttacks: newMarker.assignedAttacks || []
       });
       io.emit('combatStateUpdated', combatState);
     }
@@ -1391,6 +1432,9 @@ io.on('connection', (socket) => {
     if (data.ac_bonus !== undefined || data.acBonus !== undefined) {
       m.ac_bonus = clampNumber(data.ac_bonus ?? data.acBonus, 0, 50);
     }
+    if (data.assignedAttacks !== undefined && Array.isArray(data.assignedAttacks)) {
+      m.assignedAttacks = data.assignedAttacks;
+    }
     if (data.stats && typeof data.stats === 'object') {
       m.stats = {
         str: clampNumber(data.stats.str, 0, 30),
@@ -1419,6 +1463,7 @@ io.on('connection', (socket) => {
         if (data.imgUrl !== undefined) c.imgUrl = m.imgUrl;
         if (data.hp !== undefined) c.hpCurrent = m.hp;
         if (data.maxHp !== undefined) c.hpMax = m.maxHp;
+        if (data.assignedAttacks !== undefined) c.assignedAttacks = m.assignedAttacks;
         c.isDead = m.hp !== null && m.hp <= 0;
       }
       io.emit('combatStateUpdated', combatState);
@@ -1488,6 +1533,9 @@ io.on('connection', (socket) => {
     if (data.ac !== undefined) updates.ac = clampNumber(data.ac, 0, 50);
     if (data.ac_bonus !== undefined) updates.ac_bonus = clampNumber(data.ac_bonus, 0, 50);
     if (data.corruption !== undefined) updates.corruption = clampNumber(data.corruption, 0, 100);
+    if (data.assignedAttacks !== undefined && Array.isArray(data.assignedAttacks)) {
+      updates.assignedAttacks = data.assignedAttacks;
+    }
     if (data.spell_slots) {
       updates.spell_slots = {
         lvl1: clampNumber(data.spell_slots.lvl1, 0, 20),
@@ -1497,10 +1545,16 @@ io.on('connection', (socket) => {
       };
     }
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('characters')
       .update(updates)
       .eq('id', data.characterId);
+
+    if (error && error.message && error.message.includes('column') && updates.assignedAttacks !== undefined) {
+      const { assignedAttacks, ...safeUpdates } = updates;
+      const retry = await supabase.from('characters').update(safeUpdates).eq('id', data.characterId);
+      error = retry.error;
+    }
 
     if (error) {
       console.error("Supabase güncellerken hata:", error);
@@ -1512,6 +1566,14 @@ io.on('connection', (socket) => {
       Object.assign(players[data.id].character, updates);
       io.emit('characterUpdated', { id: data.id, updates: updates });
       syncCombatantHp(data.id, updates.hp_current, updates.hp_max);
+
+      if (combatState.active) {
+        const c = combatState.combatants.find(item => item.id === data.id || item.characterId === data.characterId);
+        if (c && updates.assignedAttacks !== undefined) {
+          c.assignedAttacks = updates.assignedAttacks;
+          io.emit('combatStateUpdated', combatState);
+        }
+      }
     }
   });
 
