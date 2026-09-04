@@ -1194,7 +1194,7 @@
       const notes = [];
       if (result.statusNotes?.attackerBlind) notes.push('👁️ Körlük (Dezavantaj)');
       if (result.statusNotes?.targetPrepared) notes.push('🎯 Hedef Hazır (Dezavantaj)');
-      if (result.statusNotes?.targetParalyzed) notes.push('⚡ Hedef Felçli (Kesin Kritik)');
+      if (result.statusNotes?.targetParalyzed) notes.push('⚡ Hedef Felçli (Kesin Kritik 2x)');
       if (result.statusNotes?.halfDamageOnMiss) notes.push('🛡️ Iska: ½ Hasar');
       const notesLabel = notes.length > 0 ? ` [${notes.join(', ')}]` : '';
 
@@ -1370,13 +1370,110 @@
     return parts.join(' | ') || 'Havuz boş';
   }
 
+  let catalogSearchTerm = '';
+
+  function updateBuilderModeBanner(preset = null) {
+    const banner = document.getElementById('atk-builder-mode-banner');
+    const text = document.getElementById('atk-builder-mode-text');
+    const resetBtn = document.getElementById('btn-builder-reset');
+    const saveBtn = document.getElementById('btn-save-atk-preset');
+
+    if (preset && preset.id) {
+      if (banner) banner.className = 'atk-builder-mode-banner is-editing';
+      if (text) text.innerHTML = `✏️ <strong>Preset Düzenleniyor:</strong> "${escapeHtml(preset.name)}"`;
+      if (resetBtn) resetBtn.style.display = 'inline-block';
+      if (saveBtn) saveBtn.textContent = '💾 Değişiklikleri Güncelle';
+    } else {
+      if (banner) banner.className = 'atk-builder-mode-banner';
+      if (text) text.innerHTML = `✨ <strong>Yeni Saldırı Preseti Yarat</strong> <span style="font-size:11px; opacity:0.8;">(Sınırsız)</span>`;
+      if (resetBtn) resetBtn.style.display = 'none';
+      if (saveBtn) saveBtn.textContent = '💾 Preseti Kaydet';
+    }
+  }
+
+  function resetPresetBuilder() {
+    const idInput = document.getElementById('atk-builder-id');
+    if (idInput) idInput.value = '';
+
+    const nameInput = document.getElementById('atk-builder-name');
+    if (nameInput) nameInput.value = '';
+
+    const typeSelect = document.getElementById('atk-builder-type');
+    if (typeSelect) typeSelect.value = 'physical';
+
+    const statSelect = document.getElementById('atk-builder-stat');
+    if (statSelect) statSelect.value = 'STR';
+
+    const spellLvlSelect = document.getElementById('atk-builder-spell-level');
+    if (spellLvlSelect) spellLvlSelect.value = '1';
+
+    const countInput = document.getElementById('atk-builder-count');
+    if (countInput) countInput.value = '1';
+
+    const halfMissCheck = document.getElementById('atk-builder-half-miss');
+    if (halfMissCheck) halfMissCheck.checked = false;
+
+    const descInput = document.getElementById('atk-builder-desc');
+    if (descInput) descInput.value = '';
+
+    // Tüm zar havuzu steppers sıfırla
+    ['phys', 'elem1', 'elem2', 'spell'].forEach(prefix => {
+      [4, 6, 8, 10, 12, 20].forEach(sides => {
+        const el = document.getElementById(`atk-bpool-${prefix}-d${sides}`);
+        if (el) el.value = 0;
+      });
+      const bonusEl = document.getElementById(`atk-bpool-${prefix}-bonus`);
+      if (bonusEl) bonusEl.value = 0;
+    });
+
+    // Status effect dropdown sıfırla
+    populateStatusEffectsSelect();
+    const statusSelect = document.getElementById('atk-builder-status-effect');
+    if (statusSelect) statusSelect.value = '';
+
+    updateBuilderModeBanner(null);
+  }
+
+  function openNewPresetBuilder() {
+    resetPresetBuilder();
+    const builderTabBtn = document.querySelector('.atk-tab-btn[data-tab="builder"]');
+    if (builderTabBtn) builderTabBtn.click();
+  }
+
   function renderAttackPresetsCatalog() {
     const grid = document.getElementById('atk-presets-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
 
-    attackPresetsCache.forEach(preset => {
+    const countBadge = document.getElementById('atk-catalog-count-badge');
+    if (countBadge) {
+      countBadge.textContent = `${attackPresetsCache.length} Preset`;
+    }
+
+    const term = (catalogSearchTerm || '').toLowerCase().trim();
+    const filtered = attackPresetsCache.filter(preset => {
+      if (!term) return true;
+      const matchName = (preset.name || '').toLowerCase().includes(term);
+      const matchStat = (preset.stat || '').toLowerCase().includes(term);
+      const matchType = (preset.attackType || '').toLowerCase().includes(term);
+      const matchDesc = (preset.description || '').toLowerCase().includes(term);
+      return matchName || matchStat || matchType || matchDesc;
+    });
+
+    if (filtered.length === 0) {
+      grid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 28px 10px; color: #888;">
+          <p style="margin: 0 0 10px 0; font-size: 13px;">${term ? `"${escapeHtml(term)}" ile eşleşen saldırı preseti bulunamadı.` : 'Henüz kayıtlı saldırı preseti yok.'}</p>
+          <button type="button" class="btn primary action-btn" id="btn-empty-create-preset">+ Yeni Preset Yarat</button>
+        </div>
+      `;
+      const emptyBtn = grid.querySelector('#btn-empty-create-preset');
+      if (emptyBtn) emptyBtn.addEventListener('click', openNewPresetBuilder);
+      return;
+    }
+
+    filtered.forEach(preset => {
       const card = document.createElement('div');
       card.className = 'atk-preset-card';
       if (activeEquippedPreset && activeEquippedPreset.id === preset.id) {
@@ -1406,6 +1503,7 @@
         <div class="atk-preset-card-actions">
           <button type="button" class="btn-equip-preset" title="Bu Saldırıyı Kuşan">⚡ Kuşan</button>
           <button type="button" class="btn-edit-preset" title="Düzenle">✏️</button>
+          <button type="button" class="btn-duplicate-preset" title="Kopyala / Çoğalt">📋</button>
           <button type="button" class="btn-delete-atk-preset" title="Sil">🗑️</button>
         </div>
       `;
@@ -1419,6 +1517,11 @@
       // Düzenle butonu
       card.querySelector('.btn-edit-preset').addEventListener('click', () => {
         editPresetInBuilder(preset);
+      });
+
+      // Çoğalt (Duplicate) butonu
+      card.querySelector('.btn-duplicate-preset').addEventListener('click', () => {
+        duplicatePresetInBuilder(preset);
       });
 
       // Sil butonu
@@ -1507,9 +1610,28 @@
       }
     }
 
+    updateBuilderModeBanner(preset);
+
     // Builder Sekmesini Aktif Et
     const builderTabBtn = document.querySelector('.atk-tab-btn[data-tab="builder"]');
-    if (builderTabBtn) builderTabBtn.click();
+    if (builderTabBtn) {
+      document.querySelectorAll('.atk-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.atk-tab-pane').forEach(p => p.classList.remove('active'));
+      builderTabBtn.classList.add('active');
+      const pane = document.getElementById('atk-tab-builder');
+      if (pane) pane.classList.add('active');
+    }
+  }
+
+  function duplicatePresetInBuilder(preset) {
+    if (!preset) return;
+    editPresetInBuilder(preset);
+    // Yeni bağımsız kopya oluşturmak için ID'yi boşalt ve isme (Kopya) ekle
+    const idInput = document.getElementById('atk-builder-id');
+    if (idInput) idInput.value = '';
+    const nameInput = document.getElementById('atk-builder-name');
+    if (nameInput) nameInput.value = `${preset.name} (Kopya)`;
+    updateBuilderModeBanner(null);
   }
 
   function readPresetFromBuilder() {
@@ -1554,7 +1676,7 @@
     }
 
     return {
-      id: id || ('atk_custom_' + Date.now()),
+      id: id || ('atk_custom_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
       name,
       stat,
       attackType,
@@ -1582,6 +1704,9 @@
     else attackPresetsCache.push(preset);
 
     populatePresetSelect();
+
+    // Formu sıfırla ki sonraki kayıtlar bunun ID'si üzerine yazmasın!
+    resetPresetBuilder();
 
     if (equipAfter) {
       equipPreset(preset, true);
@@ -1613,14 +1738,32 @@
   document.getElementById('btn-close-attack-presets')?.addEventListener('click', closeAttackPresetsModal);
   document.getElementById('btn-cancel-attack-presets')?.addEventListener('click', closeAttackPresetsModal);
 
+  // Katalog arama & Yeni preset butonları
+  document.getElementById('atk-catalog-search')?.addEventListener('input', (e) => {
+    catalogSearchTerm = e.target.value;
+    renderAttackPresetsCatalog();
+  });
+  document.getElementById('btn-catalog-new-preset')?.addEventListener('click', openNewPresetBuilder);
+  document.getElementById('btn-builder-reset')?.addEventListener('click', resetPresetBuilder);
+
   // Modal Sekmeleri
   document.querySelectorAll('.atk-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const tabName = btn.dataset.tab;
+
+      // Eğer kullanıcı doğrudan Builder tabına tıkladıysa ve şu an bir düzenleme ID'si varsa,
+      // düzenlemeyi sıfırla ki yanlışlıkla eski presetin üzerine yazmasın
+      if (tabName === 'builder' && btn.id === 'btn-tab-atk-builder') {
+        const idVal = document.getElementById('atk-builder-id')?.value;
+        if (idVal) {
+          resetPresetBuilder();
+        }
+      }
+
       document.querySelectorAll('.atk-tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.atk-tab-pane').forEach(p => p.classList.remove('active'));
 
       btn.classList.add('active');
-      const tabName = btn.dataset.tab;
       const pane = document.getElementById(`atk-tab-${tabName}`);
       if (pane) pane.classList.add('active');
 
@@ -1694,6 +1837,8 @@
   };
 
   window.__webdnd_openAttackPresetsModal = openAttackPresetsModal;
+  window.__webdnd_openNewPresetBuilder = openNewPresetBuilder;
+  window.__webdnd_resetPresetBuilder = resetPresetBuilder;
 
   // === SOCKET SENKRONİZASYON ===
   if (typeof socket !== 'undefined') {

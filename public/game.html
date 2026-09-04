@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700;800;900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=MedievalSharp&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=9">
 </head>
 
 <body>
@@ -239,8 +239,18 @@
                         <!-- Atanmış Saldırılar (Attack Loadout) -->
                         <div class="token-assigned-attacks-section">
                             <div class="token-assigned-attacks-header">
-                                <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
-                                <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin</span>
+                                <div class="token-assigned-attacks-title-row">
+                                    <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
+                                    <span id="dm-player-assigned-count" class="token-assigned-count-badge">(0 Seçili)</span>
+                                </div>
+                                <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin (Sınırsız)</span>
+                            </div>
+                            <div class="assigned-attacks-toolbar">
+                                <input type="text" id="dm-player-assigned-search" placeholder="Saldırı ara..." class="assigned-search-input">
+                                <div class="assigned-quick-actions">
+                                    <button type="button" id="dm-player-assigned-select-all" class="atk-mini-btn">Tümünü Seç</button>
+                                    <button type="button" id="dm-player-assigned-clear-all" class="atk-mini-btn">Temizle</button>
+                                </div>
                             </div>
                             <div id="dm-player-assigned-attacks" class="assigned-attacks-grid">
                                 <!-- JS ile tüm presetler checkbox listesi olarak doldurulacak -->
@@ -634,8 +644,18 @@
             <!-- Atanmış Saldırılar (Attack Loadout) -->
             <div class="token-assigned-attacks-section">
                 <div class="token-assigned-attacks-header">
-                    <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
-                    <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin</span>
+                    <div class="token-assigned-attacks-title-row">
+                        <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
+                        <span id="dm-marker-assigned-count" class="token-assigned-count-badge">(0 Seçili)</span>
+                    </div>
+                    <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin (Sınırsız)</span>
+                </div>
+                <div class="assigned-attacks-toolbar">
+                    <input type="text" id="dm-marker-assigned-search" placeholder="Saldırı ara..." class="assigned-search-input">
+                    <div class="assigned-quick-actions">
+                        <button type="button" id="dm-marker-assigned-select-all" class="atk-mini-btn">Tümünü Seç</button>
+                        <button type="button" id="dm-marker-assigned-clear-all" class="atk-mini-btn">Temizle</button>
+                    </div>
                 </div>
                 <div id="dm-marker-assigned-attacks" class="assigned-attacks-grid">
                     <!-- JS ile tüm presetler checkbox listesi olarak doldurulacak -->
@@ -746,7 +766,7 @@
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-paralyzed">
-                                    <span>⚡ Felç <small style="color:#bdc3c7;">(Gelen tüm saldırılar kesin vurur & kritik)</small></span>
+                                    <span>⚡ Felç <small style="color:#bdc3c7;">(Gelen tüm saldırılar kesin vurur & 2x kritik)</small></span>
                                 </label>
                             </div>
 
@@ -821,6 +841,14 @@
 
             <!-- Tab 1: Preset Kataloğu Listesi -->
             <div id="atk-tab-list" class="atk-tab-pane active">
+                <div class="atk-catalog-toolbar">
+                    <div class="atk-catalog-search-wrap">
+                        <span class="atk-catalog-search-icon">🔍</span>
+                        <input type="text" id="atk-catalog-search" placeholder="Presetlerde ara (ad, stat, tür)..." class="atk-search-input">
+                    </div>
+                    <span id="atk-catalog-count-badge" class="atk-count-badge">0 Preset</span>
+                    <button type="button" id="btn-catalog-new-preset" class="btn primary action-btn atk-new-preset-btn">+ Yeni Preset Ekle</button>
+                </div>
                 <div class="atk-presets-grid" id="atk-presets-grid">
                     <!-- JS ile dinamik doldurulacak -->
                 </div>
@@ -828,6 +856,10 @@
 
             <!-- Tab 2: Preset Creator Builder Formu -->
             <div id="atk-tab-builder" class="atk-tab-pane">
+                <div id="atk-builder-mode-banner" class="atk-builder-mode-banner">
+                    <span id="atk-builder-mode-text">✨ Yeni Saldırı Preseti Yarat (Sınırsız)</span>
+                    <button type="button" id="btn-builder-reset" class="atk-mini-btn btn-builder-cancel-edit" style="display:none;">✕ İptal / Yeni Presete Dön</button>
+                </div>
                 <div class="atk-builder-form">
                     <input type="hidden" id="atk-builder-id" value="">
                     
@@ -973,9 +1005,9 @@
 
     <!-- Socket.io istemci scripti -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/client.js?v=8"></script>
-    <script src="js/attack-panel.js?v=4"></script>
-    <script src="js/combat-tracker.js?v=3"></script>
+    <script src="js/client.js?v=9"></script>
+    <script src="js/attack-panel.js?v=5"></script>
+    <script src="js/combat-tracker.js?v=4"></script>
     <script>
         // Mobile sidebar toggle
         (function() {

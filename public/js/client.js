@@ -207,11 +207,29 @@ socket.on('removeMarker', (markerId) => {
 });
 
 socket.on('updateMarkerData', (markerData) => {
+  const existingMarker = window.__webdnd_markers[markerData.id];
+  const t = tokens[markerData.id];
+  if (t && t.style.left && (markerData.x == null || isNaN(markerData.x))) {
+    markerData.x = parseFloat(t.style.left);
+    markerData.y = parseFloat(t.style.top);
+  } else if (existingMarker && (markerData.x == null || isNaN(markerData.x))) {
+    markerData.x = existingMarker.x;
+    markerData.y = existingMarker.y;
+  }
   window.__webdnd_markers[markerData.id] = markerData;
   updateToken(markerData);
   if (editingMarkerId === markerData.id) {
     renderMarkerEditorActiveEffects(markerData);
     renderMarkerAssignedAttacks(markerData);
+  }
+});
+
+socket.on('attackPresetsUpdated', () => {
+  if (typeof editingPlayerId !== 'undefined' && editingPlayerId && allPlayers && allPlayers[editingPlayerId]) {
+    renderPlayerAssignedAttacks(allPlayers[editingPlayerId]);
+  }
+  if (typeof editingMarkerId !== 'undefined' && editingMarkerId && window.__webdnd_markers && window.__webdnd_markers[editingMarkerId]) {
+    renderMarkerAssignedAttacks(window.__webdnd_markers[editingMarkerId]);
   }
 });
 
@@ -321,6 +339,14 @@ socket.on('updateTokenPosition', (position) => {
     tokens[position.id].style.left = position.x + 'px';
     tokens[position.id].style.top = position.y + 'px';
   }
+  if (allPlayers[position.id]) {
+    allPlayers[position.id].x = position.x;
+    allPlayers[position.id].y = position.y;
+  }
+  if (window.__webdnd_markers && window.__webdnd_markers[position.id]) {
+    window.__webdnd_markers[position.id].x = position.x;
+    window.__webdnd_markers[position.id].y = position.y;
+  }
 });
 
 // ============================================================
@@ -331,9 +357,14 @@ socket.on('updateTokenPosition', (position) => {
  * Yeni bir token DOM elemanı oluşturur ve haritaya ekler.
  */
 function addToken(playerData) {
-  // Eğer zaten varsa var olanı temizle (klon engelleme)
+  // Eğer zaten varsa var olanı temizle (klon engelleme) ve eski pozisyonu koru
   if (tokens[playerData.id]) {
-    tokens[playerData.id].remove();
+    const existing = tokens[playerData.id];
+    const prevX = parseFloat(existing.style.left);
+    const prevY = parseFloat(existing.style.top);
+    if (!isNaN(prevX) && (playerData.x == null || isNaN(playerData.x))) playerData.x = prevX;
+    if (!isNaN(prevY) && (playerData.y == null || isNaN(playerData.y))) playerData.y = prevY;
+    existing.remove();
     delete tokens[playerData.id];
   }
 
@@ -359,8 +390,12 @@ function addToken(playerData) {
     t.classList.add('my-token');
   }
 
-  // Pozisyon, Renk, Boyut
-  applyTokenStyles(t, playerData);
+  // Koordinat yoksa varsayılan 50 ata
+  if (playerData.x == null || isNaN(playerData.x)) playerData.x = 50;
+  if (playerData.y == null || isNaN(playerData.y)) playerData.y = 50;
+
+  // Pozisyon, Renk, Boyut (yeni eklenirken pozisyonu uygula)
+  applyTokenStyles(t, playerData, true);
 
   // İçine baş harf koyalım
   const initial = getTokenInitial(playerData);
@@ -452,6 +487,12 @@ function updateToken(playerData) {
     return;
   }
 
+  // Mevcut DOM koordinatlarını playerData ile senkronize tut
+  const curLeft = parseFloat(t.style.left);
+  const curTop = parseFloat(t.style.top);
+  if (!isNaN(curLeft)) playerData.x = curLeft;
+  if (!isNaN(curTop)) playerData.y = curTop;
+
   if (playerData.character?.id) {
     t.dataset.characterId = playerData.character.id;
   }
@@ -468,8 +509,8 @@ function updateToken(playerData) {
     }
   }
 
-  // Stil güncelle
-  applyTokenStyles(t, playerData);
+  // Stil güncelle (POZİSYONU SIFIRLAMADAN: updatePosition = false)
+  applyTokenStyles(t, playerData, false);
 
   // Başlık / İsim güncelle
   if (playerData.isMarker) {
@@ -553,9 +594,15 @@ function updateTokenStatusBadges(tokenEl, playerData) {
 /**
  * Token DOM elemanına pozisyon, renk ve boyut stillerini uygular.
  */
-function applyTokenStyles(t, data) {
-  t.style.left = data.x + 'px';
-  t.style.top = data.y + 'px';
+function applyTokenStyles(t, data, updatePosition = true) {
+  if (updatePosition) {
+    if (data.x !== undefined && data.x !== null && !isNaN(data.x)) {
+      t.style.left = data.x + 'px';
+    }
+    if (data.y !== undefined && data.y !== null && !isNaN(data.y)) {
+      t.style.top = data.y + 'px';
+    }
+  }
   t.style.borderColor = data.color || '#e74c3c';
 
   const size = data.size || 50;
@@ -568,6 +615,7 @@ function applyTokenStyles(t, data) {
     t.style.backgroundPosition = 'center';
     t.style.backgroundColor = 'transparent';
   } else {
+    t.style.backgroundImage = 'none';
     t.style.backgroundColor = data.color || '#e74c3c';
   }
 }
@@ -632,7 +680,18 @@ document.addEventListener('mousemove', (e) => {
   draggedToken.style.left = newX + 'px';
   draggedToken.style.top = newY + 'px';
 
-  throttledMovementEmit(draggedToken.dataset.id, newX, newY);
+  const id = draggedToken.dataset.id;
+  if (id) {
+    if (allPlayers[id]) {
+      allPlayers[id].x = newX;
+      allPlayers[id].y = newY;
+    }
+    if (window.__webdnd_markers && window.__webdnd_markers[id]) {
+      window.__webdnd_markers[id].x = newX;
+      window.__webdnd_markers[id].y = newY;
+    }
+    throttledMovementEmit(id, newX, newY);
+  }
 });
 
 document.addEventListener('touchmove', (e) => {
@@ -647,15 +706,58 @@ document.addEventListener('touchmove', (e) => {
   draggedToken.style.left = newX + 'px';
   draggedToken.style.top = newY + 'px';
 
-  throttledMovementEmit(draggedToken.dataset.id, newX, newY);
+  const id = draggedToken.dataset.id;
+  if (id) {
+    if (allPlayers[id]) {
+      allPlayers[id].x = newX;
+      allPlayers[id].y = newY;
+    }
+    if (window.__webdnd_markers && window.__webdnd_markers[id]) {
+      window.__webdnd_markers[id].x = newX;
+      window.__webdnd_markers[id].y = newY;
+    }
+    throttledMovementEmit(id, newX, newY);
+  }
 }, { passive: false });
 
 document.addEventListener('mouseup', () => {
+  if (isDragging && draggedToken) {
+    const id = draggedToken.dataset.id;
+    const finalX = parseFloat(draggedToken.style.left);
+    const finalY = parseFloat(draggedToken.style.top);
+    if (id && !isNaN(finalX) && !isNaN(finalY)) {
+      if (allPlayers[id]) {
+        allPlayers[id].x = finalX;
+        allPlayers[id].y = finalY;
+      }
+      if (window.__webdnd_markers && window.__webdnd_markers[id]) {
+        window.__webdnd_markers[id].x = finalX;
+        window.__webdnd_markers[id].y = finalY;
+      }
+      socket.emit('playerMovement', { id, x: finalX, y: finalY });
+    }
+  }
   isDragging = false;
   draggedToken = null;
 });
 
 document.addEventListener('touchend', () => {
+  if (isDragging && draggedToken) {
+    const id = draggedToken.dataset.id;
+    const finalX = parseFloat(draggedToken.style.left);
+    const finalY = parseFloat(draggedToken.style.top);
+    if (id && !isNaN(finalX) && !isNaN(finalY)) {
+      if (allPlayers[id]) {
+        allPlayers[id].x = finalX;
+        allPlayers[id].y = finalY;
+      }
+      if (window.__webdnd_markers && window.__webdnd_markers[id]) {
+        window.__webdnd_markers[id].x = finalX;
+        window.__webdnd_markers[id].y = finalY;
+      }
+      socket.emit('playerMovement', { id, x: finalX, y: finalY });
+    }
+  }
   isDragging = false;
   draggedToken = null;
 });
@@ -783,8 +885,18 @@ function openMarkerEditor(markerInput) {
   document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
 }
 
+let markerAssignedSearchTerm = '';
+
+function updateMarkerAssignedCountBadge(count, total) {
+  const badge = document.getElementById('dm-marker-assigned-count');
+  if (badge) {
+    badge.textContent = `(${count} / ${total} Seçili)`;
+    badge.classList.toggle('has-selected', count > 0);
+  }
+}
+
 /**
- * Marker düzenleme modalındaki atanmış saldırı presetlerini listeler ve seçim sunar.
+ * Marker düzenleme modalındaki atanmış saldırı presetlerini listeler ve seçim sunar (Sınırsız).
  */
 function renderMarkerAssignedAttacks(markerData) {
   const container = document.getElementById('dm-marker-assigned-attacks');
@@ -792,15 +904,70 @@ function renderMarkerAssignedAttacks(markerData) {
 
   container.innerHTML = '';
   const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+  if (!markerData) return;
   const currentMarker = (window.__webdnd_markers && window.__webdnd_markers[markerData.id]) || markerData;
   const assigned = currentMarker.assignedAttacks || [];
+
+  updateMarkerAssignedCountBadge(assigned.length, allPresets.length);
+
+  // Arama ve aksiyon butonlarını bağla
+  const searchInput = document.getElementById('dm-marker-assigned-search');
+  if (searchInput && !searchInput._bound) {
+    searchInput._bound = true;
+    searchInput.addEventListener('input', (e) => {
+      markerAssignedSearchTerm = e.target.value.toLowerCase().trim();
+      if (editingMarkerId && window.__webdnd_markers && window.__webdnd_markers[editingMarkerId]) {
+        renderMarkerAssignedAttacks(window.__webdnd_markers[editingMarkerId]);
+      }
+    });
+  }
+
+  const selectAllBtn = document.getElementById('dm-marker-assigned-select-all');
+  if (selectAllBtn && !selectAllBtn._bound) {
+    selectAllBtn._bound = true;
+    selectAllBtn.addEventListener('click', () => {
+      const cbs = container.querySelectorAll('input[type="checkbox"]');
+      cbs.forEach(cb => {
+        cb.checked = true;
+        cb.closest('.assigned-attack-item')?.classList.add('is-selected');
+      });
+      const selected = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
+      updateMarkerAssignedCountBadge(selected.length, allPresets.length);
+    });
+  }
+
+  const clearAllBtn = document.getElementById('dm-marker-assigned-clear-all');
+  if (clearAllBtn && !clearAllBtn._bound) {
+    clearAllBtn._bound = true;
+    clearAllBtn.addEventListener('click', () => {
+      const cbs = container.querySelectorAll('input[type="checkbox"]');
+      cbs.forEach(cb => {
+        cb.checked = false;
+        cb.closest('.assigned-attack-item')?.classList.remove('is-selected');
+      });
+      updateMarkerAssignedCountBadge(0, allPresets.length);
+    });
+  }
 
   if (allPresets.length === 0) {
     container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Kayıtlı saldırı preseti bulunamadı.</span>';
     return;
   }
 
-  allPresets.forEach(preset => {
+  const filteredPresets = allPresets.filter(preset => {
+    if (!markerAssignedSearchTerm) return true;
+    const name = (preset.name || '').toLowerCase();
+    const stat = (preset.stat || '').toLowerCase();
+    const type = (preset.attackType || '').toLowerCase();
+    return name.includes(markerAssignedSearchTerm) || stat.includes(markerAssignedSearchTerm) || type.includes(markerAssignedSearchTerm);
+  });
+
+  if (filteredPresets.length === 0) {
+    container.innerHTML = `<span style="font-size:11px; color:#7f8c8d; font-style:italic; grid-column: 1 / -1;">"${escapeHtml(markerAssignedSearchTerm)}" ile eşleşen saldırı bulunamadı.</span>`;
+    return;
+  }
+
+  filteredPresets.forEach(preset => {
     const isSelected = assigned.includes(preset.id);
     const item = document.createElement('label');
     item.className = 'assigned-attack-item' + (isSelected ? ' is-selected' : '');
@@ -816,6 +983,8 @@ function renderMarkerAssignedAttacks(markerData) {
     const checkbox = item.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => {
       item.classList.toggle('is-selected', checkbox.checked);
+      const totalChecked = container.querySelectorAll('input[type="checkbox"]:checked').length;
+      updateMarkerAssignedCountBadge(totalChecked, allPresets.length);
     });
 
     container.appendChild(item);
@@ -1219,8 +1388,18 @@ function showDmEditor(playerInput) {
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }
 
+let playerAssignedSearchTerm = '';
+
+function updatePlayerAssignedCountBadge(count, total) {
+  const badge = document.getElementById('dm-player-assigned-count');
+  if (badge) {
+    badge.textContent = `(${count} / ${total} Seçili)`;
+    badge.classList.toggle('has-selected', count > 0);
+  }
+}
+
 /**
- * Oyuncu düzenleme modalındaki atanmış saldırı presetlerini listeler ve seçim sunar.
+ * Oyuncu düzenleme modalındaki atanmış saldırı presetlerini listeler ve seçim sunar (Sınırsız).
  */
 function renderPlayerAssignedAttacks(playerData) {
   const container = document.getElementById('dm-player-assigned-attacks');
@@ -1228,15 +1407,76 @@ function renderPlayerAssignedAttacks(playerData) {
 
   container.innerHTML = '';
   const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+  if (!playerData) return;
   const current = (allPlayers && allPlayers[playerData.id]) || playerData;
   const assigned = current.assignedAttacks || (current.character && current.character.assignedAttacks) || [];
+
+  updatePlayerAssignedCountBadge(assigned.length, allPresets.length);
+
+  // Arama ve aksiyon butonlarını bağla
+  const searchInput = document.getElementById('dm-player-assigned-search');
+  if (searchInput && !searchInput._bound) {
+    searchInput._bound = true;
+    searchInput.addEventListener('input', (e) => {
+      playerAssignedSearchTerm = e.target.value.toLowerCase().trim();
+      if (editingPlayerId && allPlayers && allPlayers[editingPlayerId]) {
+        renderPlayerAssignedAttacks(allPlayers[editingPlayerId]);
+      }
+    });
+  }
+
+  const selectAllBtn = document.getElementById('dm-player-assigned-select-all');
+  if (selectAllBtn && !selectAllBtn._bound) {
+    selectAllBtn._bound = true;
+    selectAllBtn.addEventListener('click', () => {
+      const cbs = container.querySelectorAll('input[type="checkbox"]');
+      cbs.forEach(cb => {
+        cb.checked = true;
+        cb.closest('.assigned-attack-item')?.classList.add('is-selected');
+      });
+      const selected = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
+      updatePlayerAssignedCountBadge(selected.length, allPresets.length);
+      if (typeof flushDmEdit === 'function') {
+        saveDmEditorState(editingPlayerId);
+      }
+    });
+  }
+
+  const clearAllBtn = document.getElementById('dm-player-assigned-clear-all');
+  if (clearAllBtn && !clearAllBtn._bound) {
+    clearAllBtn._bound = true;
+    clearAllBtn.addEventListener('click', () => {
+      const cbs = container.querySelectorAll('input[type="checkbox"]');
+      cbs.forEach(cb => {
+        cb.checked = false;
+        cb.closest('.assigned-attack-item')?.classList.remove('is-selected');
+      });
+      updatePlayerAssignedCountBadge(0, allPresets.length);
+      if (typeof flushDmEdit === 'function') {
+        saveDmEditorState(editingPlayerId);
+      }
+    });
+  }
 
   if (allPresets.length === 0) {
     container.innerHTML = '<span style="font-size:11px; color:#7f8c8d; font-style:italic;">Kayıtlı saldırı preseti bulunamadı.</span>';
     return;
   }
 
-  allPresets.forEach(preset => {
+  const filteredPresets = allPresets.filter(preset => {
+    if (!playerAssignedSearchTerm) return true;
+    const name = (preset.name || '').toLowerCase();
+    const stat = (preset.stat || '').toLowerCase();
+    const type = (preset.attackType || '').toLowerCase();
+    return name.includes(playerAssignedSearchTerm) || stat.includes(playerAssignedSearchTerm) || type.includes(playerAssignedSearchTerm);
+  });
+
+  if (filteredPresets.length === 0) {
+    container.innerHTML = `<span style="font-size:11px; color:#7f8c8d; font-style:italic; grid-column: 1 / -1;">"${escapeHtml(playerAssignedSearchTerm)}" ile eşleşen saldırı bulunamadı.</span>`;
+    return;
+  }
+
+  filteredPresets.forEach(preset => {
     const isSelected = assigned.includes(preset.id);
     const item = document.createElement('label');
     item.className = 'assigned-attack-item' + (isSelected ? ' is-selected' : '');
@@ -1252,6 +1492,8 @@ function renderPlayerAssignedAttacks(playerData) {
     const checkbox = item.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => {
       item.classList.toggle('is-selected', checkbox.checked);
+      const totalChecked = container.querySelectorAll('input[type="checkbox"]:checked').length;
+      updatePlayerAssignedCountBadge(totalChecked, allPresets.length);
       if (typeof flushDmEdit === 'function') {
         saveDmEditorState(editingPlayerId);
       }
@@ -1704,7 +1946,12 @@ socket.on('tokenEffectsUpdated', (data) => {
     if (allPlayers[data.id].character) {
       allPlayers[data.id].character.activeEffects = data.activeEffects;
     }
-    updateToken(allPlayers[data.id]);
+    const t = tokens[data.id];
+    if (t) {
+      updateTokenStatusBadges(t, allPlayers[data.id]);
+    } else {
+      updateToken(allPlayers[data.id]);
+    }
     if (editingPlayerId === data.id) {
       renderPlayerEditorActiveEffects(allPlayers[data.id]);
     }
@@ -1725,7 +1972,7 @@ function describeStatusRules(effects) {
   const parts = [];
   if (effects.dotDamage) parts.push(`🔥 Tur sonu ${effects.dotDamage.min}-${effects.dotDamage.max} hasar`);
   if (effects.blind) parts.push('👁️ Kendi saldırıları dezavantajlı');
-  if (effects.paralyzed) parts.push('⚡ Gelen saldırılar kesin vuruş & kritik');
+  if (effects.paralyzed) parts.push('⚡ Gelen saldırılar kesin vuruş & kritik (2x)');
   if (effects.shelter) parts.push('🛡️ Hasar almaz (Dokunulmaz)');
   if (effects.prepared) parts.push('🎯 Gelen saldırılar dezavantajlı');
   if (effects.unstoppable) parts.push('🦏 Felç bağışıklığı');

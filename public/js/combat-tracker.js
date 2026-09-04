@@ -62,7 +62,7 @@
       parts.push('Kendi saldırıları dezavantajlı');
     }
     if (effRules.paralyzed) {
-      parts.push('Gelen saldırılar kesin vuruş & kritik');
+      parts.push('Gelen saldırılar kesin vuruş & kritik (2x)');
     }
     if (effRules.shelter) {
       parts.push('Hasar almaz (Dokunulmaz)');
@@ -512,6 +512,17 @@
       }
     });
   };
+
+  // Hotbar yatay tekerlek (mouse wheel) kaydırma desteği
+  const hotbarSlotsWrapper = document.getElementById('bg3-hotbar-slots-wrapper');
+  if (hotbarSlotsWrapper) {
+    hotbarSlotsWrapper.addEventListener('wheel', (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        hotbarSlotsWrapper.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+  }
 
   // Saldırı panelini aç / odakla butonu
   if (hotbarOpenPanelBtn) {

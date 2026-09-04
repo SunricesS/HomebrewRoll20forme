@@ -460,12 +460,13 @@ app.post('/api/combat/attack', (req, res) => {
         if (safeExtra > 0) breakdownParts.push(`Manuel Ek: +${safeExtra}`);
       }
 
-      // 5. Kritik vuruş çarpanı (1.5x)
+      // 5. Kritik vuruş çarpanı (Normal kritik: 1.5x, Felç kritik: 2x)
       if (isCritical) {
-        damage = Math.floor(damage * 1.5);
         if (hasTargetParalyzed) {
-          breakdownParts.push('(⚡ FELÇ KRİTİK x1.5)');
+          damage = Math.floor(damage * 2);
+          breakdownParts.push('(⚡ FELÇ KRİTİK x2)');
         } else {
+          damage = Math.floor(damage * 1.5);
           breakdownParts.push('(KRİTİK x1.5)');
         }
       }
@@ -1836,7 +1837,7 @@ io.on('connection', (socket) => {
     if (!preset || !preset.name) return;
 
     const newPreset = {
-      id: preset.id || ('atk_custom_' + Date.now()),
+      id: preset.id || ('atk_custom_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
       name: truncateStr(preset.name, 40),
       stat: preset.stat || 'STR',
       attackType: preset.attackType === 'spell' ? 'spell' : 'physical',
@@ -2016,7 +2017,8 @@ async function restoreAttackPresets() {
     const { data, error } = await supabase
       .from('attack_presets')
       .select('*')
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(10000);
 
     if (error) {
       if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
