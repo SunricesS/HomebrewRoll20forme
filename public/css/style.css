@@ -3897,3 +3897,158 @@ input[type="color"]::-webkit-color-swatch {
     padding: 1px 3px;
     border-radius: 3px;
 }
+
+/* ============================================================ */
+/* HASAR TÜRLERİ & DİNAMİK DİRENÇ/ZAYIFLIK ROZETLERİ           */
+/* ============================================================ */
+
+.atk-channel-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.atk-select-damage-type {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(229, 193, 88, 0.4);
+    border-radius: 4px;
+    color: #f1c40f;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.atk-select-damage-type:hover, .atk-select-damage-type:focus {
+    border-color: #e5c158;
+    background: rgba(15, 23, 42, 1);
+    box-shadow: 0 0 8px rgba(229, 193, 88, 0.25);
+}
+
+.atk-channel-target-status {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.atk-target-res-chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.atk-target-res-chip.is-resist {
+    background: rgba(168, 85, 247, 0.18);
+    border: 1px solid rgba(168, 85, 247, 0.6);
+    color: #d8b4fe;
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.25);
+}
+
+.atk-target-res-chip.is-vuln {
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    color: #fca5a5;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+}
+
+.atk-target-res-chip.is-neutral {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #fcd34d;
+}
+
+.atk-target-res-chip.is-normal {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+}
+
+.atk-target-res-chip.is-multi {
+    background: rgba(14, 165, 233, 0.18);
+    border: 1px solid rgba(14, 165, 233, 0.5);
+    color: #7dd3fc;
+}
+
+/* Token Düzenleme Penceresi — Durum Efekti Ekleme Satırı */
+.token-add-effect-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(229, 193, 88, 0.15);
+}
+
+.token-add-effect-select {
+    flex: 1;
+    min-width: 0;
+    font-size: 11.5px;
+    padding: 5px 8px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(229, 193, 88, 0.35);
+    border-radius: 4px;
+    color: #f8fafc;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.token-add-effect-select:focus {
+    border-color: #e5c158;
+}
+
+.token-add-effect-select optgroup {
+    background: #0f172a;
+    color: #e5c158;
+    font-weight: bold;
+}
+
+.token-add-effect-select option {
+    background: #1e293b;
+    color: #f1f5f9;
+}
+
+.token-add-effect-duration {
+    width: 70px;
+    font-size: 11px;
+    padding: 5px 6px;
+    text-align: center;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(229, 193, 88, 0.35);
+    border-radius: 4px;
+    color: #f8fafc;
+    outline: none;
+}
+
+.token-add-effect-duration:focus {
+    border-color: #e5c158;
+}
+
+.token-add-effect-btn {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    padding: 5px 12px !important;
+    border-radius: 4px !important;
+    background: linear-gradient(135deg, rgba(229, 193, 88, 0.25), rgba(184, 134, 11, 0.25)) !important;
+    border: 1px solid var(--border-gold) !important;
+    color: var(--text-gold) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+}
+
+.token-add-effect-btn:hover {
+    background: rgba(229, 193, 88, 0.4) !important;
+    color: #fff !important;
+    box-shadow: 0 0 10px rgba(229, 193, 88, 0.3) !important;
+    transform: translateY(-1px);
+}

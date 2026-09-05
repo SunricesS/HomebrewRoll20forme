@@ -881,6 +881,7 @@ function openMarkerEditor(markerInput) {
 
   renderMarkerEditorActiveEffects(markerData);
   renderMarkerAssignedAttacks(markerData);
+  populateTokenEditorEffectSelect(document.getElementById('dm-marker-add-effect-select'));
 
   document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
 }
@@ -1051,6 +1052,51 @@ function renderMarkerEditorActiveEffects(markerData) {
     }
 
     container.appendChild(chip);
+  });
+}
+
+// Marker Düzenleme Modalında Durum Efekti Ekleme Butonu
+const btnMarkerAddEffect = document.getElementById('dm-marker-btn-add-effect');
+if (btnMarkerAddEffect && !btnMarkerAddEffect._bound) {
+  btnMarkerAddEffect._bound = true;
+  btnMarkerAddEffect.addEventListener('click', () => {
+    if (!editingMarkerId || !window.__webdnd_markers || !window.__webdnd_markers[editingMarkerId]) {
+      alert('Düzenlenen token bulunamadı!');
+      return;
+    }
+    const select = document.getElementById('dm-marker-add-effect-select');
+    const durInput = document.getElementById('dm-marker-add-effect-duration');
+    const presetId = select?.value;
+    if (!presetId) {
+      alert('Lütfen eklenecek durum efektini seçin!');
+      return;
+    }
+    const preset = currentStatusPresets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    const effectToApply = JSON.parse(JSON.stringify(preset));
+    effectToApply.id = 'eff_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const customDur = durInput && durInput.value.trim() !== '' ? parseInt(durInput.value) : null;
+    if (customDur !== null && !isNaN(customDur)) {
+      effectToApply.duration = Math.max(1, customDur);
+    }
+
+    socket.emit('applyStatusEffect', {
+      targetType: 'marker',
+      targetId: editingMarkerId,
+      effect: effectToApply
+    });
+
+    // Anında yerel olarak da ekle ve listeyi tazele
+    const m = window.__webdnd_markers[editingMarkerId];
+    if (!m.activeEffects) m.activeEffects = [];
+    const idx = m.activeEffects.findIndex(e => e.id === effectToApply.id || e.name === effectToApply.name);
+    if (idx >= 0) m.activeEffects[idx] = effectToApply;
+    else m.activeEffects.push(effectToApply);
+    renderMarkerEditorActiveEffects(m);
+
+    if (select) select.value = '';
+    if (durInput) durInput.value = '';
   });
 }
 
@@ -1384,6 +1430,7 @@ function showDmEditor(playerInput) {
 
   renderPlayerEditorActiveEffects(playerData);
   renderPlayerAssignedAttacks(playerData);
+  populateTokenEditorEffectSelect(document.getElementById('dm-player-add-effect-select'));
 
   document.getElementById('dm-player-editor').classList.remove('hidden');
 }
@@ -1565,6 +1612,56 @@ function renderPlayerEditorActiveEffects(playerData) {
     }
 
     container.appendChild(chip);
+  });
+}
+
+// Oyuncu Düzenleme Modalında Durum Efekti Ekleme Butonu
+const btnPlayerAddEffect = document.getElementById('dm-player-btn-add-effect');
+if (btnPlayerAddEffect && !btnPlayerAddEffect._bound) {
+  btnPlayerAddEffect._bound = true;
+  btnPlayerAddEffect.addEventListener('click', () => {
+    if (!editingPlayerId || !allPlayers || !allPlayers[editingPlayerId]) {
+      alert('Düzenlenen oyuncu bulunamadı!');
+      return;
+    }
+    const select = document.getElementById('dm-player-add-effect-select');
+    const durInput = document.getElementById('dm-player-add-effect-duration');
+    const presetId = select?.value;
+    if (!presetId) {
+      alert('Lütfen eklenecek durum efektini seçin!');
+      return;
+    }
+    const preset = currentStatusPresets.find(p => p.id === presetId);
+    if (!preset) return;
+
+    const effectToApply = JSON.parse(JSON.stringify(preset));
+    effectToApply.id = 'eff_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const customDur = durInput && durInput.value.trim() !== '' ? parseInt(durInput.value) : null;
+    if (customDur !== null && !isNaN(customDur)) {
+      effectToApply.duration = Math.max(1, customDur);
+    }
+
+    socket.emit('applyStatusEffect', {
+      targetType: 'player',
+      targetId: editingPlayerId,
+      effect: effectToApply
+    });
+
+    const p = allPlayers[editingPlayerId];
+    if (!p.activeEffects) p.activeEffects = [];
+    if (p.character && !p.character.activeEffects) p.character.activeEffects = [];
+    const idx = p.activeEffects.findIndex(e => e.id === effectToApply.id || e.name === effectToApply.name);
+    if (idx >= 0) {
+      p.activeEffects[idx] = effectToApply;
+      if (p.character) p.character.activeEffects[idx] = effectToApply;
+    } else {
+      p.activeEffects.push(effectToApply);
+      if (p.character) p.character.activeEffects.push(effectToApply);
+    }
+    renderPlayerEditorActiveEffects(p);
+
+    if (select) select.value = '';
+    if (durInput) durInput.value = '';
   });
 }
 
@@ -1929,7 +2026,17 @@ let currentStatusPresets = [
   { id: 'preset_shelter', name: 'Barınak', icon: '🛡️', duration: 1, effects: { shelter: true } },
   { id: 'preset_prepared', name: 'Hazır', icon: '🎯', duration: 2, effects: { prepared: true } },
   { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
-  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
+  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } },
+  // Hasar Dirençleri (0.5x Hasar)
+  { id: 'preset_res_bludgeoning', name: 'Ezme Direnci', icon: '🔨', duration: null, effects: { resistance: 'bludgeoning' } },
+  { id: 'preset_res_slashing', name: 'Kesme Direnci', icon: '⚔️', duration: null, effects: { resistance: 'slashing' } },
+  { id: 'preset_res_piercing', name: 'Delme Direnci', icon: '🏹', duration: null, effects: { resistance: 'piercing' } },
+  { id: 'preset_res_magic', name: 'Büyü Direnci', icon: '🔮', duration: null, effects: { resistance: 'magic' } },
+  // Hasar Zayıflıkları (2x Hasar)
+  { id: 'preset_vuln_bludgeoning', name: 'Ezme Zayıflığı', icon: '💥🔨', duration: null, effects: { vulnerability: 'bludgeoning' } },
+  { id: 'preset_vuln_slashing', name: 'Kesme Zayıflığı', icon: '💥⚔️', duration: null, effects: { vulnerability: 'slashing' } },
+  { id: 'preset_vuln_piercing', name: 'Delme Zayıflığı', icon: '💥🏹', duration: null, effects: { vulnerability: 'piercing' } },
+  { id: 'preset_vuln_magic', name: 'Büyü Zayıflığı', icon: '💥✨', duration: null, effects: { vulnerability: 'magic' } }
 ];
 
 // Socket senkronizasyonu
@@ -1937,6 +2044,8 @@ socket.on('customEffectsUpdated', (presets) => {
   if (Array.isArray(presets)) {
     currentStatusPresets = presets;
     renderStatusPresets();
+    populateTokenEditorEffectSelect(document.getElementById('dm-marker-add-effect-select'));
+    populateTokenEditorEffectSelect(document.getElementById('dm-player-add-effect-select'));
   }
 });
 
@@ -1976,7 +2085,76 @@ function describeStatusRules(effects) {
   if (effects.shelter) parts.push('🛡️ Hasar almaz (Dokunulmaz)');
   if (effects.prepared) parts.push('🎯 Gelen saldırılar dezavantajlı');
   if (effects.unstoppable) parts.push('🦏 Felç bağışıklığı');
+
+  // Dirençler
+  if (effects.res_bludgeoning || effects.resistance === 'bludgeoning') parts.push('🔨 Ezme Direnci (0.5x)');
+  if (effects.res_slashing || effects.resistance === 'slashing') parts.push('⚔️ Kesme Direnci (0.5x)');
+  if (effects.res_piercing || effects.resistance === 'piercing') parts.push('🏹 Delme Direnci (0.5x)');
+  if (effects.res_magic || effects.resistance === 'magic') parts.push('🔮 Büyü Direnci (0.5x)');
+
+  // Zayıflıklar
+  if (effects.vuln_bludgeoning || effects.vulnerability === 'bludgeoning') parts.push('💥🔨 Ezme Zayıflığı (2x)');
+  if (effects.vuln_slashing || effects.vulnerability === 'slashing') parts.push('💥⚔️ Kesme Zayıflığı (2x)');
+  if (effects.vuln_piercing || effects.vulnerability === 'piercing') parts.push('💥🏹 Delme Zayıflığı (2x)');
+  if (effects.vuln_magic || effects.vulnerability === 'magic') parts.push('💥✨ Büyü Zayıflığı (2x)');
+
   return parts.join(' | ') || 'Özel Efekt';
+}
+
+/**
+ * Token düzenleme pencerelerindeki durum efekti ekleme dropdown'ını doldurur.
+ */
+function populateTokenEditorEffectSelect(selectEl) {
+  if (!selectEl) return;
+  const prevVal = selectEl.value;
+  selectEl.innerHTML = '<option value="">— Durum Efekti Ekle —</option>';
+
+  const presets = (typeof currentStatusPresets !== 'undefined' && Array.isArray(currentStatusPresets)) ? currentStatusPresets : [];
+  if (presets.length === 0) return;
+
+  const groupRes = document.createElement('optgroup');
+  groupRes.label = '🛡️ Hasar Dirençleri (0.5x)';
+
+  const groupVuln = document.createElement('optgroup');
+  groupVuln.label = '💥 Hasar Zayıflıkları (2x)';
+
+  const groupDebuff = document.createElement('optgroup');
+  groupDebuff.label = '🔥 Zararlı Durumlar (Debuff)';
+
+  const groupBuff = document.createElement('optgroup');
+  groupBuff.label = '✨ Yararlı / Özel Durumlar';
+
+  const groupOther = document.createElement('optgroup');
+  groupOther.label = '📜 Özel Şablonlar';
+
+  presets.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    const durLabel = p.duration != null ? ` (${p.duration}T)` : ' (Kalıcı)';
+    opt.textContent = `${p.icon || '✨'} ${p.name}${durLabel}`;
+
+    const id = p.id || '';
+    const name = (p.name || '').toLowerCase();
+    if (id.startsWith('preset_res_') || name.includes('diren')) {
+      groupRes.appendChild(opt);
+    } else if (id.startsWith('preset_vuln_') || name.includes('zayıf')) {
+      groupVuln.appendChild(opt);
+    } else if (['preset_burn', 'preset_bleed', 'preset_blind', 'preset_paralyzed', 'preset_poison'].includes(id)) {
+      groupDebuff.appendChild(opt);
+    } else if (['preset_shelter', 'preset_prepared', 'preset_unstoppable'].includes(id)) {
+      groupBuff.appendChild(opt);
+    } else {
+      groupOther.appendChild(opt);
+    }
+  });
+
+  if (groupRes.children.length > 0) selectEl.appendChild(groupRes);
+  if (groupVuln.children.length > 0) selectEl.appendChild(groupVuln);
+  if (groupDebuff.children.length > 0) selectEl.appendChild(groupDebuff);
+  if (groupBuff.children.length > 0) selectEl.appendChild(groupBuff);
+  if (groupOther.children.length > 0) selectEl.appendChild(groupOther);
+
+  if (prevVal) selectEl.value = prevVal;
 }
 
 /**
@@ -2290,6 +2468,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (document.getElementById('status-rule-prepared')?.checked) effects.prepared = true;
       if (document.getElementById('status-rule-unstoppable')?.checked) effects.unstoppable = true;
 
+      // Hasar Dirençleri
+      if (document.getElementById('status-rule-res-bludgeoning')?.checked) effects.res_bludgeoning = true;
+      if (document.getElementById('status-rule-res-slashing')?.checked) effects.res_slashing = true;
+      if (document.getElementById('status-rule-res-piercing')?.checked) effects.res_piercing = true;
+      if (document.getElementById('status-rule-res-magic')?.checked) effects.res_magic = true;
+
+      // Hasar Zayıflıkları
+      if (document.getElementById('status-rule-vuln-bludgeoning')?.checked) effects.vuln_bludgeoning = true;
+      if (document.getElementById('status-rule-vuln-slashing')?.checked) effects.vuln_slashing = true;
+      if (document.getElementById('status-rule-vuln-piercing')?.checked) effects.vuln_piercing = true;
+      if (document.getElementById('status-rule-vuln-magic')?.checked) effects.vuln_magic = true;
+
       const effectObj = {
         name,
         icon,
@@ -2326,6 +2516,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (document.getElementById('status-rule-shelter')?.checked) effects.shelter = true;
       if (document.getElementById('status-rule-prepared')?.checked) effects.prepared = true;
       if (document.getElementById('status-rule-unstoppable')?.checked) effects.unstoppable = true;
+
+      // Hasar Dirençleri
+      if (document.getElementById('status-rule-res-bludgeoning')?.checked) effects.res_bludgeoning = true;
+      if (document.getElementById('status-rule-res-slashing')?.checked) effects.res_slashing = true;
+      if (document.getElementById('status-rule-res-piercing')?.checked) effects.res_piercing = true;
+      if (document.getElementById('status-rule-res-magic')?.checked) effects.res_magic = true;
+
+      // Hasar Zayıflıkları
+      if (document.getElementById('status-rule-vuln-bludgeoning')?.checked) effects.vuln_bludgeoning = true;
+      if (document.getElementById('status-rule-vuln-slashing')?.checked) effects.vuln_slashing = true;
+      if (document.getElementById('status-rule-vuln-piercing')?.checked) effects.vuln_piercing = true;
+      if (document.getElementById('status-rule-vuln-magic')?.checked) effects.vuln_magic = true;
 
       const effectObj = {
         name,

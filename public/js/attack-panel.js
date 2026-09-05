@@ -270,12 +270,32 @@
       }
 
       let finalDmg = Math.max(0, rawTotal);
-      if (this.weakRadio?.checked) {
-        finalDmg *= 2;
-        breakdownParts.push('(Zayıf 2x)');
-      } else if (this.resRadio?.checked) {
-        finalDmg = Math.floor(finalDmg / 2);
-        breakdownParts.push('(Dirençli 0.5x)');
+      if (selectedTargets.length === 1) {
+        const t = selectedTargets[0];
+        const effects = getTargetEffects(t);
+        let dt = 'slashing';
+        if (this.key === 'phys') {
+          dt = document.getElementById('atk-phys-damage-type')?.value || 'slashing';
+        } else if (this.key === 'spell') {
+          dt = 'magic';
+        }
+        const hasRes = hasDamageResistance(effects, dt);
+        const hasVuln = hasDamageVulnerability(effects, dt);
+        if (hasVuln && !hasRes) {
+          finalDmg *= 2;
+          breakdownParts.push(`(${getDamageTypeTurkish(dt)} Zayıflığı 2x)`);
+        } else if (hasRes && !hasVuln) {
+          finalDmg = Math.floor(finalDmg / 2);
+          breakdownParts.push(`(${getDamageTypeTurkish(dt)} Direnci 0.5x)`);
+        }
+      } else {
+        if (this.weakRadio?.checked) {
+          finalDmg *= 2;
+          breakdownParts.push('(Zayıf 2x)');
+        } else if (this.resRadio?.checked) {
+          finalDmg = Math.floor(finalDmg / 2);
+          breakdownParts.push('(Dirençli 0.5x)');
+        }
       }
 
       const breakdown = breakdownParts.length > 0 ? breakdownParts.join(' + ') : '0';
@@ -506,8 +526,15 @@
     if (preset.extraDamage != null && extraDmgInput) extraDmgInput.value = preset.extraDamage;
     if (preset.attackCount != null && attackCountInput) attackCountInput.value = preset.attackCount;
 
-    // Banner Güncelle
+    // Hasar türü (Fiziksel)
+    if (preset.physicalDamageType) {
+      const pTypeSelect = document.getElementById('atk-phys-damage-type');
+      if (pTypeSelect) pTypeSelect.value = preset.physicalDamageType;
+    }
+
+    // Banner ve Direnç Rozetleri Güncelle
     updatePresetBanner(preset);
+    updateTargetResistanceBadges();
 
     // Saldıran token için kuşanma hafızasını kaydet
     if (persistForToken && selectedAttacker) {
@@ -555,7 +582,13 @@
 
     if (presetBadgeStat) presetBadgeStat.textContent = `Stat: ${preset.stat || 'STR'}`;
     if (presetBadgeType) {
-      presetBadgeType.textContent = preset.attackType === 'spell' ? `✨ Büyü (Lvl ${preset.spellLevel || 1})` : '⚔️ Fiziksel';
+      if (preset.attackType === 'spell') {
+        presetBadgeType.textContent = `✨ Büyü (Lvl ${preset.spellLevel || 1})`;
+      } else {
+        const typeNames = { slashing: '⚔️ Kesme', bludgeoning: '🔨 Ezme', piercing: '🏹 Delme' };
+        const pType = typeNames[preset.physicalDamageType] || '⚔️ Fiziksel';
+        presetBadgeType.textContent = pType;
+      }
     }
 
     if (presetBadgeHalfMiss) {
@@ -1004,10 +1037,139 @@
 
       selectedTargetsList.appendChild(card);
     });
+
+    updateTargetResistanceBadges();
   }
 
   // Ctrl+Click callback'ini kaydet
   window.__webdnd_ctrlClickTarget = onCtrlClickTarget;
+
+  // ============================================================
+  // HASAR TÜRLERİ & HEDEF DİRENÇ/ZAYIFLIK KONTROLLERİ
+  // ============================================================
+
+  function normalizeDamageType(type) {
+    if (!type) return 'slashing';
+    const t = String(type).toLowerCase().trim();
+    if (t === 'ezme' || t === 'bludgeoning') return 'bludgeoning';
+    if (t === 'delme' || t === 'piercing') return 'piercing';
+    if (t === 'kesme' || t === 'slashing') return 'slashing';
+    if (t === 'büyü' || t === 'buyu' || t === 'magic' || t === 'spell') return 'magic';
+    return t;
+  }
+
+  function getDamageTypeTurkish(type) {
+    const norm = normalizeDamageType(type);
+    if (norm === 'bludgeoning') return 'Ezme';
+    if (norm === 'piercing') return 'Delme';
+    if (norm === 'slashing') return 'Kesme';
+    if (norm === 'magic') return 'Büyü';
+    return type || 'Fiziksel';
+  }
+
+  function hasDamageResistance(effects, damageType) {
+    if (!Array.isArray(effects) || !damageType) return false;
+    const dt = normalizeDamageType(damageType);
+    return effects.some(e => {
+      if (!e) return false;
+      const eff = e.effects || {};
+      if (eff[`res_${dt}`] || eff[`resistance_${dt}`]) return true;
+      if (typeof eff.resistance === 'string' && normalizeDamageType(eff.resistance) === dt) return true;
+      if (Array.isArray(eff.resistance) && eff.resistance.some(r => normalizeDamageType(r) === dt)) return true;
+      if (typeof eff.resistance === 'object' && eff.resistance && eff.resistance[dt]) return true;
+      const name = (e.name || '').toLowerCase();
+      if (dt === 'bludgeoning' && (/ezme.*diren/i.test(name) || /bludgeon.*resist/i.test(name))) return true;
+      if (dt === 'slashing' && (/kesme.*diren/i.test(name) || /slash.*resist/i.test(name))) return true;
+      if (dt === 'piercing' && (/delme.*diren/i.test(name) || /pierc.*resist/i.test(name))) return true;
+      if (dt === 'magic' && (/b[üy]y[üu].*diren/i.test(name) || /magic.*resist/i.test(name))) return true;
+      return false;
+    });
+  }
+
+  function hasDamageVulnerability(effects, damageType) {
+    if (!Array.isArray(effects) || !damageType) return false;
+    const dt = normalizeDamageType(damageType);
+    return effects.some(e => {
+      if (!e) return false;
+      const eff = e.effects || {};
+      if (eff[`vuln_${dt}`] || eff[`vulnerability_${dt}`]) return true;
+      if (typeof eff.vulnerability === 'string' && normalizeDamageType(eff.vulnerability) === dt) return true;
+      if (Array.isArray(eff.vulnerability) && eff.vulnerability.some(r => normalizeDamageType(r) === dt)) return true;
+      if (typeof eff.vulnerability === 'object' && eff.vulnerability && eff.vulnerability[dt]) return true;
+      const name = (e.name || '').toLowerCase();
+      if (dt === 'bludgeoning' && (/ezme.*zay/i.test(name) || /bludgeon.*vuln/i.test(name))) return true;
+      if (dt === 'slashing' && (/kesme.*zay/i.test(name) || /slash.*vuln/i.test(name))) return true;
+      if (dt === 'piercing' && (/delme.*zay/i.test(name) || /pierc.*vuln/i.test(name))) return true;
+      if (dt === 'magic' && (/b[üy]y[üu].*zay/i.test(name) || /magic.*vuln/i.test(name))) return true;
+      return false;
+    });
+  }
+
+  function getTargetEffects(target) {
+    if (!target) return [];
+    if (target.type === 'marker') {
+      return (window.__webdnd_markers && window.__webdnd_markers[target.id]?.activeEffects) || target.data?.activeEffects || [];
+    } else {
+      const p = (typeof allPlayers !== 'undefined' && allPlayers[target.id]) || null;
+      return (p && (p.activeEffects || p.character?.activeEffects)) || target.data?.activeEffects || [];
+    }
+  }
+
+  function updateTargetResistanceBadges() {
+    const physBadgeEl = document.getElementById('atk-phys-target-status');
+    const spellBadgeEl = document.getElementById('atk-spell-target-status');
+    if (!physBadgeEl && !spellBadgeEl) return;
+
+    if (selectedTargets.length === 0) {
+      if (physBadgeEl) physBadgeEl.innerHTML = '';
+      if (spellBadgeEl) spellBadgeEl.innerHTML = '';
+      return;
+    }
+
+    if (selectedTargets.length > 1) {
+      const multiHtml = `<span class="atk-target-res-chip is-multi">👥 ${selectedTargets.length} Hedef</span>`;
+      if (physBadgeEl) physBadgeEl.innerHTML = multiHtml;
+      if (spellBadgeEl) spellBadgeEl.innerHTML = multiHtml;
+      return;
+    }
+
+    const target = selectedTargets[0];
+    const effects = getTargetEffects(target);
+    const physType = document.getElementById('atk-phys-damage-type')?.value || 'slashing';
+    const typeLabel = getDamageTypeTurkish(physType);
+
+    // Fiziksel Hasar Direnç / Zayıflık Kontrolü
+    const hasPhysRes = hasDamageResistance(effects, physType);
+    const hasPhysVuln = hasDamageVulnerability(effects, physType);
+
+    if (physBadgeEl) {
+      if (hasPhysRes && !hasPhysVuln) {
+        physBadgeEl.innerHTML = `<span class="atk-target-res-chip is-resist" title="${typeLabel} Direnci: Alınan hasar yarıya (0.5x) düşer">🛡️ ${typeLabel} Direnci (0.5x)</span>`;
+      } else if (hasPhysVuln && !hasPhysRes) {
+        physBadgeEl.innerHTML = `<span class="atk-target-res-chip is-vuln" title="${typeLabel} Zayıflığı: Alınan hasar iki katına (2x) çıkar">💥 ${typeLabel} Zayıflığı (2x)</span>`;
+      } else if (hasPhysRes && hasPhysVuln) {
+        physBadgeEl.innerHTML = `<span class="atk-target-res-chip is-neutral" title="Direnç ve Zayıflık birbirini nötrler">⚖️ Nötr (1x)</span>`;
+      } else {
+        physBadgeEl.innerHTML = `<span class="atk-target-res-chip is-normal" title="Normal hasar">Normal (1x)</span>`;
+      }
+    }
+
+    // Büyü Hasarı Direnç / Zayıflık Kontrolü
+    const hasMagicRes = hasDamageResistance(effects, 'magic');
+    const hasMagicVuln = hasDamageVulnerability(effects, 'magic');
+
+    if (spellBadgeEl) {
+      if (hasMagicRes && !hasMagicVuln) {
+        spellBadgeEl.innerHTML = `<span class="atk-target-res-chip is-resist" title="Büyü Direnci: Alınan büyü hasarı yarıya (0.5x) düşer">🛡️ Büyü Direnci (0.5x)</span>`;
+      } else if (hasMagicVuln && !hasMagicRes) {
+        spellBadgeEl.innerHTML = `<span class="atk-target-res-chip is-vuln" title="Büyü Zayıflığı: Alınan büyü hasarı iki katına (2x) çıkar">💥 Büyü Zayıflığı (2x)</span>`;
+      } else if (hasMagicRes && hasMagicVuln) {
+        spellBadgeEl.innerHTML = `<span class="atk-target-res-chip is-neutral" title="Direnç ve Zayıflık birbirini nötrler">⚖️ Nötr (1x)</span>`;
+      } else {
+        spellBadgeEl.innerHTML = `<span class="atk-target-res-chip is-normal" title="Normal büyü hasarı">Normal (1x)</span>`;
+      }
+    }
+  }
 
   // ============================================================
   // YARDIMCILAR
@@ -1083,6 +1245,7 @@
         extraDamage: intVal(extraDmgInput),
         halfDamageOnMiss: halfDamageOnMiss,
         statusEffectsToApply: statusEffectsToApply,
+        physicalDamageType: document.getElementById('atk-phys-damage-type')?.value || 'slashing',
         physical: dicePools.phys.getState(),
         element1: dicePools.elem1.getState(),
         element2: dicePools.elem2.getState()
@@ -1196,6 +1359,8 @@
       if (result.statusNotes?.targetPrepared) notes.push('🎯 Hedef Hazır (Dezavantaj)');
       if (result.statusNotes?.targetParalyzed) notes.push('⚡ Hedef Felçli (Kesin Kritik 2x)');
       if (result.statusNotes?.halfDamageOnMiss) notes.push('🛡️ Iska: ½ Hasar');
+      if (result.statusNotes?.targetResistant) notes.push(`🛡️ ${result.statusNotes.damageType} Direnci (0.5x)`);
+      if (result.statusNotes?.targetVulnerable) notes.push(`💥 ${result.statusNotes.damageType} Zayıflığı (2x)`);
       const notesLabel = notes.length > 0 ? ` [${notes.join(', ')}]` : '';
 
       // Log başlığı: Saldıran → Hedef
@@ -1410,6 +1575,9 @@
     const countInput = document.getElementById('atk-builder-count');
     if (countInput) countInput.value = '1';
 
+    const physTypeSelect = document.getElementById('atk-builder-phys-type');
+    if (physTypeSelect) physTypeSelect.value = 'slashing';
+
     const halfMissCheck = document.getElementById('atk-builder-half-miss');
     if (halfMissCheck) halfMissCheck.checked = false;
 
@@ -1579,6 +1747,8 @@
     document.getElementById('atk-builder-stat').value = preset.stat || 'STR';
     document.getElementById('atk-builder-spell-level').value = preset.spellLevel || 1;
     document.getElementById('atk-builder-count').value = preset.attackCount || 1;
+    const physTypeSelect = document.getElementById('atk-builder-phys-type');
+    if (physTypeSelect) physTypeSelect.value = preset.physicalDamageType || 'slashing';
     document.getElementById('atk-builder-half-miss').checked = Boolean(preset.halfDamageOnMiss);
     document.getElementById('atk-builder-desc').value = preset.description || '';
 
@@ -1643,6 +1813,7 @@
     }
 
     const attackType = document.getElementById('atk-builder-type')?.value || 'physical';
+    const physicalDamageType = document.getElementById('atk-builder-phys-type')?.value || 'slashing';
     const stat = document.getElementById('atk-builder-stat')?.value || 'STR';
     const spellLevel = parseInt(document.getElementById('atk-builder-spell-level')?.value) || 1;
     const attackCount = parseInt(document.getElementById('atk-builder-count')?.value) || 1;
@@ -1680,6 +1851,7 @@
       name,
       stat,
       attackType,
+      physicalDamageType,
       spellLevel,
       attackCount,
       dicePools,
@@ -1887,11 +2059,23 @@
       }
       loadSelectors();
     });
-    socket.on('updateMarkerData', () => loadSelectors());
+    socket.on('updateMarkerData', () => {
+      loadSelectors();
+      updateTargetResistanceBadges();
+    });
+    socket.on('tokenEffectsUpdated', () => updateTargetResistanceBadges());
     socket.on('characterUpdated', () => {
       if (selectedAttacker) setTimeout(onAttackerChange, 300);
-      if (selectedTargets.length > 0) setTimeout(renderSelectedTargets, 300);
+      if (selectedTargets.length > 0) {
+        setTimeout(() => {
+          renderSelectedTargets();
+          updateTargetResistanceBadges();
+        }, 300);
+      }
     });
+
+    // Hasar türü dropdown değişikliği
+    document.getElementById('atk-phys-damage-type')?.addEventListener('change', updateTargetResistanceBadges);
 
     // İlk yüklemede presetleri sorgula
     socket.emit('getAttackPresets');

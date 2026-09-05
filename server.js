@@ -180,8 +180,70 @@ function rollDisadvantage(min, max) {
   return Math.min(rollDie(min, max), rollDie(min, max));
 }
 
-function rollChannelDamage(channel) {
+// === HASAR TÜRLERİ & DİRENÇ / ZAYIFLIK MOTORU ===
+function normalizeDamageType(type) {
+  if (!type) return 'slashing';
+  const t = String(type).toLowerCase().trim();
+  if (t === 'ezme' || t === 'bludgeoning') return 'bludgeoning';
+  if (t === 'delme' || t === 'piercing') return 'piercing';
+  if (t === 'kesme' || t === 'slashing') return 'slashing';
+  if (t === 'büyü' || t === 'buyu' || t === 'magic' || t === 'spell') return 'magic';
+  return t;
+}
+
+function getDamageTypeTurkish(type) {
+  const norm = normalizeDamageType(type);
+  if (norm === 'bludgeoning') return 'Ezme';
+  if (norm === 'piercing') return 'Delme';
+  if (norm === 'slashing') return 'Kesme';
+  if (norm === 'magic') return 'Büyü';
+  return type || 'Fiziksel';
+}
+
+function hasDamageResistance(effects, damageType) {
+  if (!Array.isArray(effects) || !damageType) return false;
+  const dt = normalizeDamageType(damageType);
+  return effects.some(e => {
+    if (!e) return false;
+    const eff = e.effects || {};
+    if (eff[`res_${dt}`] || eff[`resistance_${dt}`]) return true;
+    if (typeof eff.resistance === 'string' && normalizeDamageType(eff.resistance) === dt) return true;
+    if (Array.isArray(eff.resistance) && eff.resistance.some(r => normalizeDamageType(r) === dt)) return true;
+    if (typeof eff.resistance === 'object' && eff.resistance && eff.resistance[dt]) return true;
+    const name = (e.name || '').toLowerCase();
+    if (dt === 'bludgeoning' && (/ezme.*diren/i.test(name) || /bludgeon.*resist/i.test(name))) return true;
+    if (dt === 'slashing' && (/kesme.*diren/i.test(name) || /slash.*resist/i.test(name))) return true;
+    if (dt === 'piercing' && (/delme.*diren/i.test(name) || /pierc.*resist/i.test(name))) return true;
+    if (dt === 'magic' && (/b[üy]y[üu].*diren/i.test(name) || /magic.*resist/i.test(name))) return true;
+    return false;
+  });
+}
+
+function hasDamageVulnerability(effects, damageType) {
+  if (!Array.isArray(effects) || !damageType) return false;
+  const dt = normalizeDamageType(damageType);
+  return effects.some(e => {
+    if (!e) return false;
+    const eff = e.effects || {};
+    if (eff[`vuln_${dt}`] || eff[`vulnerability_${dt}`]) return true;
+    if (typeof eff.vulnerability === 'string' && normalizeDamageType(eff.vulnerability) === dt) return true;
+    if (Array.isArray(eff.vulnerability) && eff.vulnerability.some(r => normalizeDamageType(r) === dt)) return true;
+    if (typeof eff.vulnerability === 'object' && eff.vulnerability && eff.vulnerability[dt]) return true;
+    const name = (e.name || '').toLowerCase();
+    if (dt === 'bludgeoning' && (/ezme.*zay/i.test(name) || /bludgeon.*vuln/i.test(name))) return true;
+    if (dt === 'slashing' && (/kesme.*zay/i.test(name) || /slash.*vuln/i.test(name))) return true;
+    if (dt === 'piercing' && (/delme.*zay/i.test(name) || /pierc.*vuln/i.test(name))) return true;
+    if (dt === 'magic' && (/b[üy]y[üu].*zay/i.test(name) || /magic.*vuln/i.test(name))) return true;
+    return false;
+  });
+}
+
+function rollChannelDamage(channel, resWeakOptions) {
   if (!channel) return { damage: 0, breakdown: '' };
+
+  const isResistant = resWeakOptions ? Boolean(resWeakOptions.isResistant) : Boolean(channel.resistance);
+  const isVulnerable = resWeakOptions ? Boolean(resWeakOptions.isVulnerable) : Boolean(channel.weakness);
+  const resLabel = (resWeakOptions && resWeakOptions.typeLabel) || (isResistant ? 'Dirençli 0.5x' : 'Zayıf 2x');
 
   // 1. Dice pool desteği ({ dice: { d4, d6, ... }, bonus, weakness, resistance })
   if (channel.dice && typeof channel.dice === 'object') {
@@ -212,12 +274,12 @@ function rollChannelDamage(channel) {
 
     if (hasDice || bonus !== 0) {
       let finalDmg = Math.max(0, rawTotal);
-      if (channel.weakness) {
+      if (isVulnerable && !isResistant) {
         finalDmg *= 2;
-        parts.push('(Zayıf 2x)');
-      } else if (channel.resistance) {
+        parts.push(`(${resLabel} 2x)`);
+      } else if (isResistant && !isVulnerable) {
         finalDmg = Math.floor(finalDmg / 2);
-        parts.push('(Dirençli 0.5x)');
+        parts.push(`(${resLabel} 0.5x)`);
       }
       return { damage: finalDmg, breakdown: parts.join(' ') };
     }
@@ -242,22 +304,26 @@ function rollChannelDamage(channel) {
     parts.push(`Ek:[${r2}]`);
   }
 
-  if (channel.weakness) {
+  if (isVulnerable && !isResistant) {
     dmg *= 2;
-    parts.push('(Zayıf 2x)');
-  } else if (channel.resistance) {
+    parts.push(`(${resLabel} 2x)`);
+  } else if (isResistant && !isVulnerable) {
     dmg = Math.floor(dmg / 2);
-    parts.push('(Dirençli 0.5x)');
+    parts.push(`(${resLabel} 0.5x)`);
   }
 
   return { damage: dmg, breakdown: parts.join(' + ') };
 }
 
-function rollSpellDamage(spell) {
+function rollSpellDamage(spell, resWeakOptions) {
   if (!spell) return { damage: 0, breakdown: '' };
   const slotMultipliers = { 1: 1, 2: 1.5, 3: 2, 4: 2.5 };
   const sLevel = clampNumber(spell.level, 1, 4);
   const mult = slotMultipliers[sLevel] || 1;
+
+  const isResistant = resWeakOptions ? Boolean(resWeakOptions.isResistant) : false;
+  const isVulnerable = resWeakOptions ? Boolean(resWeakOptions.isVulnerable) : false;
+  const resLabel = (resWeakOptions && resWeakOptions.typeLabel) || (isResistant ? 'Büyü Direnci 0.5x' : 'Büyü Zayıflığı 2x');
 
   if (spell.dice && typeof spell.dice === 'object') {
     let rawTotal = 0;
@@ -286,9 +352,16 @@ function rollSpellDamage(spell) {
     }
 
     if (hasDice || bonus !== 0) {
-      const scaledDmg = Math.max(0, Math.floor(rawTotal * mult));
+      let scaledDmg = Math.max(0, Math.floor(rawTotal * mult));
       if (mult !== 1) {
         parts.push(`(Lvl ${sLevel}: ${mult}x)`);
+      }
+      if (isVulnerable && !isResistant) {
+        scaledDmg *= 2;
+        parts.push(`(${resLabel} 2x)`);
+      } else if (isResistant && !isVulnerable) {
+        scaledDmg = Math.floor(scaledDmg / 2);
+        parts.push(`(${resLabel} 0.5x)`);
       }
       return { damage: scaledDmg, breakdown: parts.join(' ') };
     }
@@ -312,6 +385,13 @@ function rollSpellDamage(spell) {
       parts.push(`Ek:[${r2}]`);
     }
   }
+  if (isVulnerable && !isResistant) {
+    spellDmg *= 2;
+    parts.push(`(${resLabel} 2x)`);
+  } else if (isResistant && !isVulnerable) {
+    spellDmg = Math.floor(spellDmg / 2);
+    parts.push(`(${resLabel} 0.5x)`);
+  }
   return { damage: spellDmg, breakdown: parts.join(' + ') };
 }
 
@@ -330,6 +410,7 @@ app.post('/api/combat/attack', (req, res) => {
       extraDamage,          // manuel ek hasar
       halfDamageOnMiss,     // bool — Iska durumunda yarım hasar vurulsun mu
       statusEffectsToApply, // array — İsabet durumunda hedefe uygulanacak durum efektleri
+      physicalDamageType,   // 'slashing' | 'bludgeoning' | 'piercing'
       // Fiziksel saldırı parametreleri
       physical,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
       element1,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
@@ -352,6 +433,33 @@ app.post('/api/combat/attack', (req, res) => {
     const hasTargetPrepared = targetEffects.some(e => e.effects?.prepared);
     const hasTargetUnstoppable = targetEffects.some(e => e.effects?.unstoppable);
     const hasTargetParalyzed = targetEffects.some(e => e.effects?.paralyzed) && !hasTargetUnstoppable;
+
+    // Hasar Direnç ve Zayıflık Çözümleme (Ezme, Kesme, Delme, Büyü)
+    const physType = normalizeDamageType(physicalDamageType || 'slashing');
+    const hasPhysRes = hasDamageResistance(targetEffects, physType);
+    const hasPhysVuln = hasDamageVulnerability(targetEffects, physType);
+
+    const hasMagicRes = hasDamageResistance(targetEffects, 'magic');
+    const hasMagicVuln = hasDamageVulnerability(targetEffects, 'magic');
+
+    // Direnç ve zayıflık aynı anda varsa birbirini sıfırlar (D&D 5e standardı)
+    const physEffectiveRes = hasPhysRes && !hasPhysVuln;
+    const physEffectiveVuln = hasPhysVuln && !hasPhysRes;
+
+    const magicEffectiveRes = hasMagicRes && !hasMagicVuln;
+    const magicEffectiveVuln = hasMagicVuln && !hasMagicRes;
+
+    const physResOptions = {
+      isResistant: physEffectiveRes,
+      isVulnerable: physEffectiveVuln,
+      typeLabel: `${getDamageTypeTurkish(physType)} ${physEffectiveRes ? 'Direnci' : 'Zayıflığı'}`
+    };
+
+    const magicResOptions = {
+      isResistant: magicEffectiveRes,
+      isVulnerable: magicEffectiveVuln,
+      typeLabel: `Büyü ${magicEffectiveRes ? 'Direnci' : 'Zayıflığı'}`
+    };
 
     let effectiveAdvantage = Boolean(advantage);
     let effectiveDisadvantage = Boolean(disadvantage);
@@ -399,18 +507,18 @@ app.post('/api/combat/attack', (req, res) => {
           const missParts = [];
 
           if (attackType === 'physical') {
-            const physRes = rollChannelDamage(physical);
+            const physRes = rollChannelDamage(physical, physResOptions);
             const elem1Res = rollChannelDamage(element1);
             const elem2Res = rollChannelDamage(element2);
 
-            if (physRes.breakdown) missParts.push(`Fiziksel: ${physRes.breakdown}`);
+            if (physRes.breakdown) missParts.push(`${getDamageTypeTurkish(physType)}: ${physRes.breakdown}`);
             if (elem1Res.breakdown) missParts.push(`Ateş/El.1: ${elem1Res.breakdown}`);
             if (elem2Res.breakdown) missParts.push(`Buz/El.2: ${elem2Res.breakdown}`);
 
             rawDmg = physRes.damage + elem1Res.damage + elem2Res.damage + safeExtra;
             if (safeExtra > 0) missParts.push(`Manuel Ek: +${safeExtra}`);
           } else {
-            const spellRes = rollSpellDamage(spell);
+            const spellRes = rollSpellDamage(spell, magicResOptions);
             if (spellRes.breakdown) missParts.push(`Büyü: ${spellRes.breakdown}`);
             rawDmg = spellRes.damage + safeExtra;
             if (safeExtra > 0) missParts.push(`Manuel Ek: +${safeExtra}`);
@@ -443,18 +551,18 @@ app.post('/api/combat/attack', (req, res) => {
       const breakdownParts = [];
 
       if (attackType === 'physical') {
-        const physRes = rollChannelDamage(physical);
+        const physRes = rollChannelDamage(physical, physResOptions);
         const elem1Res = rollChannelDamage(element1);
         const elem2Res = rollChannelDamage(element2);
 
-        if (physRes.breakdown) breakdownParts.push(`Fiziksel: ${physRes.breakdown}`);
+        if (physRes.breakdown) breakdownParts.push(`${getDamageTypeTurkish(physType)}: ${physRes.breakdown}`);
         if (elem1Res.breakdown) breakdownParts.push(`Ateş/El.1: ${elem1Res.breakdown}`);
         if (elem2Res.breakdown) breakdownParts.push(`Buz/El.2: ${elem2Res.breakdown}`);
 
         damage = physRes.damage + elem1Res.damage + elem2Res.damage + safeExtra;
         if (safeExtra > 0) breakdownParts.push(`Manuel Ek: +${safeExtra}`);
       } else {
-        const spellRes = rollSpellDamage(spell);
+        const spellRes = rollSpellDamage(spell, magicResOptions);
         if (spellRes.breakdown) breakdownParts.push(`Büyü: ${spellRes.breakdown}`);
         damage = spellRes.damage + safeExtra;
         if (safeExtra > 0) breakdownParts.push(`Manuel Ek: +${safeExtra}`);
@@ -495,7 +603,10 @@ app.post('/api/combat/attack', (req, res) => {
         attackerBlind: hasAttackerBlind,
         targetPrepared: hasTargetPrepared,
         targetParalyzed: hasTargetParalyzed,
-        halfDamageOnMiss: Boolean(halfDamageOnMiss)
+        halfDamageOnMiss: Boolean(halfDamageOnMiss),
+        targetResistant: attackType === 'physical' ? physEffectiveRes : magicEffectiveRes,
+        targetVulnerable: attackType === 'physical' ? physEffectiveVuln : magicEffectiveVuln,
+        damageType: attackType === 'physical' ? getDamageTypeTurkish(physType) : 'Büyü'
       }
     });
   } catch (err) {
@@ -716,7 +827,17 @@ const defaultStatusPresets = [
   { id: 'preset_shelter', name: 'Barınak', icon: '🛡️', duration: 1, effects: { shelter: true } },
   { id: 'preset_prepared', name: 'Hazır', icon: '🎯', duration: 2, effects: { prepared: true } },
   { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
-  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
+  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } },
+  // Hasar Dirençleri (0.5x Hasar)
+  { id: 'preset_res_bludgeoning', name: 'Ezme Direnci', icon: '🔨', duration: null, effects: { resistance: 'bludgeoning' } },
+  { id: 'preset_res_slashing', name: 'Kesme Direnci', icon: '⚔️', duration: null, effects: { resistance: 'slashing' } },
+  { id: 'preset_res_piercing', name: 'Delme Direnci', icon: '🏹', duration: null, effects: { resistance: 'piercing' } },
+  { id: 'preset_res_magic', name: 'Büyü Direnci', icon: '🔮', duration: null, effects: { resistance: 'magic' } },
+  // Hasar Zayıflıkları (2x Hasar)
+  { id: 'preset_vuln_bludgeoning', name: 'Ezme Zayıflığı', icon: '💥🔨', duration: null, effects: { vulnerability: 'bludgeoning' } },
+  { id: 'preset_vuln_slashing', name: 'Kesme Zayıflığı', icon: '💥⚔️', duration: null, effects: { vulnerability: 'slashing' } },
+  { id: 'preset_vuln_piercing', name: 'Delme Zayıflığı', icon: '💥🏹', duration: null, effects: { vulnerability: 'piercing' } },
+  { id: 'preset_vuln_magic', name: 'Büyü Zayıflığı', icon: '💥✨', duration: null, effects: { vulnerability: 'magic' } }
 ];
 let customStatusPresets = [...defaultStatusPresets];
 
@@ -727,6 +848,7 @@ const defaultAttackPresets = [
     name: 'Alev Kılıcı',
     stat: 'STR',
     attackType: 'physical',
+    physicalDamageType: 'slashing',
     spellLevel: 1,
     dicePools: {
       phys: { dice: { 6: 1 }, bonus: 2, weakness: false, resistance: false },
@@ -740,13 +862,14 @@ const defaultAttackPresets = [
     halfDamageOnMiss: true,
     extraDamage: 0,
     attackCount: 1,
-    description: '1d6+2 Fiziksel + 1d6 Ateş. İsabet halinde 2 tur Yanma uygular. Iskalasa bile yarım hasar verir.'
+    description: '1d6+2 Kesme + 1d6 Ateş. İsabet halinde 2 tur Yanma uygular. Iskalasa bile yarım hasar verir.'
   },
   {
     id: 'atk_preset_heavy_strike',
     name: 'Güçlü Vuruş',
     stat: 'STR',
     attackType: 'physical',
+    physicalDamageType: 'bludgeoning',
     spellLevel: 1,
     dicePools: {
       phys: { dice: { 8: 2 }, bonus: 3, weakness: false, resistance: false },
@@ -758,13 +881,14 @@ const defaultAttackPresets = [
     halfDamageOnMiss: false,
     extraDamage: 0,
     attackCount: 1,
-    description: '2d8+3 Ağır fiziksel ezici darbe.'
+    description: '2d8+3 Ağır fiziksel ezme darbesi.'
   },
   {
     id: 'atk_preset_frost_bolt',
     name: 'Buz Oku',
     stat: 'INT',
     attackType: 'spell',
+    physicalDamageType: 'slashing',
     spellLevel: 1,
     dicePools: {
       phys: { dice: {}, bonus: 0, weakness: false, resistance: false },
@@ -785,6 +909,7 @@ const defaultAttackPresets = [
     name: 'Zehirli Hançer',
     stat: 'DEX',
     attackType: 'physical',
+    physicalDamageType: 'piercing',
     spellLevel: 1,
     dicePools: {
       phys: { dice: { 4: 1 }, bonus: 3, weakness: false, resistance: false },
@@ -798,13 +923,14 @@ const defaultAttackPresets = [
     halfDamageOnMiss: false,
     extraDamage: 0,
     attackCount: 1,
-    description: '1d4+3 Hızlı hançer darbesi. İsabet halinde 3 tur Zehir (1-4 DoT & Körlük) uygular.'
+    description: '1d4+3 Hızlı delme hançer darbesi. İsabet halinde 3 tur Zehir (1-4 DoT & Körlük) uygular.'
   },
   {
     id: 'atk_preset_holy_smite',
     name: 'Kutsal Darbe',
     stat: 'WIS',
     attackType: 'spell',
+    physicalDamageType: 'slashing',
     spellLevel: 2,
     dicePools: {
       phys: { dice: { 6: 1 }, bonus: 2, weakness: false, resistance: false },
@@ -818,13 +944,14 @@ const defaultAttackPresets = [
     halfDamageOnMiss: true,
     extraDamage: 0,
     attackCount: 1,
-    description: '2. Seviye kutsal ışık patlaması. İsabet halinde 1 tur Felç uygular, ıskalasa bile yarım hasar vurur.'
+    description: '2. Seviye kutsal büyü ışık patlaması. İsabet halinde 1 tur Felç uygular, ıskalasa bile yarım hasar vurur.'
   },
   {
     id: 'atk_preset_shadow_strike',
     name: 'Gölge Darbesi',
     stat: 'DEX',
     attackType: 'physical',
+    physicalDamageType: 'piercing',
     spellLevel: 1,
     dicePools: {
       phys: { dice: { 6: 2 }, bonus: 4, weakness: false, resistance: false },
@@ -838,7 +965,7 @@ const defaultAttackPresets = [
     halfDamageOnMiss: false,
     extraDamage: 0,
     attackCount: 1,
-    description: '2d6+4 Sinsi gölge saldırısı. İsabet halinde 2 tur Kanama (2-8 DoT) uygular.'
+    description: '2d6+4 Sinsi delme saldırısı. İsabet halinde 2 tur Kanama (2-8 DoT) uygular.'
   }
 ];
 let attackPresets = [...defaultAttackPresets];
@@ -1841,6 +1968,7 @@ io.on('connection', (socket) => {
       name: truncateStr(preset.name, 40),
       stat: preset.stat || 'STR',
       attackType: preset.attackType === 'spell' ? 'spell' : 'physical',
+      physicalDamageType: preset.physicalDamageType || 'slashing',
       spellLevel: clampNumber(parseInt(preset.spellLevel) || 1, 1, 4),
       dicePools: preset.dicePools || { phys: {}, elem1: {}, elem2: {}, spell: {} },
       statusEffectsToApply: Array.isArray(preset.statusEffectsToApply) ? preset.statusEffectsToApply : [],
@@ -1859,13 +1987,13 @@ io.on('connection', (socket) => {
 
     io.emit('attackPresetsUpdated', attackPresets);
 
-    // Supabase veritabanına kaydet (upsert)
     try {
       const dbRecord = {
         id: newPreset.id,
         name: newPreset.name,
         stat: newPreset.stat,
         attack_type: newPreset.attackType,
+        physical_damage_type: newPreset.physicalDamageType,
         spell_level: newPreset.spellLevel,
         dice_pools: newPreset.dicePools,
         status_effects_to_apply: newPreset.statusEffectsToApply,
@@ -1885,10 +2013,11 @@ io.on('connection', (socket) => {
 
   socket.on('deleteAttackPreset', async (presetId) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!presetId) return;
+
     attackPresets = attackPresets.filter(p => p.id !== presetId);
     io.emit('attackPresetsUpdated', attackPresets);
 
-    // Supabase veritabanından sil
     try {
       const { error } = await supabase.from('attack_presets').delete().eq('id', presetId);
       if (error && error.code !== 'PGRST205') {
@@ -1897,6 +2026,13 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Supabase attack preset silme istisnası:', err.message);
     }
+  });
+
+  // ---- HARİTA DÜZENİ BACKUP / RESTORE ----
+  socket.on('requestMapBackup', async () => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    await backupMapState();
+    socket.emit('backupCompleted', { success: true, timestamp: new Date().toLocaleTimeString('tr-TR') });
   });
 
   // ---- Bağlantı Kopma ----
@@ -1929,85 +2065,67 @@ io.on('connection', (socket) => {
   });
 });
 
-// === MAP STATE RESTORE VE BACKUP ===
+// === HARİTA DURUMU YEDEKLEME (SUPABASE) ===
+async function backupMapState() {
+  try {
+    const payload = {
+      id: 1,
+      current_map: currentMap,
+      fog_data: fogGrid,
+      fog_uncovered: fogUncovered,
+      markers: markers,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('map_state')
+      .upsert(payload);
+
+    if (error) {
+      if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Harita durumu yedeklenirken Supabase hatası:', error.message);
+      } else if (error.code === 'PGRST205') {
+        console.log('map_state tablosu henüz veritabanında oluşturulmamış.');
+      }
+    } else {
+      console.log('Map durumu yedeklendi.');
+    }
+  } catch (err) {
+    console.error('Harita durumu yedeklenirken beklenmeyen hata:', err.message);
+  }
+}
+
+// === HARİTA DURUMUNU GERİ YÜKLEME (SUPABASE) ===
 async function restoreMapState() {
   try {
     const { data, error } = await supabase
       .from('map_state')
-      .select('data')
+      .select('*')
       .eq('id', 1)
       .single();
 
-    // PGRST116 kodu kayıt bulunamadığında döner
-    if (error && error.code !== 'PGRST116') {
-      console.error('Map state yüklenirken Supabase hatası:', error.message);
+    if (error) {
+      if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Harita durumu yüklenirken Supabase hatası:', error.message);
+      } else if (error.code === 'PGRST205') {
+        console.log('map_state tablosu henüz veritabanında oluşturulmamış.');
+      }
       return;
     }
 
-    if (data && data.data) {
-      const savedState = data.data;
-
-      // Oyuncu pozisyonlarını sessionCache'e al
-      if (savedState.players) {
-        Object.values(savedState.players).forEach(p => {
-          if (p.sessionId) {
-            sessionCache[p.sessionId] = {
-              x: p.x,
-              y: p.y,
-              color: p.color,
-              imgUrl: p.imgUrl,
-              role: p.role,
-              character: p.character,
-              cachedAt: Date.now()
-            };
-          }
-        });
+    if (data) {
+      if (data.current_map) currentMap = data.current_map;
+      if (data.fog_data) fogGrid = data.fog_data;
+      if (data.fog_uncovered) fogUncovered = data.fog_uncovered;
+      if (data.markers && typeof data.markers === 'object') {
+        markers = data.markers;
       }
-
-      // Markerları geri yükle
-      if (savedState.markers) {
-        Object.assign(markers, savedState.markers);
-      }
-
-      // Çizim geçmişini geri yükle
-      if (savedState.drawHistory && Array.isArray(savedState.drawHistory)) {
-        drawHistory = savedState.drawHistory.slice(-MAX_DRAW_HISTORY);
-      }
-
-      // Arka planı geri yükle
-      if (savedState.mapBgUrl) {
-        mapBgUrl = savedState.mapBgUrl;
-      }
-
       console.log('Map durumu başarıyla geri yüklendi.');
     } else {
       console.log('Geri yüklenecek map durumu bulunamadı veya tablo boş.');
     }
   } catch (err) {
-    console.error('Map state geri yüklenirken beklenmeyen hata:', err.message);
-  }
-}
-
-async function backupMapState() {
-  try {
-    const currentState = {
-      players: players,
-      markers: markers,
-      drawHistory: drawHistory,
-      mapBgUrl: mapBgUrl
-    };
-
-    const { error } = await supabase
-      .from('map_state')
-      .upsert({ id: 1, data: currentState });
-
-    if (error) {
-      console.error('Map state yedekleme hatası:', error.message);
-    } else {
-      console.log('Map durumu yedeklendi.');
-    }
-  } catch (err) {
-    console.error('Map state yedekleme sırasında beklenmeyen hata:', err.message);
+    console.error('Harita durumu geri yüklenirken beklenmeyen hata:', err.message);
   }
 }
 
@@ -2030,11 +2148,13 @@ async function restoreAttackPresets() {
     }
 
     if (data) {
-      attackPresets = data.map(row => ({
+      const loadedIds = new Set(data.map(row => row.id));
+      const dbPresets = data.map(row => ({
         id: row.id,
         name: row.name,
         stat: row.stat || 'STR',
         attackType: row.attack_type || row.attackType || 'physical',
+        physicalDamageType: row.physical_damage_type || row.physicalDamageType || 'slashing',
         spellLevel: row.spell_level ?? row.spellLevel ?? 1,
         dicePools: row.dice_pools || row.dicePools || { phys: {}, elem1: {}, elem2: {}, spell: {} },
         statusEffectsToApply: Array.isArray(row.status_effects_to_apply) ? row.status_effects_to_apply : (Array.isArray(row.statusEffectsToApply) ? row.statusEffectsToApply : []),
@@ -2043,7 +2163,11 @@ async function restoreAttackPresets() {
         attackCount: row.attack_count ?? row.attackCount ?? 1,
         description: row.description || ''
       }));
-      console.log(`Supabase'den ${attackPresets.length} adet saldırı preseti başarıyla yüklendi.`);
+      attackPresets = [
+        ...defaultAttackPresets.filter(dp => !loadedIds.has(dp.id)),
+        ...dbPresets
+      ];
+      console.log(`Supabase'den ${dbPresets.length} adet saldırı preseti başarıyla yüklendi, toplam ${attackPresets.length} adet hazır.`);
     }
   } catch (err) {
     console.error('Attack presets geri yüklenirken beklenmeyen hata:', err.message);
@@ -2068,7 +2192,8 @@ async function restoreStatusPresets() {
     }
 
     if (data) {
-      customStatusPresets = data.map(row => ({
+      const loadedIds = new Set(data.map(row => row.id));
+      const dbStatusPresets = data.map(row => ({
         id: row.id,
         name: row.name,
         icon: row.icon || '✨',

@@ -234,6 +234,13 @@
                             <div id="dm-player-active-effects" class="status-target-effects-list">
                                 <!-- JS ile doldurulacak -->
                             </div>
+                            <div class="token-add-effect-row">
+                                <select id="dm-player-add-effect-select" class="atk-select token-add-effect-select">
+                                    <option value="">— Durum Efekti Ekle —</option>
+                                </select>
+                                <input type="number" id="dm-player-add-effect-duration" class="atk-input token-add-effect-duration" placeholder="Tur (Boş=Kalıcı)" min="1" max="99" title="Tur sayısı (boş bırakılırsa varsayılan/kalıcı)">
+                                <button type="button" id="dm-player-btn-add-effect" class="atk-mini-btn token-add-effect-btn">➕ Ekle</button>
+                            </div>
                         </div>
 
                         <!-- Atanmış Saldırılar (Attack Loadout) -->
@@ -356,7 +363,6 @@
                             <div class="atk-check-row">
                                 <label class="atk-check"><input type="checkbox" id="atk-advantage"> Avantaj</label>
                                 <label class="atk-check"><input type="checkbox" id="atk-disadvantage"> Dezavantaj</label>
-                                <button id="atk-btn-clear-resist" class="atk-mini-btn atk-clear-resist-btn">Zayıflık/Direnç Temizle</button>
                             </div>
                         </div>
 
@@ -367,11 +373,15 @@
                             <!-- Fiziksel Kanal -->
                             <div class="atk-damage-channel" data-channel="phys">
                                 <div class="atk-channel-header">
-                                    <span class="atk-channel-label">Fiziksel</span>
-                                    <div class="atk-resist-row">
-                                        <label><input type="radio" name="atk-phys-resist" id="atk-phys-weak"> Zayıf</label>
-                                        <label><input type="radio" name="atk-phys-resist" id="atk-phys-resist"> Dirençli</label>
+                                    <div class="atk-channel-title-row">
+                                        <span class="atk-channel-label">Fiziksel:</span>
+                                        <select id="atk-phys-damage-type" class="atk-select-damage-type" title="Fiziksel Hasar Türü">
+                                            <option value="slashing">⚔️ Kesme</option>
+                                            <option value="bludgeoning">🔨 Ezme</option>
+                                            <option value="piercing">🏹 Delme</option>
+                                        </select>
                                     </div>
+                                    <div id="atk-phys-target-status" class="atk-channel-target-status"></div>
                                 </div>
 
                                 <div class="atk-pool-display" id="atk-phys-display">
@@ -409,10 +419,6 @@
                             <div class="atk-damage-channel" data-channel="elem1">
                                 <div class="atk-channel-header">
                                     <span class="atk-channel-label" style="color:var(--danger, #ef4444);">Ateş/El.1</span>
-                                    <div class="atk-resist-row">
-                                        <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-weak"> Zayıf</label>
-                                        <label><input type="radio" name="atk-elem1-resist" id="atk-elem1-resist"> Dirençli</label>
-                                    </div>
                                 </div>
 
                                 <div class="atk-pool-display" id="atk-elem1-display">
@@ -450,10 +456,6 @@
                             <div class="atk-damage-channel" data-channel="elem2">
                                 <div class="atk-channel-header">
                                     <span class="atk-channel-label" style="color:var(--accent, #0ea5e9);">Buz/El.2</span>
-                                    <div class="atk-resist-row">
-                                        <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-weak"> Zayıf</label>
-                                        <label><input type="radio" name="atk-elem2-resist" id="atk-elem2-resist"> Dirençli</label>
-                                    </div>
                                 </div>
 
                                 <div class="atk-pool-display" id="atk-elem2-display">
@@ -510,6 +512,7 @@
                             <div class="atk-damage-channel" data-channel="spell">
                                 <div class="atk-channel-header">
                                     <span class="atk-channel-label" style="color:var(--accent-hover, #38bdf8);">Büyü Hasarı</span>
+                                    <div id="atk-spell-target-status" class="atk-channel-target-status"></div>
                                 </div>
 
                                 <div class="atk-pool-display" id="atk-spell-display">
@@ -638,6 +641,13 @@
                 </div>
                 <div id="dm-marker-active-effects" class="status-target-effects-list">
                     <!-- JS ile doldurulacak -->
+                </div>
+                <div class="token-add-effect-row">
+                    <select id="dm-marker-add-effect-select" class="atk-select token-add-effect-select">
+                        <option value="">— Durum Efekti Ekle —</option>
+                    </select>
+                    <input type="number" id="dm-marker-add-effect-duration" class="atk-input token-add-effect-duration" placeholder="Tur (Boş=Kalıcı)" min="1" max="99" title="Tur sayısı (boş bırakılırsa varsayılan/kalıcı)">
+                    <button type="button" id="dm-marker-btn-add-effect" class="atk-mini-btn token-add-effect-btn">➕ Ekle</button>
                 </div>
             </div>
 
@@ -793,6 +803,24 @@
                                     <span>🦏 Durdurulamaz <small style="color:#bdc3c7;">(Felç etkisine bağışıklık)</small></span>
                                 </label>
                             </div>
+
+                            <!-- Hasar Dirençleri (0.5x) -->
+                            <div class="status-rule-group-title" style="margin-top:8px; font-size:11px; font-weight:bold; color:var(--accent-hover);">🛡️ Hasar Dirençleri (0.5x Hasar):</div>
+                            <div class="status-subrules-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px;">
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-res-bludgeoning"> <span>🔨 Ezme Direnci</span></label>
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-res-slashing"> <span>⚔️ Kesme Direnci</span></label>
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-res-piercing"> <span>🏹 Delme Direnci</span></label>
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-res-magic"> <span>🔮 Büyü Direnci</span></label>
+                            </div>
+
+                            <!-- Hasar Zayıflıkları (2x) -->
+                            <div class="status-rule-group-title" style="margin-top:8px; font-size:11px; font-weight:bold; color:var(--danger, #ef4444);">💥 Hasar Zayıflıkları (2x Hasar):</div>
+                            <div class="status-subrules-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px;">
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-vuln-bludgeoning"> <span>💥🔨 Ezme Zayıflığı</span></label>
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-vuln-slashing"> <span>💥⚔️ Kesme Zayıflığı</span></label>
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-vuln-piercing"> <span>💥🏹 Delme Zayıflığı</span></label>
+                                <label class="status-checkbox-label"><input type="checkbox" id="status-rule-vuln-magic"> <span>💥✨ Büyü Zayıflığı</span></label>
+                            </div>
                         </div>
                     </div>
 
@@ -901,6 +929,14 @@
                         <div class="form-group">
                             <label>Saldırı Adedi:</label>
                             <input type="number" id="atk-builder-count" value="1" min="1" max="20" class="input-light">
+                        </div>
+                        <div class="form-group" id="atk-builder-phys-type-group">
+                            <label>Fiziksel Tür:</label>
+                            <select id="atk-builder-phys-type" class="atk-select">
+                                <option value="slashing">⚔️ Kesme</option>
+                                <option value="bludgeoning">🔨 Ezme</option>
+                                <option value="piercing">🏹 Delme</option>
+                            </select>
                         </div>
                     </div>
 
