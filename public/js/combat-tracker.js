@@ -26,6 +26,7 @@
   const floatingBtn = document.getElementById('combat-mode-toggle-btn');
   const floatingBtnBadge = document.getElementById('combat-btn-status-badge');
   const dmCombatBtn = document.getElementById('btn-dm-toggle-combat');
+  const dmAoeBtn = document.getElementById('dm-aoe-damage-btn');
   const gameMap = document.getElementById('game-map');
 
   // Alt Hotbar Elementleri
@@ -157,6 +158,7 @@
       if (floatingBtn) floatingBtn.classList.remove('active');
       if (floatingBtnBadge) floatingBtnBadge.classList.add('hidden');
       if (dmCombatBtn) dmCombatBtn.classList.remove('active');
+      if (dmAoeBtn) dmAoeBtn.classList.add('hidden');
       updateMapActiveTokenHighlight(null);
       lastSyncedAttackerTurnKey = null;
       return;
@@ -170,6 +172,9 @@
       floatingBtnBadge.textContent = `Tur ${combatState.round}`;
     }
     if (dmCombatBtn) dmCombatBtn.classList.add('active');
+    if (dmAoeBtn && typeof role !== 'undefined' && role === 'dm') {
+      dmAoeBtn.classList.remove('hidden');
+    }
 
     // Tur sayacı
     if (roundDisplay) {
@@ -227,6 +232,31 @@
       // Border rengini token rengine uyarla
       if (c.color) {
         card.style.setProperty('--token-theme-color', c.color);
+      }
+
+      // Aktif Durum Efektleri Görsel Vurgusu (Felçli, Yanan, Durdurulamaz, Barınak)
+      if (c.activeEffects && c.activeEffects.length > 0) {
+        const hasParalyzed = c.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.effects?.paralyzed || e.id === 'preset_paralyzed' || n.includes('felç') || n.includes('paralyz') || e.icon === '⚡');
+        });
+        const hasBurning = c.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.id === 'preset_burn' || e.icon === '🔥' || n.includes('yan') || n.includes('burn') || n.includes('ateş') || n.includes('alev') || (e.effects?.dotDamage && !n.includes('zehir') && !n.includes('kan')));
+        });
+        const hasUnstoppable = c.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.effects?.unstoppable || e.id === 'preset_unstoppable' || n.includes('durdurulamaz') || n.includes('unstoppable'));
+        });
+        const hasShelter = c.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.effects?.shelter || e.id === 'preset_shelter' || n.includes('barınak') || n.includes('shelter') || e.icon === '🛡️');
+        });
+
+        if (hasParalyzed) card.classList.add('card-status-paralyzed');
+        if (hasBurning) card.classList.add('card-status-burning');
+        if (hasUnstoppable) card.classList.add('card-status-unstoppable');
+        if (hasShelter) card.classList.add('card-status-shelter');
       }
 
       // 1. Portre / Görsel Alanı
@@ -430,6 +460,32 @@
         init.textContent = (activeCombatant.name || '?').charAt(0).toUpperCase();
         hotbarAvatarWrap.appendChild(init);
       }
+
+      // Aktif combatant durum efektlerine göre alt hotbar avatar ışıldaması
+      hotbarAvatarWrap.classList.remove('status-glow-paralyzed', 'status-glow-burning', 'status-glow-unstoppable', 'status-glow-shelter');
+      if (activeCombatant.activeEffects && activeCombatant.activeEffects.length > 0) {
+        const hasParalyzed = activeCombatant.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.effects?.paralyzed || e.id === 'preset_paralyzed' || n.includes('felç') || n.includes('paralyz') || e.icon === '⚡');
+        });
+        const hasBurning = activeCombatant.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.id === 'preset_burn' || e.icon === '🔥' || n.includes('yan') || n.includes('burn') || n.includes('ateş') || n.includes('alev') || (e.effects?.dotDamage && !n.includes('zehir') && !n.includes('kan')));
+        });
+        const hasUnstoppable = activeCombatant.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.effects?.unstoppable || e.id === 'preset_unstoppable' || n.includes('durdurulamaz') || n.includes('unstoppable'));
+        });
+        const hasShelter = activeCombatant.activeEffects.some(e => {
+          const n = (e.name || '').toLowerCase();
+          return Boolean(e.effects?.shelter || e.id === 'preset_shelter' || n.includes('barınak') || n.includes('shelter') || e.icon === '🛡️');
+        });
+
+        if (hasParalyzed) hotbarAvatarWrap.classList.add('status-glow-paralyzed');
+        if (hasBurning) hotbarAvatarWrap.classList.add('status-glow-burning');
+        if (hasUnstoppable) hotbarAvatarWrap.classList.add('status-glow-unstoppable');
+        if (hasShelter) hotbarAvatarWrap.classList.add('status-glow-shelter');
+      }
     }
 
     // 2. Saldırı Slotları
@@ -561,6 +617,9 @@
       updateMapActiveTokenHighlight(null);
       if (bottomHotbar) {
         bottomHotbar.classList.add('hidden');
+      }
+      if (dmAoeBtn) {
+        dmAoeBtn.classList.add('hidden');
       }
       if (typeof window.__webdnd_clearTargets === 'function') {
         window.__webdnd_clearTargets();

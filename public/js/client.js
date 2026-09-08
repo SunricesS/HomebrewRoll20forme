@@ -570,6 +570,32 @@ function updateTokenStatusBadges(tokenEl, playerData) {
   let badgeWrap = tokenEl.querySelector('.token-status-badges');
   const activeEffects = playerData.activeEffects || (playerData.character && playerData.character.activeEffects) || [];
 
+  // Görsel efekt sınıflarını hesapla ve tokene uygula (Felçli: Mor parıltı, Yanan: Alev dalgası, Durdurulamaz: Altın kalkan)
+  const hasParalyzed = activeEffects.some(e => {
+    const n = (e.name || '').toLowerCase();
+    return Boolean(e.effects?.paralyzed || e.id === 'preset_paralyzed' || n.includes('felç') || n.includes('paralyz') || e.icon === '⚡');
+  });
+
+  const hasBurning = activeEffects.some(e => {
+    const n = (e.name || '').toLowerCase();
+    return Boolean(e.id === 'preset_burn' || e.icon === '🔥' || n.includes('yan') || n.includes('burn') || n.includes('ateş') || n.includes('alev') || (e.effects?.dotDamage && !n.includes('zehir') && !n.includes('kan')));
+  });
+
+  const hasUnstoppable = activeEffects.some(e => {
+    const n = (e.name || '').toLowerCase();
+    return Boolean(e.effects?.unstoppable || e.id === 'preset_unstoppable' || n.includes('durdurulamaz') || n.includes('unstoppable'));
+  });
+
+  const hasShelter = activeEffects.some(e => {
+    const n = (e.name || '').toLowerCase();
+    return Boolean(e.effects?.shelter || e.id === 'preset_shelter' || n.includes('barınak') || n.includes('shelter') || e.icon === '🛡️');
+  });
+
+  tokenEl.classList.toggle('token-status-paralyzed', hasParalyzed);
+  tokenEl.classList.toggle('token-status-burning', hasBurning);
+  tokenEl.classList.toggle('token-status-unstoppable', hasUnstoppable);
+  tokenEl.classList.toggle('token-status-shelter', hasShelter);
+
   if (!activeEffects || activeEffects.length === 0) {
     if (badgeWrap) badgeWrap.remove();
     return;

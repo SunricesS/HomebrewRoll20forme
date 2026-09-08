@@ -18,6 +18,15 @@
         <div id="game-map">
             <div id="map-content">
                 <canvas id="drawing-layer"></canvas>
+                <!-- Daire Alan Hedefleme Katmanı (AoE) -->
+                <div id="aoe-targeting-layer" class="aoe-targeting-layer hidden">
+                    <svg id="aoe-svg-canvas" class="aoe-svg-canvas">
+                        <circle id="aoe-svg-circle" class="aoe-svg-circle hidden" cx="0" cy="0" r="0" />
+                        <circle id="aoe-svg-center-dot" class="aoe-svg-center-dot hidden" cx="0" cy="0" r="4" />
+                        <line id="aoe-svg-radius-line" class="aoe-svg-radius-line hidden" x1="0" y1="0" x2="0" y2="0" />
+                    </svg>
+                    <div id="aoe-radius-badge" class="aoe-radius-badge hidden">0 px</div>
+                </div>
                 <!-- Token Sistemi -->
             </div>
 
@@ -94,6 +103,12 @@
                 <span class="combat-btn-icon">⚔️</span>
                 <span class="combat-btn-text">Combat Modu</span>
                 <span class="combat-btn-status-badge hidden" id="combat-btn-status-badge">Aktif</span>
+            </button>
+
+            <!-- DM Sol Alt Alan Hasarı (AoE) Butonu -->
+            <button id="dm-aoe-damage-btn" class="dm-aoe-floating-btn hidden" title="💥 Alan Hasarı (AoE) — Haritada daire alan seçip toplu hasar uygula">
+                <span class="aoe-btn-icon">💥</span>
+                <span class="aoe-btn-text">Alan Hasarı</span>
             </button>
         </div>
 
@@ -1118,6 +1133,58 @@
         </div>
     </div>
 
+    <!-- DM Alan Hasarı (AoE Damage) Modalı -->
+    <div id="dm-aoe-modal" class="modal-overlay hidden" style="z-index: 1200;">
+        <div class="modal-box dm-modal-box aoe-modal-box">
+            <div class="status-modal-header">
+                <h3 class="dm-modal-title" style="margin-bottom:0;">💥 Alan Hasarı Uygula (AoE)</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-aoe-modal" title="Kapat">✕</button>
+            </div>
+
+            <div class="aoe-modal-summary-banner">
+                <span class="aoe-summary-icon">🎯</span>
+                <div class="aoe-summary-text">
+                    <span id="aoe-modal-radius-info">Seçilen Alan Yarıçapı: 0 px</span>
+                    <small id="aoe-modal-targets-count">0 Hedef Kapsandı</small>
+                </div>
+            </div>
+
+            <!-- Alandaki Hedefler Listesi -->
+            <div class="aoe-targets-section">
+                <div class="aoe-section-header">
+                    <span class="aoe-section-title">Etkilenecek Hedefler:</span>
+                    <span class="aoe-section-hint">(Tik kaldırarak muaf tutabilirsiniz)</span>
+                </div>
+                <div id="aoe-modal-targets-list" class="aoe-targets-list">
+                    <!-- Hedefler dinamik JS ile yüklenecek -->
+                </div>
+            </div>
+
+            <!-- Hasar Girişi -->
+            <div class="aoe-damage-input-section">
+                <label for="aoe-damage-amount" class="aoe-input-label">Uygulanacak Hasar Miktarı:</label>
+                <div class="aoe-input-row">
+                    <input type="number" id="aoe-damage-amount" min="1" max="9999" placeholder="Örn: 25" class="input-light aoe-num-input" autocomplete="off" />
+                    <div class="aoe-quick-dmg-pills">
+                        <button type="button" class="aoe-pill-btn" data-val="10">+10</button>
+                        <button type="button" class="aoe-pill-btn" data-val="20">+20</button>
+                        <button type="button" class="aoe-pill-btn" data-val="30">+30</button>
+                        <button type="button" class="aoe-pill-btn" data-val="50">+50</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Butonlar -->
+            <div class="aoe-modal-footer">
+                <button type="button" class="btn secondary action-btn" id="btn-aoe-reselect">🔄 Yeniden Seç</button>
+                <div class="aoe-footer-right">
+                    <button type="button" class="btn back-btn action-btn" id="btn-cancel-aoe">İptal</button>
+                    <button type="button" class="btn danger action-btn aoe-submit-btn" id="btn-submit-aoe-damage">🔥 Hasarı Uygula</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Mobil Sidebar Toggle -->
     <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Paneli Aç/Kapat">☰</button>
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
@@ -1127,6 +1194,7 @@
     <script src="js/client.js?v=9"></script>
     <script src="js/attack-panel.js?v=5"></script>
     <script src="js/combat-tracker.js?v=4"></script>
+    <script src="js/aoe-damage.js?v=1"></script>
     <script>
         // Mobile sidebar toggle
         (function() {

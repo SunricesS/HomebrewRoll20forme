@@ -4290,3 +4290,843 @@ input[type="color"]::-webkit-color-swatch {
     border-radius: 4px;
     border: 1px solid rgba(14, 165, 233, 0.3);
 }
+
+/* ============================================================
+   DM COMBAT AOE DAMAGE (ALAN HASARI) SİSTEMİ
+   ============================================================ */
+
+/* Sol Alt AoE Butonu */
+.dm-aoe-floating-btn {
+    position: fixed;
+    bottom: 74px;
+    left: 24px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    background: linear-gradient(180deg, rgba(45, 20, 15, 0.95) 0%, rgba(25, 10, 8, 0.98) 100%);
+    border: 1.5px solid #ef4444;
+    border-radius: 30px;
+    color: #fca5a5;
+    font-family: var(--font-title);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 14px rgba(239, 68, 68, 0.35);
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: auto;
+}
+
+.dm-aoe-floating-btn:hover {
+    border-color: #f87171;
+    color: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 22px rgba(239, 68, 68, 0.65);
+    transform: translateY(-2px);
+}
+
+.dm-aoe-floating-btn.active {
+    border-color: #fbbf24;
+    color: #ffffff;
+    background: linear-gradient(180deg, rgba(80, 25, 15, 0.98) 0%, rgba(45, 12, 8, 0.98) 100%);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.8), 0 6px 20px rgba(0, 0, 0, 0.8);
+    animation: aoeBtnPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes aoeBtnPulse {
+    0%, 100% {
+        box-shadow: 0 0 14px rgba(239, 68, 68, 0.5), 0 6px 20px rgba(0, 0, 0, 0.8);
+    }
+    50% {
+        box-shadow: 0 0 26px rgba(245, 158, 11, 0.9), 0 6px 20px rgba(0, 0, 0, 0.8);
+        border-color: #f59e0b;
+    }
+}
+
+/* Harita SVG Hedefleme Katmanı */
+.aoe-targeting-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.aoe-targeting-layer.active {
+    pointer-events: auto;
+    cursor: crosshair;
+}
+
+.aoe-svg-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.aoe-svg-circle {
+    fill: rgba(239, 68, 68, 0.24);
+    stroke: #f59e0b;
+    stroke-width: 2.5;
+    stroke-dasharray: 8 5;
+    filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.65));
+    animation: aoeCircleDash 20s linear infinite;
+    transform-origin: center;
+}
+
+@keyframes aoeCircleDash {
+    to {
+        stroke-dashoffset: -100;
+    }
+}
+
+.aoe-svg-center-dot {
+    fill: #ef4444;
+    stroke: #fbbf24;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.9));
+}
+
+.aoe-svg-radius-line {
+    stroke: #fbbf24;
+    stroke-width: 1.8;
+    stroke-dasharray: 4 3;
+}
+
+.aoe-radius-badge {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    background: rgba(20, 10, 8, 0.9);
+    border: 1px solid #f59e0b;
+    color: #fbbf24;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-title);
+    padding: 3px 8px;
+    border-radius: 12px;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.8), 0 0 8px rgba(245, 158, 11, 0.4);
+    white-space: nowrap;
+    z-index: 20;
+    margin-top: -6px;
+}
+
+/* Alanda Kalan Tokenlar Vurgusu */
+.token.token-aoe-targeted {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 18px #ef4444, inset 0 0 10px rgba(239, 68, 68, 0.6) !important;
+    transform: scale(1.08);
+    animation: aoeTargetPulse 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes aoeTargetPulse {
+    from {
+        box-shadow: 0 0 12px #ef4444, inset 0 0 6px rgba(239, 68, 68, 0.5);
+    }
+    to {
+        box-shadow: 0 0 24px #f59e0b, 0 0 10px #ef4444, inset 0 0 12px rgba(245, 158, 11, 0.7);
+        border-color: #f59e0b !important;
+    }
+}
+
+/* AoE Hasar Modalı */
+.aoe-modal-box {
+    width: 480px;
+    max-width: 95%;
+    border-color: #ef4444;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 0 10px 32px rgba(0, 0, 0, 0.85), 0 0 35px rgba(239, 68, 68, 0.25);
+}
+
+.aoe-modal-summary-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: var(--radius-md);
+    margin-bottom: 16px;
+}
+
+.aoe-summary-icon {
+    font-size: 24px;
+}
+
+.aoe-summary-text {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+#aoe-modal-radius-info {
+    font-weight: 700;
+    color: #fca5a5;
+    font-size: 13px;
+}
+
+#aoe-modal-targets-count {
+    color: #e5c158;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.aoe-targets-section {
+    text-align: left;
+    margin-bottom: 16px;
+}
+
+.aoe-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.aoe-section-title {
+    font-family: var(--font-title);
+    font-size: 13px;
+    font-weight: 700;
+    color: #e5c158;
+}
+
+.aoe-section-hint {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.aoe-targets-list {
+    max-height: 180px;
+    overflow-y: auto;
+    background: rgba(14, 10, 8, 0.7);
+    border: 1px solid rgba(197, 160, 89, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.aoe-target-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: rgba(26, 18, 14, 0.85);
+    border: 1px solid rgba(197, 160, 89, 0.15);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.aoe-target-item:hover {
+    background: rgba(45, 30, 20, 0.95);
+    border-color: rgba(229, 193, 88, 0.4);
+}
+
+.aoe-target-item.excluded {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.aoe-target-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid #e5c158;
+    flex-shrink: 0;
+}
+
+.aoe-target-initial {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e74c3c;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+}
+
+.aoe-target-info {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 0;
+}
+
+.aoe-target-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.aoe-target-hp {
+    font-size: 11px;
+    color: #94a3b8;
+    font-family: var(--font-mono);
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+/* Hasar Girişi */
+.aoe-damage-input-section {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+.aoe-input-label {
+    display: block;
+    font-family: var(--font-title);
+    font-size: 13px;
+    font-weight: 700;
+    color: #e5c158;
+    margin-bottom: 6px;
+}
+
+.aoe-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.aoe-num-input {
+    width: 130px;
+    font-size: 20px !important;
+    font-weight: 800;
+    text-align: center;
+    color: #ef4444 !important;
+    border-color: #ef4444 !important;
+    padding: 8px 12px !important;
+}
+
+.aoe-quick-dmg-pills {
+    display: flex;
+    gap: 6px;
+}
+
+.aoe-pill-btn {
+    padding: 6px 12px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 14px;
+    color: #fca5a5;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.aoe-pill-btn:hover {
+    background: rgba(239, 68, 68, 0.35);
+    color: #ffffff;
+    border-color: #ef4444;
+    transform: translateY(-1px);
+}
+
+.aoe-modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 14px;
+    border-top: 1px solid rgba(229, 193, 88, 0.2);
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.aoe-footer-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.aoe-submit-btn {
+    background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%) !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4) !important;
+    font-weight: 800;
+}
+
+.aoe-submit-btn:hover {
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.7) !important;
+}
+
+/* Patlama & Floating Hasar Animasyonları */
+.aoe-explosion-burst {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 25;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.7) 0%, rgba(239, 68, 68, 0.5) 40%, rgba(185, 28, 28, 0.2) 75%, transparent 100%);
+    border: 3px solid #fbbf24;
+    box-shadow: 0 0 40px #f59e0b, inset 0 0 30px #ef4444;
+    animation: aoeExplosionBurst 1.2s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+@keyframes aoeExplosionBurst {
+    0% {
+        transform: scale(0.1);
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(1.05);
+        opacity: 0;
+    }
+}
+
+.aoe-floating-damage {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    color: #ef4444;
+    font-family: var(--font-title);
+    font-size: 26px;
+    font-weight: 900;
+    text-shadow: 0 0 10px #000000, 0 0 20px rgba(239, 68, 68, 0.8), 2px 2px 0 #000;
+    pointer-events: none;
+    z-index: 30;
+    animation: aoeFloatDamage 1.6s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes aoeFloatDamage {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 0) scale(0.6);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -20px) scale(1.2);
+    }
+    50% {
+        transform: translate(-50%, -40px) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -70px) scale(0.9);
+    }
+}
+
+/* ============================================================
+   TOKEN & CARD STATUS EFFECT VISUALS (FELÇLİ, YANAN, DURDURULAMAZ)
+   ============================================================ */
+
+/* 1. FELÇLİ (PARALYZED) — Mor Elektrik Titreşimi ve Ark Halkası */
+.token.token-status-paralyzed {
+    border-color: #c084fc !important;
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.95), 0 0 32px rgba(147, 51, 234, 0.7), inset 0 0 12px rgba(192, 132, 252, 0.75) !important;
+    animation: tokenParalyzedPulse 1.2s infinite alternate ease-in-out !important;
+}
+
+.token.token-status-paralyzed::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: inherit;
+    border: 2px dashed #c084fc;
+    box-shadow: 0 0 14px rgba(192, 132, 252, 0.85);
+    pointer-events: none;
+    animation: tokenParalyzedRing 3s linear infinite;
+    z-index: 8;
+}
+
+@keyframes tokenParalyzedPulse {
+    0% {
+        box-shadow: 0 0 12px rgba(168, 85, 247, 0.8), 0 0 22px rgba(147, 51, 234, 0.5), inset 0 0 8px rgba(192, 132, 252, 0.6);
+        border-color: #a855f7 !important;
+    }
+    100% {
+        box-shadow: 0 0 26px rgba(192, 132, 252, 1), 0 0 46px rgba(147, 51, 234, 0.85), inset 0 0 16px rgba(233, 213, 255, 0.9);
+        border-color: #f3e8ff !important;
+    }
+}
+
+@keyframes tokenParalyzedRing {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* 2. YANAN (BURNING) — Alevli Turuncu/Kırmızı Titreşim ve Dans Eden Alev */
+.token.token-status-burning {
+    border-color: #f97316 !important;
+    box-shadow: 0 0 18px rgba(249, 115, 22, 0.95), 0 -8px 28px rgba(239, 68, 68, 0.85), inset 0 -6px 14px rgba(234, 179, 8, 0.8) !important;
+    animation: tokenFlameFlicker 0.9s infinite alternate ease-in-out !important;
+}
+
+.token.token-status-burning::after {
+    content: '🔥';
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    filter: drop-shadow(0 0 8px #f97316) drop-shadow(0 0 16px #ef4444);
+    animation: burningFlameDance 0.75s infinite alternate ease-in-out;
+    pointer-events: none;
+    z-index: 12;
+}
+
+@keyframes tokenFlameFlicker {
+    0% {
+        box-shadow: 0 0 14px rgba(249, 115, 22, 0.85), 0 -6px 20px rgba(239, 68, 68, 0.7), inset 0 -4px 10px rgba(234, 179, 8, 0.7);
+        border-color: #f97316 !important;
+    }
+    50% {
+        box-shadow: 0 0 24px rgba(234, 179, 8, 1), 0 -12px 34px rgba(239, 68, 68, 0.95), inset 0 -8px 18px rgba(249, 115, 22, 0.9);
+        border-color: #fbbf24 !important;
+    }
+    100% {
+        box-shadow: 0 0 18px rgba(239, 68, 68, 0.9), 0 -8px 26px rgba(249, 115, 22, 0.8), inset 0 -6px 12px rgba(234, 179, 8, 0.8);
+        border-color: #ef4444 !important;
+    }
+}
+
+@keyframes burningFlameDance {
+    0% {
+        transform: translateX(-50%) translateY(0) scale(0.92) rotate(-4deg);
+    }
+    100% {
+        transform: translateX(-50%) translateY(-5px) scale(1.22) rotate(6deg);
+    }
+}
+
+/* 3. DURDURULAMAZ (UNSTOPPABLE) — Parlak Altın Rünik Kalkan Dalgası */
+.token.token-status-unstoppable {
+    border-color: #fbbf24 !important;
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.95), 0 0 35px rgba(245, 158, 11, 0.75), inset 0 0 14px rgba(254, 240, 138, 0.85) !important;
+    animation: tokenUnstoppablePulse 1.8s infinite ease-in-out !important;
+}
+
+.token.token-status-unstoppable::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: inherit;
+    border: 2px solid rgba(250, 204, 21, 0.7);
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.85), inset 0 0 10px rgba(254, 240, 138, 0.5);
+    pointer-events: none;
+    animation: unstoppableShieldRotate 6s linear infinite;
+    z-index: 8;
+}
+
+@keyframes tokenUnstoppablePulse {
+    0%, 100% {
+        box-shadow: 0 0 16px rgba(234, 179, 8, 0.85), 0 0 28px rgba(217, 119, 6, 0.6), inset 0 0 10px rgba(254, 240, 138, 0.7);
+        border-color: #f59e0b !important;
+    }
+    50% {
+        box-shadow: 0 0 32px rgba(250, 204, 21, 1), 0 0 52px rgba(245, 158, 11, 0.95), inset 0 0 20px rgba(255, 255, 255, 0.95);
+        border-color: #fef08a !important;
+    }
+}
+
+@keyframes unstoppableShieldRotate {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* 4. BARINAK / DOKUNULMAZ (SHELTER) — Göksel Kristal Kubbe */
+.token.token-status-shelter {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.95), 0 0 35px rgba(14, 165, 233, 0.75), inset 0 0 14px rgba(186, 230, 253, 0.85) !important;
+    animation: tokenShelterGlow 2s infinite ease-in-out !important;
+}
+
+@keyframes tokenShelterGlow {
+    0%, 100% {
+        box-shadow: 0 0 14px rgba(56, 189, 248, 0.8), inset 0 0 10px rgba(186, 230, 253, 0.6);
+        border-color: #38bdf8 !important;
+    }
+    50% {
+        box-shadow: 0 0 28px rgba(14, 165, 233, 1), 0 0 48px rgba(56, 189, 248, 0.95), inset 0 0 18px #ffffff;
+        border-color: #bae6fd !important;
+    }
+}
+
+/* Çift Efekt Kombinasyonu: Hem Yanan Hem Felçli */
+.token.token-status-burning.token-status-paralyzed {
+    border-color: #e879f9 !important;
+    box-shadow: 0 0 18px rgba(249, 115, 22, 0.95), 0 0 30px rgba(168, 85, 247, 0.85), inset 0 0 12px rgba(254, 215, 170, 0.8) !important;
+}
+
+/* ==================== BG3 COMBAT TRACKER KARTLARI EFEKT VURGULARI ==================== */
+.bg3-combat-card.card-status-paralyzed {
+    border-color: #c084fc !important;
+    box-shadow: 0 0 14px rgba(168, 85, 247, 0.75), 0 4px 12px rgba(0, 0, 0, 0.8) !important;
+}
+
+.bg3-combat-card.card-status-burning {
+    border-color: #f97316 !important;
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.8), 0 -4px 12px rgba(239, 68, 68, 0.7) !important;
+}
+
+.bg3-combat-card.card-status-unstoppable {
+    border-color: #facc15 !important;
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.8), 0 0 24px rgba(245, 158, 11, 0.5) !important;
+}
+
+.bg3-combat-card.card-status-shelter {
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.75) !important;
+}
+
+/* ==================== BG3 ALT HOTBAR AVATAR EFEKT GLOW ==================== */
+#bg3-hotbar-avatar-wrap.status-glow-paralyzed {
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.85) !important;
+    border-color: #c084fc !important;
+}
+
+#bg3-hotbar-avatar-wrap.status-glow-burning {
+    box-shadow: 0 0 18px rgba(249, 115, 22, 0.9), 0 -4px 14px rgba(239, 68, 68, 0.8) !important;
+    border-color: #f97316 !important;
+}
+
+#bg3-hotbar-avatar-wrap.status-glow-unstoppable {
+    box-shadow: 0 0 18px rgba(234, 179, 8, 0.85) !important;
+    border-color: #facc15 !important;
+}
+
+#bg3-hotbar-avatar-wrap.status-glow-shelter {
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.85) !important;
+    border-color: #38bdf8 !important;
+}
+
+/* ============================================================
+   VURUŞ HİSSİ (HIT IMPACT, SLASH, RECOIL & SCREEN SHAKE)
+   ============================================================ */
+
+/* 1. Token Darbe Titremesi ve Flinch Recoil */
+.token.token-impact-shake {
+    animation: tokenImpactRecoil 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) !important;
+    z-index: 50 !important;
+}
+
+@keyframes tokenImpactRecoil {
+    0% {
+        transform: scale(1);
+    }
+    15% {
+        transform: translate(-10px, -6px) scale(0.9) rotate(-8deg);
+        filter: brightness(2) drop-shadow(0 0 20px #ef4444);
+    }
+    30% {
+        transform: translate(9px, 6px) scale(1.1) rotate(6deg);
+        filter: brightness(1.5) drop-shadow(0 0 16px #f97316);
+    }
+    50% {
+        transform: translate(-6px, 4px) scale(0.96) rotate(-4deg);
+    }
+    70% {
+        transform: translate(4px, -3px) scale(1.04) rotate(2deg);
+    }
+    85% {
+        transform: translate(-2px, 1px) scale(0.99);
+    }
+    100% {
+        transform: translate(0, 0) scale(1) rotate(0deg);
+        filter: none;
+    }
+}
+
+/* 2. Harita / Ekran Sarsıntısı (Screen Shake) */
+.map-screen-shake {
+    animation: mapShakeAnim 0.22s ease-in-out !important;
+}
+
+.map-screen-shake-crit {
+    animation: mapCritShakeAnim 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) !important;
+}
+
+@keyframes mapShakeAnim {
+    0% { transform: translate(0, 0); }
+    20% { transform: translate(-4px, 3px); }
+    40% { transform: translate(4px, -3px); }
+    60% { transform: translate(-3px, 2px); }
+    80% { transform: translate(2px, -1px); }
+    100% { transform: translate(0, 0); }
+}
+
+@keyframes mapCritShakeAnim {
+    0% { transform: translate(0, 0) scale(1); }
+    15% { transform: translate(-8px, 6px) scale(1.008); }
+    30% { transform: translate(8px, -6px) scale(1.006); }
+    50% { transform: translate(-5px, 4px) scale(1.003); }
+    70% { transform: translate(4px, -3px) scale(1.001); }
+    85% { transform: translate(-2px, 2px); }
+    100% { transform: translate(0, 0) scale(1); }
+}
+
+/* 3. Kılıç Kesme & Darbe Kıvılcım Efekti (Slash & Impact Shockwave) */
+.impact-strike-fx {
+    position: absolute;
+    pointer-events: none;
+    z-index: 60;
+    width: 100px;
+    height: 100px;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.impact-strike-slash {
+    position: absolute;
+    width: 130px;
+    height: 5px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.95) 30%, #ef4444 65%, transparent 100%);
+    box-shadow: 0 0 16px #ef4444, 0 0 28px #ffffff;
+    border-radius: 3px;
+    transform: rotate(-35deg) scaleX(0);
+    animation: slashCutAnim 0.32s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
+
+@keyframes slashCutAnim {
+    0% {
+        transform: rotate(-35deg) scaleX(0.1);
+        opacity: 1;
+    }
+    40% {
+        transform: rotate(-35deg) scaleX(1.3);
+        opacity: 1;
+        filter: brightness(2);
+    }
+    100% {
+        transform: rotate(-35deg) scaleX(1.55);
+        opacity: 0;
+        filter: brightness(1);
+    }
+}
+
+.impact-strike-ring {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border: 3px solid #f59e0b;
+    border-radius: 50%;
+    box-shadow: 0 0 20px #ef4444, inset 0 0 12px #f59e0b;
+    animation: impactRingBurst 0.38s ease-out forwards;
+}
+
+@keyframes impactRingBurst {
+    0% {
+        transform: scale(0.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(3.5);
+        opacity: 0;
+    }
+}
+
+.impact-strike-fx.is-critical .impact-strike-slash {
+    height: 8px;
+    width: 160px;
+    box-shadow: 0 0 24px #ef4444, 0 0 36px #fbbf24, 0 0 50px #ffffff;
+    background: linear-gradient(90deg, transparent 0%, #ffffff 25%, #fbbf24 50%, #ef4444 80%, transparent 100%);
+}
+
+.impact-strike-fx.is-critical .impact-strike-ring {
+    border-color: #fbbf24;
+    border-width: 4px;
+    box-shadow: 0 0 30px #ef4444, 0 0 50px #f59e0b;
+}
+
+/* 4. Token Üzerinde Sıçrayan Hasar Metni (Floating Combat Damage) */
+.token-floating-dmg {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    color: #ef4444;
+    font-family: var(--font-title);
+    font-size: 28px;
+    font-weight: 900;
+    text-shadow: 0 0 8px #000000, 0 0 16px rgba(0, 0, 0, 0.9), 0 0 24px rgba(239, 68, 68, 0.9), 2px 2px 0 #000;
+    pointer-events: none;
+    z-index: 65;
+    white-space: nowrap;
+    animation: floatDamageBounce 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.token-floating-dmg.is-critical {
+    color: #fef08a;
+    font-size: 34px;
+    text-shadow: 0 0 12px #000, 0 0 20px #ef4444, 0 0 35px #f59e0b, 0 0 50px rgba(239, 68, 68, 0.8);
+    animation: floatCritDamageBounce 1.7s cubic-bezier(0.175, 0.885, 0.32, 1.3) forwards;
+}
+
+@keyframes floatDamageBounce {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 0) scale(0.4);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -24px) scale(1.25);
+    }
+    40% {
+        transform: translate(-50%, -20px) scale(1.05);
+    }
+    60% {
+        transform: translate(-50%, -36px) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -68px) scale(0.85);
+    }
+}
+
+@keyframes floatCritDamageBounce {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 0) scale(0.3) rotate(-6deg);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -32px) scale(1.45) rotate(4deg);
+    }
+    40% {
+        transform: translate(-50%, -26px) scale(1.2) rotate(-2deg);
+    }
+    65% {
+        transform: translate(-50%, -46px) scale(1.1) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -85px) scale(0.9);
+    }
+}
+
+/* 5. Buton Basma Geri Bildirimi (Punch Recoil) */
+.btn-apply-damage-hit {
+    animation: btnApplyPunch 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+
+@keyframes btnApplyPunch {
+    0% { transform: scale(1); }
+    40% { transform: scale(0.88); box-shadow: 0 0 25px rgba(239, 68, 68, 0.9); filter: brightness(1.3); }
+    100% { transform: scale(1); }
+}

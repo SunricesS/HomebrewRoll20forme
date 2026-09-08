@@ -626,7 +626,7 @@ app.post('/api/combat/attack', (req, res) => {
 // ---- Hasar Uygula ----
 app.post('/api/combat/apply-damage', async (req, res) => {
   try {
-    const { targetType, targetId, damage, statusEffectsToApply } = req.body;
+    const { targetType, targetId, damage, statusEffectsToApply, isCritical, attackType, damageType } = req.body;
     const safeDamage = clampNumber(damage, 0, 99999);
 
     // Barınak (Shelter) kontrolü
@@ -680,6 +680,18 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         syncCombatantHp(targetId, newHp, charData.hp_max);
       }
 
+      // Vuruş hissi ve darbe efektini tüm istemcilere yayınla
+      if (safeDamage > 0) {
+        io.emit('attackHitImpact', {
+          targetType: 'character',
+          targetId,
+          damage: safeDamage,
+          isCritical: Boolean(isCritical),
+          attackType: attackType || 'physical',
+          damageType: damageType || 'slashing'
+        });
+      }
+
       res.json({ success: true, newHp, targetType: 'character' });
     } else if (targetType === 'marker') {
       // Marker hasar (in-memory)
@@ -687,6 +699,19 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         markers[targetId].hp = Math.max(0, markers[targetId].hp - safeDamage);
         io.emit('updateMarkerData', markers[targetId]);
         syncCombatantHp(targetId, markers[targetId].hp, markers[targetId].maxHp);
+
+        // Vuruş hissi ve darbe efektini tüm istemcilere yayınla
+        if (safeDamage > 0) {
+          io.emit('attackHitImpact', {
+            targetType: 'marker',
+            targetId,
+            damage: safeDamage,
+            isCritical: Boolean(isCritical),
+            attackType: attackType || 'physical',
+            damageType: damageType || 'slashing'
+          });
+        }
+
         res.json({ success: true, newHp: markers[targetId].hp, targetType: 'marker' });
       }
     } else {
@@ -1558,6 +1583,106 @@ io.on('connection', (socket) => {
       message: `⚡ DM, ${updatedCount} adet tokene toplu saldırı atadı (${attackPresetIds.length} preset).`,
       color: '#38bdf8'
     });
+  });
+
+  // ---- DM: Daire Alan Hasarı (AoE Damage) ----
+  socket.on('applyAoEDamage', async (data) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    const { damage, targets, aoeInfo } = data || {};
+    const safeDamage = clampNumber(damage, 0, 99999);
+    if (!safeDamage || !Array.isArray(targets) || targets.length === 0) return;
+
+    const affectedTargets = [];
+
+    for (const t of targets) {
+      if (!t || !t.id || !t.type) continue;
+
+      // 1. Shelter (Barınak) kontrolü
+      const targetEffects = getTokenActiveEffects(t.type, t.id);
+      const hasShelter = targetEffects.some(e => e.effects?.shelter);
+      if (hasShelter) {
+        continue;
+      }
+
+      if (t.type === 'marker') {
+        const marker = markers[t.id];
+        if (marker && marker.hp != null) {
+          const oldHp = marker.hp;
+          marker.hp = Math.max(0, marker.hp - safeDamage);
+          io.emit('updateMarkerData', marker);
+          syncCombatantHp(t.id, marker.hp, marker.maxHp);
+          affectedTargets.push({
+            type: 'marker',
+            id: t.id,
+            name: marker.name || 'Yaratık',
+            oldHp,
+            newHp: marker.hp,
+            damage: safeDamage
+          });
+        }
+      } else if (t.type === 'character') {
+        try {
+          const { data: charData, error: fetchErr } = await supabase
+            .from('characters')
+            .select('hp_current, hp_max, name')
+            .eq('id', t.id)
+            .single();
+
+          if (!fetchErr && charData) {
+            const oldHp = charData.hp_current || 0;
+            const newHp = Math.max(0, oldHp - safeDamage);
+            await supabase
+              .from('characters')
+              .update({ hp_current: newHp })
+              .eq('id', t.id);
+
+            const playerEntry = Object.entries(players).find(
+              ([, p]) => p.character && p.character.id === t.id
+            );
+            if (playerEntry) {
+              const [socketId, pData] = playerEntry;
+              pData.character.hp_current = newHp;
+              io.emit('characterUpdated', {
+                id: socketId,
+                updates: { hp_current: newHp, hp_max: charData.hp_max }
+              });
+              syncCombatantHp(socketId, newHp, charData.hp_max);
+            } else {
+              syncCombatantHp(t.id, newHp, charData.hp_max);
+            }
+
+            affectedTargets.push({
+              type: 'character',
+              id: t.id,
+              name: charData.name || 'Oyuncu',
+              oldHp,
+              newHp,
+              damage: safeDamage
+            });
+          }
+        } catch (err) {
+          console.error('AoE hasar uygulama karakter hatası:', err);
+        }
+      }
+    }
+
+    if (affectedTargets.length > 0) {
+      backupMapState();
+
+      // Tüm istemcilere görsel patlama dalgası ve floating hasar rakamları bildir
+      io.emit('aoeDamageApplied', {
+        damage: safeDamage,
+        aoeInfo,
+        affectedTargets
+      });
+
+      // Oyun günlüğüne yaz
+      const names = affectedTargets.map(at => `${at.name} (-${at.damage})`).join(', ');
+      io.emit('logMessage', {
+        message: `💥 [ALAN HASARI] DM ${safeDamage} hasar vurdu! Etkilenenler: ${names}`,
+        color: '#ef4444'
+      });
+    }
   });
 
   // ---- DM: Arka Plan Güncelle ----

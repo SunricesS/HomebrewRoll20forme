@@ -90,6 +90,183 @@
   }
 
   // ============================================================
+  // VURUŞ HİSSİ (WEB AUDIO API SES VE GÖRSEL DARBE MOTORU)
+  // ============================================================
+
+  let audioCtx = null;
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) audioCtx = new AudioCtx();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  /**
+   * Tamamen yerel Web Audio API ile güçlü, tok ve organik vuruş sesleri üretir.
+   */
+  function playHitSound(options = {}) {
+    const { isCritical = false, attackType = 'physical', damage = 10 } = options;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // 1. Düşük Frekanslı Gövde Vuruşu (Deep Punch / Heavy Thud)
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      const startFreq = isCritical ? 160 : (attackType === 'spell' ? 240 : 120);
+      const endFreq = isCritical ? 24 : 32;
+      const duration = isCritical ? 0.38 : 0.24;
+
+      osc.type = isCritical ? 'sawtooth' : (attackType === 'spell' ? 'sine' : 'triangle');
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+
+      const volume = Math.min(1.0, 0.4 + (damage / 80) * 0.45 + (isCritical ? 0.3 : 0));
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration);
+
+      // 2. Kılıç Kesme / Çarpma Şapırtısı (Noise Burst)
+      const bufferSize = Math.floor(ctx.sampleRate * (isCritical ? 0.14 : 0.09));
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = attackType === 'spell' ? 'bandpass' : 'highpass';
+      noiseFilter.frequency.setValueAtTime(attackType === 'spell' ? 1400 : 900, now);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(volume * 0.55, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + (isCritical ? 0.14 : 0.09));
+
+      whiteNoise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+
+      whiteNoise.start(now);
+
+      // 3. Kritik Vuruş Çınlaması (Resonant High Chime)
+      if (isCritical) {
+        const chimeOsc = ctx.createOscillator();
+        const chimeGain = ctx.createGain();
+        chimeOsc.type = 'sine';
+        chimeOsc.frequency.setValueAtTime(900, now);
+        chimeOsc.frequency.exponentialRampToValueAtTime(1800, now + 0.08);
+        chimeOsc.frequency.exponentialRampToValueAtTime(520, now + 0.42);
+
+        chimeGain.gain.setValueAtTime(0.35, now);
+        chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        chimeOsc.connect(chimeGain);
+        chimeGain.connect(ctx.destination);
+
+        chimeOsc.start(now);
+        chimeOsc.stop(now + 0.45);
+      }
+    } catch (e) {}
+  }
+
+  function findTokenElement(targetType, targetId) {
+    if (!targetId) return null;
+    const idStr = String(targetId);
+    if (typeof tokens !== 'undefined' && tokens[idStr]) return tokens[idStr];
+    if (targetType === 'character' && typeof allPlayers !== 'undefined') {
+      const p = Object.values(allPlayers).find(pl => pl.character && String(pl.character.id) === idStr);
+      if (p && tokens[p.id]) return tokens[p.id];
+    }
+    return document.querySelector(`.token[data-id="${idStr}"]`) ||
+           document.querySelector(`.token[data-character-id="${idStr}"]`);
+  }
+
+  const recentImpacts = new Set();
+
+  /**
+   * Hedef token üzerinde sarsıntı, kesme efekti, sıçrayan hasar metni ve ses efektini tetikler.
+   */
+  function triggerHitImpact(data) {
+    const { targetType, targetId, damage, isCritical, attackType } = data || {};
+    const key = `${targetType}:${targetId}`;
+    recentImpacts.add(key);
+    setTimeout(() => recentImpacts.delete(key), 700);
+
+    // 1. Organik Vuruş Sesi Çal
+    playHitSound({ isCritical, attackType, damage });
+
+    // 2. Harita Kamerası Sarsıntısı (Screenshake)
+    const gameMapEl = document.getElementById('game-map');
+    if (gameMapEl) {
+      const shakeClass = isCritical ? 'map-screen-shake-crit' : 'map-screen-shake';
+      gameMapEl.classList.remove('map-screen-shake', 'map-screen-shake-crit');
+      void gameMapEl.offsetWidth;
+      gameMapEl.classList.add(shakeClass);
+      setTimeout(() => gameMapEl.classList.remove(shakeClass), isCritical ? 360 : 250);
+    }
+
+    // 3. Token Görsel Tepkileri
+    const mapContent = document.getElementById('map-content');
+    const tokenEl = findTokenElement(targetType, targetId);
+    if (!tokenEl || !mapContent) return;
+
+    // Token Flinch Shake (Geri tepme & Parlama)
+    tokenEl.classList.remove('token-impact-shake');
+    void tokenEl.offsetWidth;
+    tokenEl.classList.add('token-impact-shake');
+    setTimeout(() => tokenEl.classList.remove('token-impact-shake'), 460);
+
+    const tokenLeft = parseFloat(tokenEl.style.left) || tokenEl.offsetLeft || 0;
+    const tokenTop = parseFloat(tokenEl.style.top) || tokenEl.offsetTop || 0;
+    const tokenSize = tokenEl.offsetWidth || 50;
+    const cx = tokenLeft + tokenSize / 2;
+    const cy = tokenTop + tokenSize / 2;
+
+    // Kılıç Kesme & Kıvılcım Halka Efekti (Slash Trail & Shockwave)
+    const strikeFx = document.createElement('div');
+    strikeFx.className = `impact-strike-fx ${isCritical ? 'is-critical' : ''}`;
+    strikeFx.style.left = `${cx}px`;
+    strikeFx.style.top = `${cy}px`;
+
+    const slash = document.createElement('div');
+    slash.className = 'impact-strike-slash';
+    strikeFx.appendChild(slash);
+
+    const ring = document.createElement('div');
+    ring.className = 'impact-strike-ring';
+    strikeFx.appendChild(ring);
+
+    mapContent.appendChild(strikeFx);
+    setTimeout(() => strikeFx.remove(), 550);
+
+    // Sıçrayan Hasar Metni (Floating Combat Damage)
+    const floatText = document.createElement('div');
+    floatText.className = `token-floating-dmg ${isCritical ? 'is-critical' : ''}`;
+    floatText.textContent = isCritical ? `💥 KRİTİK! -${damage}` : `-${damage}`;
+    floatText.style.left = `${cx}px`;
+    floatText.style.top = `${tokenTop}px`;
+
+    mapContent.appendChild(floatText);
+    setTimeout(() => floatText.remove(), 1700);
+  }
+
+  window.__webdnd_triggerHitImpact = triggerHitImpact;
+
+  // ============================================================
   // GOOGLE DICE ROLLER — ZAR HAVUZU YÖNETİCİSİ (DICE POOL CHANNEL)
   // ============================================================
 
@@ -1403,6 +1580,7 @@
       addCombatLog(`<span class="atk-log-total">=== ${escapeHtml(target.name)}: TOPLAM HASAR: ${result.totalDamage} ===</span>`, 'total');
 
       // Sonucu sakla (çoklu hasar uygulama için)
+      const hasCritical = result.attacks ? result.attacks.some(a => a.isCritical) : false;
       if (result.totalDamage > 0 || (result.statusEffectsToApply && result.statusEffectsToApply.length > 0)) {
         lastAttackResults.push({
           totalDamage: result.totalDamage,
@@ -1410,7 +1588,10 @@
           targetType: target.type,
           targetName: target.name,
           attackerName: selectedAttacker?.name,
-          statusEffectsToApply: result.statusEffectsToApply || []
+          statusEffectsToApply: result.statusEffectsToApply || [],
+          isCritical: hasCritical,
+          attackType: body.attackType || 'physical',
+          physicalDamageType: body.physicalDamageType || 'slashing'
         });
       }
 
@@ -1454,8 +1635,22 @@
       btnApplyDamage.disabled = true;
       btnApplyDamage.textContent = 'Uygulanıyor...';
 
+      if (btnApplyDamage) {
+        btnApplyDamage.classList.add('btn-apply-damage-hit');
+        setTimeout(() => btnApplyDamage.classList.remove('btn-apply-damage-hit'), 350);
+      }
+
       for (const attackResult of lastAttackResults) {
         try {
+          // Yerel olarak anında vuruş hissi oynat (sıfır gecikme)
+          triggerHitImpact({
+            targetType: attackResult.targetType,
+            targetId: attackResult.targetId,
+            damage: attackResult.totalDamage,
+            isCritical: attackResult.isCritical,
+            attackType: attackResult.attackType
+          });
+
           const res = await fetch('/api/combat/apply-damage', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1463,7 +1658,10 @@
               targetType: attackResult.targetType,
               targetId: attackResult.targetId,
               damage: attackResult.totalDamage,
-              statusEffectsToApply: attackResult.statusEffectsToApply
+              statusEffectsToApply: attackResult.statusEffectsToApply,
+              isCritical: attackResult.isCritical,
+              attackType: attackResult.attackType,
+              damageType: attackResult.physicalDamageType
             })
           });
 
@@ -2072,6 +2270,13 @@
           updateTargetResistanceBadges();
         }, 300);
       }
+    });
+
+    // Sunucudan gelen vuruş hissi olayı (diğer oyuncuların ekranlarında da görünür)
+    socket.on('attackHitImpact', (data) => {
+      const key = `${data.targetType}:${data.targetId}`;
+      if (recentImpacts.has(key)) return;
+      triggerHitImpact(data);
     });
 
     // Hasar türü dropdown değişikliği
