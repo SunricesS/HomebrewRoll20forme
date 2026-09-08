@@ -161,6 +161,10 @@ socket.on('connect', () => {
   const logName = role === 'dm' ? "DM Olarak giriş yaptınız." : `${characterData?.name || 'Oyuncu'} olarak giriş yaptınız.`;
   addLog(logName);
 
+  // Supabase'deki güncel şablonları sunucudan talep et
+  socket.emit('getCustomEffects');
+  socket.emit('getAttackPresets');
+
   if (role === 'dm') {
     document.getElementById('dm-tools').classList.remove('hidden');
   } else {
@@ -222,14 +226,23 @@ socket.on('updateMarkerData', (markerData) => {
     renderMarkerEditorActiveEffects(markerData);
     renderMarkerAssignedAttacks(markerData);
   }
+  if (typeof refreshBatchAssignModalIfOpen === 'function') {
+    refreshBatchAssignModalIfOpen();
+  }
 });
 
 socket.on('attackPresetsUpdated', () => {
+  if (typeof populateCreateTokenAttacksList === 'function') {
+    populateCreateTokenAttacksList();
+  }
   if (typeof editingPlayerId !== 'undefined' && editingPlayerId && allPlayers && allPlayers[editingPlayerId]) {
     renderPlayerAssignedAttacks(allPlayers[editingPlayerId]);
   }
   if (typeof editingMarkerId !== 'undefined' && editingMarkerId && window.__webdnd_markers && window.__webdnd_markers[editingMarkerId]) {
     renderMarkerAssignedAttacks(window.__webdnd_markers[editingMarkerId]);
+  }
+  if (typeof refreshBatchAssignModalIfOpen === 'function') {
+    refreshBatchAssignModalIfOpen();
   }
 });
 
@@ -810,7 +823,11 @@ if (btnAddMarker) {
       chr_bonus: getNum('dm-marker-chr-bonus'),
     };
 
-    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats });
+    // Seçili saldırı presetlerini al (Opsiyonel)
+    const createAttacksCbs = document.querySelectorAll('#dm-create-token-attacks-list input[type="checkbox"]:checked');
+    const assignedAttacks = Array.from(createAttacksCbs).map(cb => cb.value);
+
+    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats, assignedAttacks });
 
     // Sadece adı temizle — HP/AC/stat değerleri bir sonraki aynı tür düşman için kalır
     nameEl.value = '';
@@ -2018,26 +2035,7 @@ socket.on('diceRolled', (data) => {
 // STATUS EFFECTS & CUSTOM EFFECT BUILDER (DM TOOLBOX)
 // ============================================================
 
-let currentStatusPresets = [
-  { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 3, effects: { dotDamage: { min: 1, max: 6 } } },
-  { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } },
-  { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 2, effects: { blind: true } },
-  { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } },
-  { id: 'preset_shelter', name: 'Barınak', icon: '🛡️', duration: 1, effects: { shelter: true } },
-  { id: 'preset_prepared', name: 'Hazır', icon: '🎯', duration: 2, effects: { prepared: true } },
-  { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
-  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } },
-  // Hasar Dirençleri (0.5x Hasar)
-  { id: 'preset_res_bludgeoning', name: 'Ezme Direnci', icon: '🔨', duration: null, effects: { resistance: 'bludgeoning' } },
-  { id: 'preset_res_slashing', name: 'Kesme Direnci', icon: '⚔️', duration: null, effects: { resistance: 'slashing' } },
-  { id: 'preset_res_piercing', name: 'Delme Direnci', icon: '🏹', duration: null, effects: { resistance: 'piercing' } },
-  { id: 'preset_res_magic', name: 'Büyü Direnci', icon: '🔮', duration: null, effects: { resistance: 'magic' } },
-  // Hasar Zayıflıkları (2x Hasar)
-  { id: 'preset_vuln_bludgeoning', name: 'Ezme Zayıflığı', icon: '💥🔨', duration: null, effects: { vulnerability: 'bludgeoning' } },
-  { id: 'preset_vuln_slashing', name: 'Kesme Zayıflığı', icon: '💥⚔️', duration: null, effects: { vulnerability: 'slashing' } },
-  { id: 'preset_vuln_piercing', name: 'Delme Zayıflığı', icon: '💥🏹', duration: null, effects: { vulnerability: 'piercing' } },
-  { id: 'preset_vuln_magic', name: 'Büyü Zayıflığı', icon: '💥✨', duration: null, effects: { vulnerability: 'magic' } }
-];
+let currentStatusPresets = [];
 
 // Socket senkronizasyonu
 socket.on('customEffectsUpdated', (presets) => {
@@ -2135,13 +2133,14 @@ function populateTokenEditorEffectSelect(selectEl) {
 
     const id = p.id || '';
     const name = (p.name || '').toLowerCase();
-    if (id.startsWith('preset_res_') || name.includes('diren')) {
+    const eff = p.effects || {};
+    if (id.startsWith('preset_res_') || eff.resistance || eff.res_bludgeoning || eff.res_slashing || eff.res_piercing || eff.res_magic || name.includes('diren')) {
       groupRes.appendChild(opt);
-    } else if (id.startsWith('preset_vuln_') || name.includes('zayıf')) {
+    } else if (id.startsWith('preset_vuln_') || eff.vulnerability || eff.vuln_bludgeoning || eff.vuln_slashing || eff.vuln_piercing || eff.vuln_magic || name.includes('zayıf')) {
       groupVuln.appendChild(opt);
-    } else if (['preset_burn', 'preset_bleed', 'preset_blind', 'preset_paralyzed', 'preset_poison'].includes(id)) {
+    } else if (eff.dotDamage || eff.blind || eff.paralyzed || ['preset_burn', 'preset_bleed', 'preset_blind', 'preset_paralyzed', 'preset_poison'].includes(id)) {
       groupDebuff.appendChild(opt);
-    } else if (['preset_shelter', 'preset_prepared', 'preset_unstoppable'].includes(id)) {
+    } else if (eff.shelter || eff.prepared || eff.unstoppable || ['preset_shelter', 'preset_prepared', 'preset_unstoppable'].includes(id)) {
       groupBuff.appendChild(opt);
     } else {
       groupOther.appendChild(opt);
@@ -2288,6 +2287,11 @@ function renderStatusPresets() {
   if (!grid) return;
 
   grid.innerHTML = '';
+
+  if (!currentStatusPresets || currentStatusPresets.length === 0) {
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 24px 10px; color: #888; font-size: 13px;">Henüz kayıtlı durum efekti yok. Aşağıdan yeni durum efekti oluşturup kaydedebilirsiniz.</div>';
+    return;
+  }
 
   currentStatusPresets.forEach(preset => {
     const card = document.createElement('div');
@@ -2540,9 +2544,345 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // İlk yüklemede özel efektleri sorgula
+  // Toplu Saldırı Atama Modal Dinleyicileri
+  document.getElementById('btn-dm-batch-assign-attacks')?.addEventListener('click', openBatchAssignModal);
+  document.getElementById('btn-close-batch-attacks')?.addEventListener('click', closeBatchAssignModal);
+  document.getElementById('btn-cancel-batch-attacks')?.addEventListener('click', closeBatchAssignModal);
+  document.getElementById('btn-submit-batch-attacks')?.addEventListener('click', submitBatchAssign);
+
+  // Token arama ve seçim butonları
+  document.getElementById('batch-tokens-search')?.addEventListener('input', (e) => {
+    renderBatchAssignTokens(e.target.value);
+  });
+  document.getElementById('batch-tokens-select-all')?.addEventListener('click', () => {
+    const markersObj = window.__webdnd_markers || {};
+    const query = (document.getElementById('batch-tokens-search')?.value || '').toLowerCase().trim();
+    Object.values(markersObj).forEach(m => {
+      if (!query || (m.name || '').toLowerCase().includes(query)) {
+        batchSelectedTokenIds.add(m.id);
+      }
+    });
+    renderBatchAssignTokens(query);
+    updateBatchAssignSummary();
+  });
+  document.getElementById('batch-tokens-clear-all')?.addEventListener('click', () => {
+    batchSelectedTokenIds.clear();
+    renderBatchAssignTokens(document.getElementById('batch-tokens-search')?.value || '');
+    updateBatchAssignSummary();
+  });
+
+  // Saldırı arama ve seçim butonları
+  document.getElementById('batch-attacks-search')?.addEventListener('input', (e) => {
+    renderBatchAssignPresets(e.target.value);
+  });
+  document.getElementById('batch-attacks-select-all')?.addEventListener('click', () => {
+    const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+    const query = (document.getElementById('batch-attacks-search')?.value || '').toLowerCase().trim();
+    allPresets.forEach(p => {
+      if (!query || (p.name || '').toLowerCase().includes(query) || (p.stat || '').toLowerCase().includes(query)) {
+        batchSelectedAttackIds.add(p.id);
+      }
+    });
+    renderBatchAssignPresets(query);
+    updateBatchAssignSummary();
+  });
+  document.getElementById('batch-attacks-clear-all')?.addEventListener('click', () => {
+    batchSelectedAttackIds.clear();
+    renderBatchAssignPresets(document.getElementById('batch-attacks-search')?.value || '');
+    updateBatchAssignSummary();
+  });
+
+  // İlk yüklemede özel efektleri sorgula ve token oluşturma saldırı listesini doldur
   if (typeof socket !== 'undefined') {
     socket.emit('getCustomEffects');
+  }
+  setTimeout(populateCreateTokenAttacksList, 1000);
+});
+
+// ============================================================
+// DM TOPLU SALDIRI ATAMA (BATCH ASSIGN ATTACKS) SİSTEMİ
+// ============================================================
+
+let batchSelectedTokenIds = new Set();
+let batchSelectedAttackIds = new Set();
+
+function openBatchAssignModal() {
+  const modal = document.getElementById('dm-batch-attacks-modal');
+  if (!modal) return;
+
+  batchSelectedTokenIds.clear();
+  batchSelectedAttackIds.clear();
+
+  // Haritadaki mevcut tüm markerları varsayılan olarak seçili yapalım
+  const markersObj = window.__webdnd_markers || {};
+  Object.keys(markersObj).forEach(id => batchSelectedTokenIds.add(id));
+
+  const searchTokens = document.getElementById('batch-tokens-search');
+  if (searchTokens) searchTokens.value = '';
+  const searchAttacks = document.getElementById('batch-attacks-search');
+  if (searchAttacks) searchAttacks.value = '';
+
+  renderBatchAssignTokens();
+  renderBatchAssignPresets();
+  updateBatchAssignSummary();
+
+  modal.classList.remove('hidden');
+}
+
+function closeBatchAssignModal() {
+  const modal = document.getElementById('dm-batch-attacks-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function refreshBatchAssignModalIfOpen() {
+  const modal = document.getElementById('dm-batch-attacks-modal');
+  if (modal && !modal.classList.contains('hidden')) {
+    const searchTokens = document.getElementById('batch-tokens-search')?.value || '';
+    const searchAttacks = document.getElementById('batch-attacks-search')?.value || '';
+    renderBatchAssignTokens(searchTokens);
+    renderBatchAssignPresets(searchAttacks);
+    updateBatchAssignSummary();
+  }
+}
+
+function renderBatchAssignTokens(filterText = '') {
+  const container = document.getElementById('batch-tokens-list');
+  const countBadge = document.getElementById('batch-tokens-count');
+  if (!container) return;
+
+  const markersObj = window.__webdnd_markers || {};
+  const markerList = Object.values(markersObj);
+
+  if (countBadge) {
+    countBadge.textContent = `${markerList.length} Token`;
+  }
+
+  const query = (filterText || '').toLowerCase().trim();
+  const filtered = markerList.filter(m => {
+    if (!query) return true;
+    return (m.name || '').toLowerCase().includes(query) || String(m.hp || '').includes(query);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 24px 8px; color: #64748b; font-size: 12px;">
+        ${query ? `"${escapeHtml(query)}" ile eşleşen token bulunamadı.` : 'Haritada henüz oluşturulmuş token bulunmuyor.'}
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '';
+  filtered.forEach(m => {
+    const item = document.createElement('div');
+    const isSelected = batchSelectedTokenIds.has(m.id);
+    item.className = `batch-check-item ${isSelected ? 'selected' : ''}`;
+
+    const assignedCount = Array.isArray(m.assignedAttacks) ? m.assignedAttacks.length : 0;
+    const hpText = m.hp != null ? `HP: ${m.hp}/${m.maxHp || m.hp}` : 'NPC';
+
+    item.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(m.id)}" ${isSelected ? 'checked' : ''}>
+      <div class="batch-token-avatar" style="background-color: ${escapeHtml(m.color || '#e5c158')};">
+        ${m.imgUrl ? `<img src="${escapeHtml(m.imgUrl)}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : escapeHtml(m.name || '?')}
+      </div>
+      <div class="batch-item-info">
+        <span class="batch-item-name">${escapeHtml(m.name || 'Token')}</span>
+        <div class="batch-item-meta">
+          <span style="color:#64748b; margin-right:4px;">${hpText}</span>
+          <span class="batch-badge-count">${assignedCount} Saldırı</span>
+        </div>
+      </div>
+    `;
+
+    const cb = item.querySelector('input[type="checkbox"]');
+    item.addEventListener('click', (e) => {
+      if (e.target !== cb) {
+        cb.checked = !cb.checked;
+      }
+      if (cb.checked) {
+        batchSelectedTokenIds.add(m.id);
+        item.classList.add('selected');
+      } else {
+        batchSelectedTokenIds.delete(m.id);
+        item.classList.remove('selected');
+      }
+      updateBatchAssignSummary();
+    });
+
+    cb.addEventListener('change', (e) => {
+      e.stopPropagation();
+      if (cb.checked) {
+        batchSelectedTokenIds.add(m.id);
+        item.classList.add('selected');
+      } else {
+        batchSelectedTokenIds.delete(m.id);
+        item.classList.remove('selected');
+      }
+      updateBatchAssignSummary();
+    });
+
+    container.appendChild(item);
+  });
+}
+
+function renderBatchAssignPresets(filterText = '') {
+  const container = document.getElementById('batch-attacks-list');
+  const countBadge = document.getElementById('batch-attacks-count');
+  if (!container) return;
+
+  const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+
+  if (countBadge) {
+    countBadge.textContent = `${allPresets.length} Saldırı`;
+  }
+
+  const query = (filterText || '').toLowerCase().trim();
+  const filtered = allPresets.filter(p => {
+    if (!query) return true;
+    return (p.name || '').toLowerCase().includes(query) || (p.stat || '').toLowerCase().includes(query);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 24px 8px; color: #64748b; font-size: 12px;">
+        ${query ? `"${escapeHtml(query)}" ile eşleşen saldırı preseti bulunamadı.` : 'Henüz kayıtlı saldırı preseti yok.'}
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '';
+  filtered.forEach(p => {
+    const item = document.createElement('div');
+    const isSelected = batchSelectedAttackIds.has(p.id);
+    item.className = `batch-check-item ${isSelected ? 'selected' : ''}`;
+
+    const stat = p.stat || 'STR';
+    const typeLabel = p.attackType === 'spell' ? `Büyü (Lvl ${p.spellLevel || 1})` : 'Fiziksel';
+
+    item.innerHTML = `
+      <input type="checkbox" value="${escapeHtml(p.id)}" ${isSelected ? 'checked' : ''}>
+      <span class="batch-badge-stat ${stat.toLowerCase()}">${stat}</span>
+      <div class="batch-item-info">
+        <span class="batch-item-name">${escapeHtml(p.name)}</span>
+        <div class="batch-item-meta">
+          <span style="color:#64748b;">${typeLabel}</span>
+        </div>
+      </div>
+    `;
+
+    const cb = item.querySelector('input[type="checkbox"]');
+    item.addEventListener('click', (e) => {
+      if (e.target !== cb) {
+        cb.checked = !cb.checked;
+      }
+      if (cb.checked) {
+        batchSelectedAttackIds.add(p.id);
+        item.classList.add('selected');
+      } else {
+        batchSelectedAttackIds.delete(p.id);
+        item.classList.remove('selected');
+      }
+      updateBatchAssignSummary();
+    });
+
+    cb.addEventListener('change', (e) => {
+      e.stopPropagation();
+      if (cb.checked) {
+        batchSelectedAttackIds.add(p.id);
+        item.classList.add('selected');
+      } else {
+        batchSelectedAttackIds.delete(p.id);
+        item.classList.remove('selected');
+      }
+      updateBatchAssignSummary();
+    });
+
+    container.appendChild(item);
+  });
+}
+
+function updateBatchAssignSummary() {
+  const badge = document.getElementById('batch-assign-summary-badge');
+  const btnSubmit = document.getElementById('btn-submit-batch-attacks');
+
+  const tokenCount = batchSelectedTokenIds.size;
+  const attackCount = batchSelectedAttackIds.size;
+
+  if (badge) {
+    badge.textContent = `${tokenCount} Token | ${attackCount} Saldırı seçildi`;
+  }
+
+  if (btnSubmit) {
+    btnSubmit.disabled = (tokenCount === 0 || attackCount === 0);
+  }
+}
+
+function submitBatchAssign() {
+  const tokenIds = Array.from(batchSelectedTokenIds);
+  const attackIds = Array.from(batchSelectedAttackIds);
+
+  if (tokenIds.length === 0) {
+    alert('Lütfen en az bir hedef token seçin.');
+    return;
+  }
+  if (attackIds.length === 0) {
+    alert('Lütfen tokenlara atanacak en az bir saldırı preseti seçin.');
+    return;
+  }
+
+  const modeRadio = document.querySelector('input[name="batch-assign-mode"]:checked');
+  const mode = modeRadio ? modeRadio.value : 'append';
+
+  socket.emit('batchAssignAttacks', {
+    markerIds: tokenIds,
+    attackPresetIds: attackIds,
+    mode: mode
+  });
+
+  closeBatchAssignModal();
+}
+
+function populateCreateTokenAttacksList() {
+  const container = document.getElementById('dm-create-token-attacks-list');
+  if (!container) return;
+
+  const allPresets = typeof window.__webdnd_getAttackPresets === 'function' ? window.__webdnd_getAttackPresets() : [];
+  if (allPresets.length === 0) {
+    container.innerHTML = '<span style="font-size: 11px; color: #64748b;">Henüz kayıtlı saldırı preseti yok.</span>';
+    return;
+  }
+
+  const previouslyChecked = new Set(Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value));
+  container.innerHTML = '';
+
+  allPresets.forEach(preset => {
+    const label = document.createElement('label');
+    label.className = 'assigned-attack-item';
+    label.style.fontSize = '11px';
+    label.style.padding = '4px 6px';
+    const isChecked = previouslyChecked.has(preset.id);
+    label.innerHTML = `
+      <input type="checkbox" class="dm-create-token-attack-checkbox" value="${escapeHtml(preset.id)}" ${isChecked ? 'checked' : ''}>
+      <span class="assigned-attack-stat-badge ${preset.stat ? preset.stat.toLowerCase() : 'str'}">${preset.stat || 'STR'}</span>
+      <span class="assigned-attack-name">${escapeHtml(preset.name)}</span>
+    `;
+    container.appendChild(label);
+  });
+}
+
+// Socket batch atama sonucu dinleyicisi
+socket.on('batchAssignAttacksResult', (res) => {
+  if (res && res.success) {
+    const toast = document.createElement('div');
+    toast.className = 'dice-toast';
+    toast.innerHTML = `⚡ <strong>${res.count} adet tokene</strong> toplu saldırı başarıyla atandı!`;
+    const mapContainer = document.getElementById('game-map');
+    if (mapContainer) {
+      mapContainer.appendChild(toast);
+      setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+    }
   }
 });
 

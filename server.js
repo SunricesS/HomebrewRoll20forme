@@ -143,7 +143,11 @@ app.get('/api/characters/:userId', async (req, res) => {
     const userId = req.params.userId;
     const { data, error } = await supabase.from('characters').select('*').eq('user_id', userId);
     if (error) throw error;
-    res.json(data);
+    const formatted = (data || []).map(c => ({
+      ...c,
+      assignedAttacks: c.assigned_attacks || c.stats?.assignedAttacks || c.assignedAttacks || []
+    }));
+    res.json(formatted);
   } catch (err) {
     console.error('Karakter çekme hatası:', err);
     res.status(500).json({ error: 'Karakterler getirilemedi.' });
@@ -155,7 +159,11 @@ app.get('/api/characters', async (req, res) => {
   try {
     const { data, error } = await supabase.from('characters').select('*');
     if (error) throw error;
-    res.json(data);
+    const formatted = (data || []).map(c => ({
+      ...c,
+      assignedAttacks: c.assigned_attacks || c.stats?.assignedAttacks || c.assignedAttacks || []
+    }));
+    res.json(formatted);
   } catch (err) {
     console.error('Tüm karakter çekme hatası:', err);
     res.status(500).json({ error: 'Karakterler getirilemedi.' });
@@ -704,6 +712,8 @@ app.put('/api/characters/:charId', async (req, res) => {
     if (corruption !== undefined) updates.corruption = clampNumber(corruption, 0, 100);
     if (req.body.assignedAttacks !== undefined && Array.isArray(req.body.assignedAttacks)) {
       updates.assignedAttacks = req.body.assignedAttacks;
+      if (!updates.stats) updates.stats = {};
+      updates.stats.assignedAttacks = req.body.assignedAttacks;
     }
     if (spell_slots !== undefined) {
       updates.spell_slots = {
@@ -715,6 +725,7 @@ app.put('/api/characters/:charId', async (req, res) => {
     }
     if (stats) {
       updates.stats = {
+        ...(updates.stats || {}),
         str: clampNumber(stats.str, 0, 30),
         str_bonus: clampNumber(stats.str_bonus, 0, 30),
         dex: clampNumber(stats.dex, 0, 30),
@@ -728,16 +739,25 @@ app.put('/api/characters/:charId', async (req, res) => {
         chr: clampNumber(stats.chr, 0, 30),
         chr_bonus: clampNumber(stats.chr_bonus, 0, 30),
       };
+      if (req.body.assignedAttacks !== undefined) {
+        updates.stats.assignedAttacks = req.body.assignedAttacks;
+      }
     }
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Güncellenecek alan yok.' });
     }
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('characters')
       .update(updates)
       .eq('id', charId);
+
+    if (error && error.message && error.message.includes('column') && updates.assignedAttacks !== undefined) {
+      const { assignedAttacks, ...safeUpdates } = updates;
+      const retry = await supabase.from('characters').update(safeUpdates).eq('id', charId);
+      error = retry.error;
+    }
 
     if (error) throw error;
 
@@ -819,156 +839,10 @@ let mapBgUrl = '';
 let drawHistory = [];
 
 // === STATUS EFFECTS & CUSTOM EFFECT BUILDER MOTORU ===
-const defaultStatusPresets = [
-  { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 3, effects: { dotDamage: { min: 1, max: 6 } } },
-  { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } },
-  { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 2, effects: { blind: true } },
-  { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } },
-  { id: 'preset_shelter', name: 'Barınak', icon: '🛡️', duration: 1, effects: { shelter: true } },
-  { id: 'preset_prepared', name: 'Hazır', icon: '🎯', duration: 2, effects: { prepared: true } },
-  { id: 'preset_unstoppable', name: 'Durdurulamaz', icon: '🦏', duration: 3, effects: { unstoppable: true } },
-  { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } },
-  // Hasar Dirençleri (0.5x Hasar)
-  { id: 'preset_res_bludgeoning', name: 'Ezme Direnci', icon: '🔨', duration: null, effects: { resistance: 'bludgeoning' } },
-  { id: 'preset_res_slashing', name: 'Kesme Direnci', icon: '⚔️', duration: null, effects: { resistance: 'slashing' } },
-  { id: 'preset_res_piercing', name: 'Delme Direnci', icon: '🏹', duration: null, effects: { resistance: 'piercing' } },
-  { id: 'preset_res_magic', name: 'Büyü Direnci', icon: '🔮', duration: null, effects: { resistance: 'magic' } },
-  // Hasar Zayıflıkları (2x Hasar)
-  { id: 'preset_vuln_bludgeoning', name: 'Ezme Zayıflığı', icon: '💥🔨', duration: null, effects: { vulnerability: 'bludgeoning' } },
-  { id: 'preset_vuln_slashing', name: 'Kesme Zayıflığı', icon: '💥⚔️', duration: null, effects: { vulnerability: 'slashing' } },
-  { id: 'preset_vuln_piercing', name: 'Delme Zayıflığı', icon: '💥🏹', duration: null, effects: { vulnerability: 'piercing' } },
-  { id: 'preset_vuln_magic', name: 'Büyü Zayıflığı', icon: '💥✨', duration: null, effects: { vulnerability: 'magic' } }
-];
-let customStatusPresets = [...defaultStatusPresets];
+let customStatusPresets = [];
 
 // === HAZIR SALDIRI PRESETLERİ (ATTACK PRESETS) ===
-const defaultAttackPresets = [
-  {
-    id: 'atk_preset_flame_sword',
-    name: 'Alev Kılıcı',
-    stat: 'STR',
-    attackType: 'physical',
-    physicalDamageType: 'slashing',
-    spellLevel: 1,
-    dicePools: {
-      phys: { dice: { 6: 1 }, bonus: 2, weakness: false, resistance: false },
-      elem1: { dice: { 6: 1 }, bonus: 0, weakness: false, resistance: false },
-      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      spell: { dice: {}, bonus: 0 }
-    },
-    statusEffectsToApply: [
-      { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 2, effects: { dotDamage: { min: 1, max: 6 } } }
-    ],
-    halfDamageOnMiss: true,
-    extraDamage: 0,
-    attackCount: 1,
-    description: '1d6+2 Kesme + 1d6 Ateş. İsabet halinde 2 tur Yanma uygular. Iskalasa bile yarım hasar verir.'
-  },
-  {
-    id: 'atk_preset_heavy_strike',
-    name: 'Güçlü Vuruş',
-    stat: 'STR',
-    attackType: 'physical',
-    physicalDamageType: 'bludgeoning',
-    spellLevel: 1,
-    dicePools: {
-      phys: { dice: { 8: 2 }, bonus: 3, weakness: false, resistance: false },
-      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      spell: { dice: {}, bonus: 0 }
-    },
-    statusEffectsToApply: [],
-    halfDamageOnMiss: false,
-    extraDamage: 0,
-    attackCount: 1,
-    description: '2d8+3 Ağır fiziksel ezme darbesi.'
-  },
-  {
-    id: 'atk_preset_frost_bolt',
-    name: 'Buz Oku',
-    stat: 'INT',
-    attackType: 'spell',
-    physicalDamageType: 'slashing',
-    spellLevel: 1,
-    dicePools: {
-      phys: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      elem2: { dice: { 8: 1 }, bonus: 2, weakness: false, resistance: false },
-      spell: { dice: { 8: 1 }, bonus: 2 }
-    },
-    statusEffectsToApply: [
-      { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 1, effects: { blind: true } }
-    ],
-    halfDamageOnMiss: true,
-    extraDamage: 0,
-    attackCount: 1,
-    description: '1d8+2 Büyü hasarı. Göz kamaştırıcı soğuklukla 1 tur Körlük uygular, ıskalarsa yarım hasar vurur.'
-  },
-  {
-    id: 'atk_preset_poison_dagger',
-    name: 'Zehirli Hançer',
-    stat: 'DEX',
-    attackType: 'physical',
-    physicalDamageType: 'piercing',
-    spellLevel: 1,
-    dicePools: {
-      phys: { dice: { 4: 1 }, bonus: 3, weakness: false, resistance: false },
-      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      spell: { dice: {}, bonus: 0 }
-    },
-    statusEffectsToApply: [
-      { id: 'preset_poison', name: 'Zehir', icon: '☠️', duration: 3, effects: { dotDamage: { min: 1, max: 4 }, blind: true } }
-    ],
-    halfDamageOnMiss: false,
-    extraDamage: 0,
-    attackCount: 1,
-    description: '1d4+3 Hızlı delme hançer darbesi. İsabet halinde 3 tur Zehir (1-4 DoT & Körlük) uygular.'
-  },
-  {
-    id: 'atk_preset_holy_smite',
-    name: 'Kutsal Darbe',
-    stat: 'WIS',
-    attackType: 'spell',
-    physicalDamageType: 'slashing',
-    spellLevel: 2,
-    dicePools: {
-      phys: { dice: { 6: 1 }, bonus: 2, weakness: false, resistance: false },
-      elem1: { dice: { 6: 2 }, bonus: 0, weakness: false, resistance: false },
-      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      spell: { dice: { 6: 2 }, bonus: 2 }
-    },
-    statusEffectsToApply: [
-      { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } }
-    ],
-    halfDamageOnMiss: true,
-    extraDamage: 0,
-    attackCount: 1,
-    description: '2. Seviye kutsal büyü ışık patlaması. İsabet halinde 1 tur Felç uygular, ıskalasa bile yarım hasar vurur.'
-  },
-  {
-    id: 'atk_preset_shadow_strike',
-    name: 'Gölge Darbesi',
-    stat: 'DEX',
-    attackType: 'physical',
-    physicalDamageType: 'piercing',
-    spellLevel: 1,
-    dicePools: {
-      phys: { dice: { 6: 2 }, bonus: 4, weakness: false, resistance: false },
-      elem1: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      elem2: { dice: {}, bonus: 0, weakness: false, resistance: false },
-      spell: { dice: {}, bonus: 0 }
-    },
-    statusEffectsToApply: [
-      { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 2, effects: { dotDamage: { min: 2, max: 8 } } }
-    ],
-    halfDamageOnMiss: false,
-    extraDamage: 0,
-    attackCount: 1,
-    description: '2d6+4 Sinsi delme saldırısı. İsabet halinde 2 tur Kanama (2-8 DoT) uygular.'
-  }
-];
-let attackPresets = [...defaultAttackPresets];
+let attackPresets = [];
 
 /**
  * Token veya karakterin aktif durum efektlerini döndürür.
@@ -1373,8 +1247,12 @@ function syncCombatantHp(id, hpCurrent, hpMax) {
 io.on('connection', (socket) => {
   console.log('Bir oyuncu bağlandı: ' + socket.id);
 
+  // Supabase'den yüklenmiş mevcut efekt ve saldırı şablonlarını hemen istemciye gönder
+  socket.emit('customEffectsUpdated', customStatusPresets);
+  socket.emit('attackPresetsUpdated', attackPresets);
+
   // ---- Oyuncu Katılma ----
-  socket.on('playerJoin', (data) => {
+  socket.on('playerJoin', async (data) => {
     if (!data || typeof data !== 'object') return;
 
     // Aynı session önceden var mı kontrol et (kısa süreli kopmalara karşı)
@@ -1394,18 +1272,19 @@ io.on('connection', (socket) => {
     let startY = 50;
     let color = data.role === 'dm' ? '#8e44ad' : '#3498db';
     let imgUrl = null;
+    let cacheMatch = null;
 
     if (existingPlayerId && players[existingPlayerId]) {
       startX = players[existingPlayerId].x;
       startY = players[existingPlayerId].y;
       color = players[existingPlayerId].color;
       imgUrl = players[existingPlayerId].imgUrl;
+      cacheMatch = { ...players[existingPlayerId] };
 
       // Eski ghost socket'i temizle ve koptuğunu yayınla (klonları engeller)
       delete players[existingPlayerId];
       socket.broadcast.emit('playerDisconnected', existingPlayerId);
     } else {
-      let cacheMatch = null;
       if (data.sessionId && sessionCache[data.sessionId]) {
         cacheMatch = sessionCache[data.sessionId];
       } else {
@@ -1425,6 +1304,41 @@ io.on('connection', (socket) => {
       }
     }
 
+    // Karakter atanmış saldırılarını koru (gir-çık durumlarında silinmeyi engeller)
+    let charObj = data.character ? { ...data.character } : null;
+    if (charObj && charObj.id) {
+      let restoredAssigned = null;
+      if (Array.isArray(charObj.assignedAttacks) && charObj.assignedAttacks.length > 0) {
+        restoredAssigned = charObj.assignedAttacks;
+      } else if (charObj.stats && Array.isArray(charObj.stats.assignedAttacks) && charObj.stats.assignedAttacks.length > 0) {
+        restoredAssigned = charObj.stats.assignedAttacks;
+      } else if (cacheMatch && cacheMatch.character && Array.isArray(cacheMatch.character.assignedAttacks) && cacheMatch.character.assignedAttacks.length > 0) {
+        restoredAssigned = cacheMatch.character.assignedAttacks;
+      } else if (cacheMatch && cacheMatch.character?.stats && Array.isArray(cacheMatch.character.stats.assignedAttacks) && cacheMatch.character.stats.assignedAttacks.length > 0) {
+        restoredAssigned = cacheMatch.character.stats.assignedAttacks;
+      }
+
+      // Eğer hala bulunamadıysa Supabase'deki characters tablosundan sorgula
+      if (!restoredAssigned) {
+        try {
+          const { data: dbChar } = await supabase.from('characters').select('stats, assigned_attacks').eq('id', charObj.id).single();
+          if (dbChar) {
+            if (Array.isArray(dbChar.assigned_attacks) && dbChar.assigned_attacks.length > 0) {
+              restoredAssigned = dbChar.assigned_attacks;
+            } else if (dbChar.stats && Array.isArray(dbChar.stats.assignedAttacks) && dbChar.stats.assignedAttacks.length > 0) {
+              restoredAssigned = dbChar.stats.assignedAttacks;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (restoredAssigned) {
+        charObj.assignedAttacks = restoredAssigned;
+        if (!charObj.stats) charObj.stats = {};
+        charObj.stats.assignedAttacks = restoredAssigned;
+      }
+    }
+
     players[socket.id] = {
       id: socket.id,
       sessionId: data.sessionId || socket.id,
@@ -1432,7 +1346,7 @@ io.on('connection', (socket) => {
       y: startY,
       role: data.role === 'dm' ? 'dm' : 'player',
       profile: data.profile,
-      character: data.character,
+      character: charObj,
       color: color,
       imgUrl: imgUrl
     };
@@ -1442,6 +1356,11 @@ io.on('connection', (socket) => {
 
     // Diğerlerine yeni oyuncuyu bildir
     socket.broadcast.emit('newPlayer', players[socket.id]);
+
+    // Kurtarılan atanmış saldırıları yeni bağlanan oyuncunun client hafızasına gönder
+    if (charObj && charObj.assignedAttacks && charObj.assignedAttacks.length > 0) {
+      socket.emit('characterUpdated', { id: socket.id, updates: { assignedAttacks: charObj.assignedAttacks } });
+    }
 
     // Ayrıca mevcut markerları da gönder
     socket.emit('currentMarkers', markers);
@@ -1598,6 +1517,49 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ---- DM: Toplu Saldırı Atama (Batch Assign Attacks to Markers) ----
+  socket.on('batchAssignAttacks', ({ markerIds, attackPresetIds, mode }) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!Array.isArray(markerIds) || !Array.isArray(attackPresetIds)) return;
+
+    let updatedCount = 0;
+    markerIds.forEach(mid => {
+      const m = markers[mid];
+      if (!m) return;
+
+      if (mode === 'append') {
+        const current = Array.isArray(m.assignedAttacks) ? m.assignedAttacks : [];
+        const set = new Set([...current, ...attackPresetIds]);
+        m.assignedAttacks = Array.from(set);
+      } else {
+        // replace mode
+        m.assignedAttacks = [...attackPresetIds];
+      }
+
+      io.emit('updateMarkerData', m);
+
+      if (combatState.active) {
+        const c = combatState.combatants.find(item => item.id === mid);
+        if (c) {
+          c.assignedAttacks = m.assignedAttacks;
+        }
+      }
+      updatedCount++;
+    });
+
+    if (combatState.active && updatedCount > 0) {
+      io.emit('combatStateUpdated', combatState);
+    }
+
+    backupMapState(); // Anında Supabase'e yedekle
+
+    socket.emit('batchAssignAttacksResult', { success: true, count: updatedCount });
+    io.emit('logMessage', {
+      message: `⚡ DM, ${updatedCount} adet tokene toplu saldırı atadı (${attackPresetIds.length} preset).`,
+      color: '#38bdf8'
+    });
+  });
+
   // ---- DM: Arka Plan Güncelle ----
   socket.on('updateBg', (url) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
@@ -1663,6 +1625,7 @@ io.on('connection', (socket) => {
     if (data.corruption !== undefined) updates.corruption = clampNumber(data.corruption, 0, 100);
     if (data.assignedAttacks !== undefined && Array.isArray(data.assignedAttacks)) {
       updates.assignedAttacks = data.assignedAttacks;
+      updates.stats.assignedAttacks = data.assignedAttacks;
     }
     if (data.spell_slots) {
       updates.spell_slots = {
@@ -1692,6 +1655,14 @@ io.on('connection', (socket) => {
     // Başarılıysa sunucu durumunu güncelle ve herkese anons et
     if (players[data.id] && players[data.id].character) {
       Object.assign(players[data.id].character, updates);
+      if (updates.assignedAttacks !== undefined) {
+        players[data.id].character.assignedAttacks = updates.assignedAttacks;
+        if (!players[data.id].character.stats) players[data.id].character.stats = {};
+        players[data.id].character.stats.assignedAttacks = updates.assignedAttacks;
+      }
+      if (players[data.id].sessionId && sessionCache[players[data.id].sessionId]) {
+        sessionCache[players[data.id].sessionId].character = players[data.id].character;
+      }
       io.emit('characterUpdated', { id: data.id, updates: updates });
       syncCombatantHp(data.id, updates.hp_current, updates.hp_max);
 
@@ -2148,7 +2119,6 @@ async function restoreAttackPresets() {
     }
 
     if (data) {
-      const loadedIds = new Set(data.map(row => row.id));
       const dbPresets = data.map(row => ({
         id: row.id,
         name: row.name,
@@ -2163,11 +2133,8 @@ async function restoreAttackPresets() {
         attackCount: row.attack_count ?? row.attackCount ?? 1,
         description: row.description || ''
       }));
-      attackPresets = [
-        ...defaultAttackPresets.filter(dp => !loadedIds.has(dp.id)),
-        ...dbPresets
-      ];
-      console.log(`Supabase'den ${dbPresets.length} adet saldırı preseti başarıyla yüklendi, toplam ${attackPresets.length} adet hazır.`);
+      attackPresets = dbPresets;
+      console.log(`Supabase'den ${attackPresets.length} adet saldırı preseti başarıyla yüklendi.`);
     }
   } catch (err) {
     console.error('Attack presets geri yüklenirken beklenmeyen hata:', err.message);
@@ -2192,8 +2159,7 @@ async function restoreStatusPresets() {
     }
 
     if (data) {
-      const loadedIds = new Set(data.map(row => row.id));
-      const dbStatusPresets = data.map(row => ({
+      customStatusPresets = data.map(row => ({
         id: row.id,
         name: row.name,
         icon: row.icon || '✨',

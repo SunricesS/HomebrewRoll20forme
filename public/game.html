@@ -123,6 +123,7 @@
                     <div class="dm-tools-actions">
                         <button class="btn warning action-btn dm-combat-btn" id="btn-dm-toggle-combat" title="Combat Modunu Başlat / Kapat">⚔️ Combat Modu</button>
                         <button class="btn secondary action-btn dm-status-btn" id="btn-dm-status-toolbox" title="Durum Efektleri ve Yaratıcı">✨ Status Efektleri</button>
+                        <button class="btn secondary action-btn dm-batch-attacks-btn" id="btn-dm-batch-assign-attacks" title="Harita Tokenlarına Toplu Saldırı Ata">⚡ Toplu Saldırı Ata</button>
                         <button class="btn primary action-btn dm-save-btn" id="btn-force-save">Harita Kaydet</button>
                         <button class="btn secondary dm-gallery-btn"
                             onclick="window.open('/gallery.html', '_blank')">Galeriyi Aç</button>
@@ -165,6 +166,15 @@
                             <div class="form-group"><label>CON:</label><input type="number" id="dm-marker-con" placeholder="0" value="0"><input type="number" id="dm-marker-con-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
                             <div class="form-group"><label>WIS:</label><input type="number" id="dm-marker-wis" placeholder="0" value="0"><input type="number" id="dm-marker-wis-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
                             <div class="form-group"><label>CHR:</label><input type="number" id="dm-marker-chr" placeholder="0" value="0"><input type="number" id="dm-marker-chr-bonus" placeholder="B" value="0" style="margin-top:2px;"></div>
+                        </div>
+                        <!-- Tokene Eklenecek Saldırılar (Opsiyonel) -->
+                        <div class="form-group" style="margin-top: 8px;">
+                            <details class="dm-collapsible">
+                                <summary style="font-size: 11px; color: #94a3b8; cursor: pointer; user-select: none;">⚡ Tokene Saldırı Ata (Opsiyonel)</summary>
+                                <div id="dm-create-token-attacks-list" class="assigned-attacks-grid" style="max-height: 120px; overflow-y: auto; margin-top: 6px; padding: 4px; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                                    <span style="font-size: 11px; color: #64748b;">Saldırı presetleri yükleniyor...</span>
+                                </div>
+                            </details>
                         </div>
                         <button id="btn-add-marker" class="btn primary action-btn">İşaret Ekle</button>
                     </div>
@@ -1031,6 +1041,79 @@
 
             <div class="button-group button-group-row" style="margin-top: 14px; justify-content: flex-end;">
                 <button type="button" class="btn back-btn action-btn" id="btn-cancel-attack-presets">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DM Toplu Saldırı Atama Modalı (Batch Assign Attacks Modal) -->
+    <div id="dm-batch-attacks-modal" class="hidden dm-modal-overlay">
+        <div class="modal-box dm-modal-box batch-attacks-modal-box">
+            <div class="status-modal-header">
+                <h3 class="dm-modal-title" style="margin-bottom:0;">⚡ Tokenlara Toplu Saldırı Ata</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-batch-attacks" title="Kapat">✕</button>
+            </div>
+            
+            <p class="batch-attacks-intro-text">
+                Haritadaki mevcut veya seçilen tokenlara (canavar/NPC) tek seferde saldırı presetleri atayın.
+            </p>
+
+            <div class="batch-attacks-grid-columns">
+                <!-- Sol Kolon: Hedef Tokenlar -->
+                <div class="batch-col batch-col-tokens">
+                    <div class="batch-col-header">
+                        <span class="batch-col-title">👾 1. Hedef Tokenları Seçin</span>
+                        <span id="batch-tokens-count" class="token-assigned-count-badge">0 Token</span>
+                    </div>
+                    <div class="assigned-actions-bar">
+                        <input type="text" id="batch-tokens-search" placeholder="Token ara..." class="assigned-search-input">
+                        <div class="assigned-quick-btn-group">
+                            <button type="button" id="batch-tokens-select-all" class="atk-mini-btn">Tümünü Seç</button>
+                            <button type="button" id="batch-tokens-clear-all" class="atk-mini-btn">Temizle</button>
+                        </div>
+                    </div>
+                    <div id="batch-tokens-list" class="batch-checklist-container">
+                        <!-- Token checklist checkboxları buraya dinamik dolacak -->
+                    </div>
+                </div>
+
+                <!-- Sağ Kolon: Atanacak Saldırılar -->
+                <div class="batch-col batch-col-attacks">
+                    <div class="batch-col-header">
+                        <span class="batch-col-title">⚔️ 2. Atanacak Saldırıları Seçin</span>
+                        <span id="batch-attacks-count" class="token-assigned-count-badge">0 Saldırı</span>
+                    </div>
+                    <div class="assigned-actions-bar">
+                        <input type="text" id="batch-attacks-search" placeholder="Saldırı preset ara..." class="assigned-search-input">
+                        <div class="assigned-quick-btn-group">
+                            <button type="button" id="batch-attacks-select-all" class="atk-mini-btn">Tümünü Seç</button>
+                            <button type="button" id="batch-attacks-clear-all" class="atk-mini-btn">Temizle</button>
+                        </div>
+                    </div>
+                    <div id="batch-attacks-list" class="batch-checklist-container">
+                        <!-- Saldırı checklist checkboxları buraya dinamik dolacak -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alt Ayarlar & Eylem Barı -->
+            <div class="batch-bottom-bar">
+                <div class="batch-mode-selector">
+                    <span class="batch-mode-label">Atama Modu:</span>
+                    <label class="batch-radio-label">
+                        <input type="radio" name="batch-assign-mode" value="append" checked>
+                        <span>➕ Mevcutlara Ekle</span>
+                    </label>
+                    <label class="batch-radio-label">
+                        <input type="radio" name="batch-assign-mode" value="replace">
+                        <span>🔄 Üzerine Yaz (Yenileriyle Değiştir)</span>
+                    </label>
+                </div>
+
+                <div class="batch-actions-right">
+                    <span id="batch-assign-summary-badge" class="batch-summary-badge">0 Token | 0 Saldırı seçildi</span>
+                    <button type="button" class="btn back-btn action-btn" id="btn-cancel-batch-attacks">İptal</button>
+                    <button type="button" class="btn primary action-btn" id="btn-submit-batch-attacks" disabled>⚡ Seçili Tokenlara Ata</button>
+                </div>
             </div>
         </div>
     </div>

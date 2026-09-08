@@ -2077,7 +2077,10 @@
     // Hasar türü dropdown değişikliği
     document.getElementById('atk-phys-damage-type')?.addEventListener('change', updateTargetResistanceBadges);
 
-    // İlk yüklemede presetleri sorgula
+    // İlk yüklemede ve yeniden bağlanmada presetleri sorgula
+    socket.on('connect', () => {
+      socket.emit('getAttackPresets');
+    });
     socket.emit('getAttackPresets');
   }
 
