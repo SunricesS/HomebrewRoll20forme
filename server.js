@@ -2062,7 +2062,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('saveAttackPreset', async (preset) => {
-    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     if (!preset || !preset.name) return;
 
     const newPreset = {
@@ -2100,10 +2099,12 @@ io.on('connection', (socket) => {
         name: newPreset.name,
         stat: newPreset.stat,
         attack_type: newPreset.attackType,
-        physical_damage_type: newPreset.physicalDamageType,
         spell_level: newPreset.baseSpellLevel || newPreset.spellLevel,
         dice_pools: {
           ...newPreset.dicePools,
+          _meta: {
+            physicalDamageType: newPreset.physicalDamageType
+          },
           _aoe: {
             isAoe: newPreset.isAoe,
             radius: newPreset.aoeRadius
@@ -2123,6 +2124,8 @@ io.on('connection', (socket) => {
       const { error } = await supabase.from('attack_presets').upsert(dbRecord);
       if (error && error.code !== 'PGRST205') {
         console.error('Supabase attack preset kaydetme hatası:', error.message);
+      } else {
+        console.log(`[Supabase] "${newPreset.name}" (${newPreset.id}) başarıyla kaydedildi.`);
       }
     } catch (err) {
       console.error('Supabase attack preset kaydetme istisnası:', err.message);
@@ -2130,7 +2133,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('deleteAttackPreset', async (presetId) => {
-    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
     if (!presetId) return;
 
     attackPresets = attackPresets.filter(p => p.id !== presetId);
@@ -2188,10 +2190,10 @@ async function backupMapState() {
   try {
     const payload = {
       id: 1,
-      current_map: currentMap,
-      fog_data: fogGrid,
-      fog_uncovered: fogUncovered,
-      markers: markers,
+      current_map: typeof mapBgUrl !== 'undefined' ? mapBgUrl : '',
+      fog_data: typeof fogGrid !== 'undefined' ? fogGrid : null,
+      fog_uncovered: typeof fogUncovered !== 'undefined' ? fogUncovered : null,
+      markers: typeof markers !== 'undefined' ? markers : {},
       updated_at: new Date().toISOString()
     };
 
@@ -2232,7 +2234,7 @@ async function restoreMapState() {
     }
 
     if (data) {
-      if (data.current_map) currentMap = data.current_map;
+      if (data.current_map) mapBgUrl = data.current_map;
       if (data.fog_data) fogGrid = data.fog_data;
       if (data.fog_uncovered) fogUncovered = data.fog_uncovered;
       if (data.markers && typeof data.markers === 'object') {
@@ -2273,7 +2275,7 @@ async function restoreAttackPresets() {
           name: row.name,
           stat: row.stat || 'STR',
           attackType: row.attack_type || row.attackType || 'physical',
-          physicalDamageType: row.physical_damage_type || row.physicalDamageType || 'slashing',
+          physicalDamageType: row.dice_pools?._meta?.physicalDamageType || row.physical_damage_type || 'slashing',
           spellLevel: row.spell_level ?? row.spellLevel ?? 1,
           consumesSpellSlot: Boolean(row.consumes_spell_slot ?? row.consumesSpellSlot ?? slotConfig.consumesSpellSlot),
           baseSpellLevel: clampNumber(parseInt(row.base_spell_level ?? row.baseSpellLevel ?? slotConfig.baseSpellLevel) || (row.spell_level ?? 1), 1, 4),
