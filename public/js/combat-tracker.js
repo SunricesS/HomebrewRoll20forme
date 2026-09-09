@@ -395,18 +395,22 @@
     const parts = [];
     const pools = preset.dicePools || {};
 
-    if (pools.phys && pools.phys.count > 0 && pools.phys.sides > 0) {
-      parts.push(`${pools.phys.count}d${pools.phys.sides}`);
-    }
-    if (pools.elem1 && pools.elem1.count > 0 && pools.elem1.sides > 0) {
-      parts.push(`${pools.elem1.count}d${pools.elem1.sides}`);
-    }
-    if (pools.elem2 && pools.elem2.count > 0 && pools.elem2.sides > 0) {
-      parts.push(`${pools.elem2.count}d${pools.elem2.sides}`);
-    }
-    if (pools.spell && pools.spell.count > 0 && pools.spell.sides > 0) {
-      parts.push(`${pools.spell.count}d${pools.spell.sides}`);
-    }
+    const extractDice = (p) => {
+      if (!p) return;
+      if (p.dice && typeof p.dice === 'object') {
+        [4, 6, 8, 10, 12, 20].forEach(sides => {
+          const count = p.dice[sides] || p.dice[`d${sides}`] || 0;
+          if (count > 0) parts.push(`${count}d${sides}`);
+        });
+      } else if (p.count > 0 && p.sides > 0) {
+        parts.push(`${p.count}d${p.sides}`);
+      }
+    };
+
+    extractDice(pools.phys || pools.physical);
+    extractDice(pools.elem1);
+    extractDice(pools.elem2);
+    extractDice(pools.spell);
 
     let diceStr = parts.join('+') || '1d20';
     if (preset.stat) {
@@ -522,6 +526,9 @@
           const statusIcon = preset.statusEffectsToApply?.length ? (preset.statusEffectsToApply[0].icon || '✨') : null;
 
           let badgesHtml = '';
+          if (preset.consumesSpellSlot) {
+            badgesHtml += `<span class="bg3-hotbar-slot-badge" style="background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#7dd3fc;" title="Büyü Slotu Harcar (Min Lvl ${preset.baseSpellLevel || 1})">✨ Lvl ${preset.baseSpellLevel || 1}+</span>`;
+          }
           if (hasHalfDamage) badgesHtml += '<span class="bg3-hotbar-slot-badge" title="Iska durumunda yarı hasar">½ Iska</span>';
           if (statusIcon) badgesHtml += `<span class="bg3-hotbar-slot-badge" title="Durum efekti uygular">${statusIcon}</span>`;
           if (preset.isAoe) badgesHtml += `<span class="bg3-hotbar-slot-badge" style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;" title="Alan Hasarı: ${preset.aoeRadius || 1}m">💥 ${preset.aoeRadius || 1}m</span>`;

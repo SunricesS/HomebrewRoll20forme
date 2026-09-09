@@ -2072,7 +2072,10 @@ io.on('connection', (socket) => {
       attackType: preset.attackType === 'spell' ? 'spell' : 'physical',
       physicalDamageType: preset.physicalDamageType || 'slashing',
       spellLevel: clampNumber(parseInt(preset.spellLevel) || 1, 1, 4),
-      dicePools: preset.dicePools || { phys: {}, elem1: {}, elem2: {}, spell: {} },
+      consumesSpellSlot: Boolean(preset.consumesSpellSlot),
+      baseSpellLevel: clampNumber(parseInt(preset.baseSpellLevel) || 1, 1, 4),
+      slotScaling: (typeof preset.slotScaling === 'object' && preset.slotScaling !== null) ? preset.slotScaling : {},
+      dicePools: preset.dicePools || { phys: {}, elem1: {}, elem2: {} },
       statusEffectsToApply: Array.isArray(preset.statusEffectsToApply) ? preset.statusEffectsToApply : [],
       halfDamageOnMiss: Boolean(preset.halfDamageOnMiss),
       extraDamage: clampNumber(parseInt(preset.extraDamage) || 0, 0, 1000),
@@ -2098,12 +2101,17 @@ io.on('connection', (socket) => {
         stat: newPreset.stat,
         attack_type: newPreset.attackType,
         physical_damage_type: newPreset.physicalDamageType,
-        spell_level: newPreset.spellLevel,
+        spell_level: newPreset.baseSpellLevel || newPreset.spellLevel,
         dice_pools: {
           ...newPreset.dicePools,
           _aoe: {
             isAoe: newPreset.isAoe,
             radius: newPreset.aoeRadius
+          },
+          _spellSlotConfig: {
+            consumesSpellSlot: newPreset.consumesSpellSlot,
+            baseSpellLevel: newPreset.baseSpellLevel,
+            slotScaling: newPreset.slotScaling
           }
         },
         status_effects_to_apply: newPreset.statusEffectsToApply,
@@ -2258,22 +2266,28 @@ async function restoreAttackPresets() {
     }
 
     if (data) {
-      const dbPresets = data.map(row => ({
-        id: row.id,
-        name: row.name,
-        stat: row.stat || 'STR',
-        attackType: row.attack_type || row.attackType || 'physical',
-        physicalDamageType: row.physical_damage_type || row.physicalDamageType || 'slashing',
-        spellLevel: row.spell_level ?? row.spellLevel ?? 1,
-        dicePools: row.dice_pools || row.dicePools || { phys: {}, elem1: {}, elem2: {}, spell: {} },
-        statusEffectsToApply: Array.isArray(row.status_effects_to_apply) ? row.status_effects_to_apply : (Array.isArray(row.statusEffectsToApply) ? row.statusEffectsToApply : []),
-        halfDamageOnMiss: Boolean(row.half_damage_on_miss ?? row.halfDamageOnMiss),
-        extraDamage: row.extra_damage ?? row.extraDamage ?? 0,
-        attackCount: row.attack_count ?? row.attackCount ?? 1,
-        isAoe: Boolean(row.is_aoe ?? row.isAoe ?? row.dice_pools?._aoe?.isAoe),
-        aoeRadius: parseFloat(row.aoe_radius ?? row.aoeRadius ?? row.dice_pools?._aoe?.radius) || 1,
-        description: row.description || ''
-      }));
+      const dbPresets = data.map(row => {
+        const slotConfig = row.dice_pools?._spellSlotConfig || {};
+        return {
+          id: row.id,
+          name: row.name,
+          stat: row.stat || 'STR',
+          attackType: row.attack_type || row.attackType || 'physical',
+          physicalDamageType: row.physical_damage_type || row.physicalDamageType || 'slashing',
+          spellLevel: row.spell_level ?? row.spellLevel ?? 1,
+          consumesSpellSlot: Boolean(row.consumes_spell_slot ?? row.consumesSpellSlot ?? slotConfig.consumesSpellSlot),
+          baseSpellLevel: clampNumber(parseInt(row.base_spell_level ?? row.baseSpellLevel ?? slotConfig.baseSpellLevel) || (row.spell_level ?? 1), 1, 4),
+          slotScaling: row.slot_scaling || row.slotScaling || slotConfig.slotScaling || {},
+          dicePools: row.dice_pools || row.dicePools || { phys: {}, elem1: {}, elem2: {} },
+          statusEffectsToApply: Array.isArray(row.status_effects_to_apply) ? row.status_effects_to_apply : (Array.isArray(row.statusEffectsToApply) ? row.statusEffectsToApply : []),
+          halfDamageOnMiss: Boolean(row.half_damage_on_miss ?? row.halfDamageOnMiss),
+          extraDamage: row.extra_damage ?? row.extraDamage ?? 0,
+          attackCount: row.attack_count ?? row.attackCount ?? 1,
+          isAoe: Boolean(row.is_aoe ?? row.isAoe ?? row.dice_pools?._aoe?.isAoe),
+          aoeRadius: parseFloat(row.aoe_radius ?? row.aoeRadius ?? row.dice_pools?._aoe?.radius) || 1,
+          description: row.description || ''
+        };
+      });
       attackPresets = dbPresets;
       console.log(`Supabase'den ${attackPresets.length} adet saldırı preseti başarıyla yüklendi.`);
     }

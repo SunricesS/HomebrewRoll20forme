@@ -68,12 +68,18 @@
   const combatLog = document.getElementById('atk-combat-log');
 
   // Butonlar
-  const btnPhysicalAttack = document.getElementById('atk-btn-physical');
-  const btnSpellAttack = document.getElementById('atk-btn-spell');
+  const btnAttack = document.getElementById('atk-btn-attack') || document.getElementById('atk-btn-physical');
+  const btnPhysicalAttack = btnAttack;
+  const btnSpellAttack = null;
   const btnApplyDamage = document.getElementById('atk-btn-apply-damage');
   const btnClearLog = document.getElementById('atk-btn-clear-log');
   const btnClearResist = document.getElementById('atk-btn-clear-resist');
   const btnRefreshTargets = document.getElementById('atk-btn-refresh');
+
+  // Büyü Slotu Kontrol DOM Referansları
+  const spellSlotControlGroup = document.getElementById('atk-spell-slot-control-group');
+  const spellSlotBadge = document.getElementById('atk-slot-control-badge');
+  const slotScalingNote = document.getElementById('atk-slot-scaling-note');
 
   // === YARDIMCI ===
 
@@ -89,6 +95,17 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function hasAnyDice(pools) {
+    if (!pools) return false;
+    const checkPool = (p) => {
+      if (!p) return false;
+      if (p.bonus && p.bonus !== 0) return true;
+      const d = p.dice || {};
+      return Object.values(d).some(c => parseInt(c) > 0);
+    };
+    return checkPool(pools.phys || pools.physical) || checkPool(pools.elem1) || checkPool(pools.elem2);
   }
 
   // ============================================================
@@ -725,6 +742,64 @@
   }
 
   /**
+   * Paneldeki büyü seviyesini değiştirir ve o seviyeye ait özel zar havuzunu (varsa) uygular.
+   */
+  function selectActiveSpellLevel(level, preset = activeEquippedPreset) {
+    const lvl = Math.max(1, Math.min(4, parseInt(level) || 1));
+    const radio = document.getElementById(`atk-active-spell-lvl${lvl}`);
+    if (radio) radio.checked = true;
+
+    // Aktif kart & radyo görsel vurgusu
+    for (let i = 1; i <= 4; i++) {
+      const slotCard = document.querySelector(`.atk-slot[data-slot-level="${i}"]`);
+      if (slotCard) {
+        if (i === lvl) slotCard.classList.add('is-active-level');
+        else slotCard.classList.remove('is-active-level');
+      }
+      const radioLabel = document.getElementById(`atk-active-spell-lvl${i}`)?.closest('.atk-level-radio-label');
+      if (radioLabel) {
+        if (i === lvl) radioLabel.classList.add('is-selected');
+        else radioLabel.classList.remove('is-selected');
+      }
+    }
+
+    // Preset büyü slotu harcıyorsa zarları seviyeye göre ölçekle
+    if (preset && preset.consumesSpellSlot) {
+      const scaling = preset.slotScaling && preset.slotScaling[lvl];
+      const hasCustomDice = scaling && hasAnyDice(scaling.dicePools || scaling);
+
+      if (hasCustomDice) {
+        const pools = scaling.dicePools || scaling;
+        dicePools.phys.setState(pools.phys || pools.physical);
+        dicePools.elem1.setState(pools.elem1);
+        dicePools.elem2.setState(pools.elem2);
+        if (slotScalingNote) {
+          slotScalingNote.innerHTML = `✨ <strong style="color:#38bdf8;">Seviye ${lvl} Özel Etkisi Aktif</strong>: Seviyeye özel zar havuzu yüklendi.`;
+        }
+      } else {
+        // Özel zar yok -> Taban zar havuzunu yükle (varsayılan)
+        const pools = preset.dicePools || {};
+        dicePools.phys.setState(pools.phys || pools.physical);
+        dicePools.elem1.setState(pools.elem1);
+        dicePools.elem2.setState(pools.elem2);
+        if (slotScalingNote) {
+          if (lvl === (preset.baseSpellLevel || 1)) {
+            slotScalingNote.innerHTML = `📌 <strong>Seviye ${lvl} (Taban Etki)</strong>: Standart büyü hasarı geçerli.`;
+          } else {
+            slotScalingNote.innerHTML = `ℹ️ <strong>Seviye ${lvl} (Varsayılan Etki)</strong>: Bu seviye için özel zar atanmamış, taban hasar geçerli.`;
+          }
+        }
+      }
+
+      // Slot sayısı kontrolü
+      const currentSlots = parseInt(slotDisplays[lvl]?.textContent || '0');
+      if (currentSlots <= 0 && slotScalingNote) {
+        slotScalingNote.innerHTML += ` <span style="color:#ef4444; font-weight:bold;">⚠️ (0 Slot Kaldı!)</span>`;
+      }
+    }
+  }
+
+  /**
    * Belirli bir preseti kuşanır ve paneldeki havuz/stat alanlarını doldurur.
    */
   function equipPreset(presetOrId, persistForToken = true) {
@@ -739,25 +814,39 @@
     // Stat Modifikatör
     if (modifierSelect && preset.stat) modifierSelect.value = preset.stat;
 
-    // Büyü Seviyesi
-    if (preset.attackType === 'spell') {
-      const lvl = preset.spellLevel || 1;
-      const radio = document.getElementById(`atk-spell-lvl${lvl}`);
-      if (radio) radio.checked = true;
-    }
+    // Büyü Slotu Kontrolü
+    if (preset.consumesSpellSlot) {
+      if (spellSlotControlGroup) {
+        spellSlotControlGroup.style.display = 'block';
+        if (spellSlotBadge) spellSlotBadge.textContent = `Gerekli: Min Lvl ${preset.baseSpellLevel || 1}`;
+      }
 
-    // Zar Havuzları
-    const pools = preset.dicePools || {};
-    dicePools.phys.setState(pools.phys || pools.physical);
-    dicePools.elem1.setState(pools.elem1);
-    dicePools.elem2.setState(pools.elem2);
-    dicePools.spell.setState(pools.spell);
+      // Uygun ilk seviyeyi seç (min seviyeden başlayarak slotu olanı tercih et)
+      const minLvl = preset.baseSpellLevel || 1;
+      let chosenLvl = minLvl;
+      for (let l = minLvl; l <= 4; l++) {
+        const cnt = parseInt(slotDisplays[l]?.textContent || '0');
+        if (cnt > 0) {
+          chosenLvl = l;
+          break;
+        }
+      }
+      selectActiveSpellLevel(chosenLvl, preset);
+    } else {
+      if (spellSlotControlGroup) spellSlotControlGroup.style.display = 'none';
+
+      // Standart Zar Havuzları
+      const pools = preset.dicePools || {};
+      dicePools.phys.setState(pools.phys || pools.physical);
+      dicePools.elem1.setState(pools.elem1);
+      dicePools.elem2.setState(pools.elem2);
+    }
 
     // Ekstra Parametreler (varsa)
     if (preset.extraDamage != null && extraDmgInput) extraDmgInput.value = preset.extraDamage;
     if (preset.attackCount != null && attackCountInput) attackCountInput.value = preset.attackCount;
 
-    // Hasar türü (Fiziksel)
+    // Hasar türü
     if (preset.physicalDamageType) {
       const pTypeSelect = document.getElementById('atk-phys-damage-type');
       if (pTypeSelect) pTypeSelect.value = preset.physicalDamageType;
@@ -786,6 +875,7 @@
     activeEquippedPreset = null;
     if (presetSelect) presetSelect.value = '';
     if (presetInfoBanner) presetInfoBanner.classList.add('hidden');
+    if (spellSlotControlGroup) spellSlotControlGroup.style.display = 'none';
 
     if (persistForToken && selectedAttacker) {
       const key = `${selectedAttacker.type}:${selectedAttacker.id}`;
@@ -813,10 +903,10 @@
 
     if (presetBadgeStat) presetBadgeStat.textContent = `Stat: ${preset.stat || 'STR'}`;
     if (presetBadgeType) {
-      if (preset.attackType === 'spell') {
-        presetBadgeType.textContent = `✨ Büyü (Lvl ${preset.spellLevel || 1})`;
+      if (preset.consumesSpellSlot) {
+        presetBadgeType.textContent = `✨ Büyü Slotu (Min Lvl ${preset.baseSpellLevel || 1})`;
       } else {
-        const typeNames = { slashing: '⚔️ Kesme', bludgeoning: '🔨 Ezme', piercing: '🏹 Delme' };
+        const typeNames = { slashing: '⚔️ Kesme', bludgeoning: '🔨 Ezme', piercing: '🏹 Delme', magic: '✨ Büyü' };
         const pType = typeNames[preset.physicalDamageType] || '⚔️ Fiziksel';
         presetBadgeType.textContent = pType;
       }
@@ -1417,10 +1507,15 @@
 
   function fillSpellSlots(slots) {
     if (!slots) slots = { lvl1: 0, lvl2: 0, lvl3: 0, lvl4: 0 };
-    if (slotDisplays[1]) slotDisplays[1].textContent = slots.lvl1 ?? 0;
-    if (slotDisplays[2]) slotDisplays[2].textContent = slots.lvl2 ?? 0;
-    if (slotDisplays[3]) slotDisplays[3].textContent = slots.lvl3 ?? 0;
-    if (slotDisplays[4]) slotDisplays[4].textContent = slots.lvl4 ?? 0;
+    for (let i = 1; i <= 4; i++) {
+      const cnt = slots[`lvl${i}`] ?? 0;
+      if (slotDisplays[i]) slotDisplays[i].textContent = cnt;
+      const slotCard = document.querySelector(`.atk-slot[data-slot-level="${i}"]`);
+      if (slotCard) {
+        if (cnt <= 0) slotCard.classList.add('is-out-of-slots');
+        else slotCard.classList.remove('is-out-of-slots');
+      }
+    }
   }
 
   /**
@@ -1455,12 +1550,35 @@
   }
 
   // ============================================================
-  // SALDIRI İŞLEMLERİ
+  // SALDIRI İŞLEMLERİ (TEKİL SALDIR BUTONU)
   // ============================================================
 
-  async function performPhysicalAttack() {
+  async function performAttack() {
     if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
     if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
+
+    const consumesSlot = Boolean(activeEquippedPreset?.consumesSpellSlot);
+    let chosenSpellLevel = 1;
+
+    if (consumesSlot) {
+      // Aktif radyo butonundan seçilen seviyeyi al
+      for (let i = 1; i <= 4; i++) {
+        const radio = document.getElementById(`atk-active-spell-lvl${i}`);
+        if (radio?.checked) { chosenSpellLevel = i; break; }
+      }
+
+      const minLevel = activeEquippedPreset.baseSpellLevel || 1;
+      if (chosenSpellLevel < minLevel) {
+        alert(`Bu saldırı en az Seviye ${minLevel} büyü slotu gerektirir!`);
+        return;
+      }
+
+      const currentSlots = parseInt(slotDisplays[chosenSpellLevel]?.textContent || '0');
+      if (currentSlots <= 0) {
+        alert(`${escapeHtml(selectedAttacker.name)} — Seviye ${chosenSpellLevel} büyü slotu kalmadı! Lütfen başka bir seviye seçin veya dinlenin.`);
+        return;
+      }
+    }
 
     const halfDamageOnMiss = Boolean(activeEquippedPreset?.halfDamageOnMiss);
     const statusEffectsToApply = activeEquippedPreset?.statusEffectsToApply || [];
@@ -1468,8 +1586,7 @@
     // Her hedef için ayrı saldırı
     lastAttackResults = [];
     pendingAoEExplosions = [];
-    btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
-    btnSpellAttack && (btnSpellAttack.disabled = true);
+    if (btnAttack) btnAttack.disabled = true;
 
     for (const target of selectedTargets) {
       const targetAC = selectedTargets.length === 1 ? intVal(targetACInput) : getTargetAC(target);
@@ -1492,99 +1609,61 @@
         element2: dicePools.elem2.getState()
       };
 
-      await sendAttackForTarget(body, target);
+      await sendAttackForTarget(body, target, consumesSlot ? chosenSpellLevel : null);
     }
 
     // Çoklu sonuçlar varsa toplam hasar uygulama butonu
     showMultiApplyButton();
 
-    btnPhysicalAttack && (btnPhysicalAttack.disabled = false);
-    btnSpellAttack && (btnSpellAttack.disabled = false);
-  }
-
-  async function performSpellAttack() {
-    if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
-    if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
-
-    // Spell seviyesini belirle
-    let spellLevel = 1;
-    for (let i = 1; i <= 4; i++) {
-      const radio = document.getElementById(`atk-spell-lvl${i}`);
-      if (radio?.checked) { spellLevel = i; break; }
-    }
-
-    // Slot kontrolü (saldıranın slotları)
-    const currentSlots = parseInt(slotDisplays[spellLevel]?.textContent || '0');
-    if (currentSlots <= 0) {
-      alert(`${escapeHtml(selectedAttacker.name)} — Seviye ${spellLevel} büyü slotu kalmadı!`);
-      return;
-    }
-
-    const halfDamageOnMiss = Boolean(activeEquippedPreset?.halfDamageOnMiss);
-    const statusEffectsToApply = activeEquippedPreset?.statusEffectsToApply || [];
-
-    // Her hedef için ayrı saldırı
-    lastAttackResults = [];
-    pendingAoEExplosions = [];
-    btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
-    btnSpellAttack && (btnSpellAttack.disabled = true);
-
-    for (const target of selectedTargets) {
-      const targetAC = selectedTargets.length === 1 ? intVal(targetACInput) : getTargetAC(target);
-
-      const body = {
-        attacker: { type: selectedAttacker.type, id: selectedAttacker.id },
-        attackerStats: getAttackerStats(),
-        target: { type: target.type, id: target.id },
-        targetAC: targetAC,
-        attackType: 'spell',
-        advantage: advantageCheck?.checked || false,
-        disadvantage: disadvantageCheck?.checked || false,
-        attackCount: intVal(attackCountInput) || 1,
-        extraDamage: intVal(extraDmgInput),
-        halfDamageOnMiss: halfDamageOnMiss,
-        statusEffectsToApply: statusEffectsToApply,
-        spell: {
-          ...dicePools.spell.getState(),
-          level: spellLevel
-        }
-      };
-
-      await sendAttackForTarget(body, target);
-    }
-
-    // Çoklu sonuçlar varsa toplam hasar uygulama butonu
-    showMultiApplyButton();
-
-    btnPhysicalAttack && (btnPhysicalAttack.disabled = false);
-    btnSpellAttack && (btnSpellAttack.disabled = false);
+    if (btnAttack) btnAttack.disabled = false;
 
     // Slotu düşür (saldırandan)
-    const newSlotCount = currentSlots - 1;
-    if (slotDisplays[spellLevel]) slotDisplays[spellLevel].textContent = newSlotCount;
+    if (consumesSlot) {
+      const currentSlots = parseInt(slotDisplays[chosenSpellLevel]?.textContent || '0');
+      const newSlotCount = Math.max(0, currentSlots - 1);
+      if (slotDisplays[chosenSpellLevel]) {
+        slotDisplays[chosenSpellLevel].textContent = newSlotCount;
+        const slotCard = document.querySelector(`.atk-slot[data-slot-level="${chosenSpellLevel}"]`);
+        if (slotCard) {
+          if (newSlotCount <= 0) slotCard.classList.add('is-out-of-slots');
+          else slotCard.classList.remove('is-out-of-slots');
+        }
+      }
 
-    // DB güncelle (saldıran karakter ise)
-    if (selectedAttacker.type === 'character' && selectedAttacker.id) {
-      const updatedSlots = {};
-      for (let i = 1; i <= 4; i++) {
-        updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
+      // DB güncelle (saldıran karakter ise)
+      if (selectedAttacker.type === 'character' && selectedAttacker.id) {
+        const updatedSlots = {};
+        for (let i = 1; i <= 4; i++) {
+          updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
+        }
+        try {
+          await fetch(`/api/characters/${selectedAttacker.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spell_slots: updatedSlots })
+          });
+        } catch (e) {
+          console.error('Slot güncelleme hatası:', e);
+        }
+      } else if (selectedAttacker.type === 'marker' && selectedAttacker.id) {
+        // Marker slot güncelle
+        const updatedSlots = {};
+        for (let i = 1; i <= 4; i++) {
+          updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
+        }
+        if (typeof socket !== 'undefined') {
+          socket.emit('editMarker', { id: selectedAttacker.id, spell_slots: updatedSlots });
+        }
       }
-      try {
-        await fetch(`/api/characters/${selectedAttacker.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ spell_slots: updatedSlots })
-        });
-      } catch (e) {
-        console.error('Slot güncelleme hatası:', e);
-      }
+
+      selectActiveSpellLevel(chosenSpellLevel);
     }
   }
 
   /**
    * Tek bir hedefe saldırı isteği gönderir ve sonucu loglar.
    */
-  async function sendAttackForTarget(body, target) {
+  async function sendAttackForTarget(body, target, usedSpellLevel = null) {
     try {
       const res = await fetch('/api/combat/attack', {
         method: 'POST',
@@ -1606,7 +1685,7 @@
       const notesLabel = notes.length > 0 ? ` [${notes.join(', ')}]` : '';
 
       // Log başlığı: Saldıran → Hedef
-      const atkLabel = body.attackType === 'physical' ? '⚔️ FİZİKSEL' : '✨ BÜYÜ';
+      const atkLabel = usedSpellLevel ? `✨ BÜYÜ (Lvl ${usedSpellLevel})` : '⚔️ SALDIRI';
       const attackerName = escapeHtml(selectedAttacker?.name || '?');
       const targetName = escapeHtml(target.name || '?');
       addCombatLog(
@@ -1617,7 +1696,7 @@
       result.attacks.forEach(atk => {
         if (atk.hit) {
           const critTag = atk.isCritical ? ' <span class="atk-crit">KRİTİK!</span>' : '';
-          const typeLabel = body.attackType === 'physical' ? 'Saldırı' : 'Büyü Saldırısı';
+          const typeLabel = usedSpellLevel ? `Büyü (Lvl ${usedSpellLevel})` : 'Saldırı';
           const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
           let statusAppliedTag = '';
           if (result.statusEffectsToApply && result.statusEffectsToApply.length > 0) {
@@ -1939,6 +2018,96 @@
   // HAZIR SALDIRI PRESETLERİ MODAL CONTROLLER
   // ============================================================
 
+  let builderActiveLvl = 1;
+  let builderSlotScaling = { 1: null, 2: null, 3: null, 4: null };
+
+  function readCurrentBuilderPools() {
+    const readSteppers = (prefix) => {
+      const dice = {};
+      [4, 6, 8, 10, 12, 20].forEach(sides => {
+        const val = parseInt(document.getElementById(`atk-bpool-${prefix}-d${sides}`)?.value) || 0;
+        if (val > 0) dice[sides] = val;
+      });
+      const bonus = parseInt(document.getElementById(`atk-bpool-${prefix}-bonus`)?.value) || 0;
+      return { dice, bonus, weakness: false, resistance: false };
+    };
+
+    return {
+      phys: readSteppers('phys'),
+      elem1: readSteppers('elem1'),
+      elem2: readSteppers('elem2')
+    };
+  }
+
+  function writeBuilderPools(pools) {
+    const writeSteppers = (prefix, p) => {
+      const d = (p && p.dice) || {};
+      [4, 6, 8, 10, 12, 20].forEach(sides => {
+        const el = document.getElementById(`atk-bpool-${prefix}-d${sides}`);
+        if (el) el.value = d[sides] || d[`d${sides}`] || 0;
+      });
+      const bonusEl = document.getElementById(`atk-bpool-${prefix}-bonus`);
+      if (bonusEl) bonusEl.value = (p && p.bonus) || 0;
+    };
+
+    writeSteppers('phys', pools ? (pools.phys || pools.physical) : null);
+    writeSteppers('elem1', pools ? pools.elem1 : null);
+    writeSteppers('elem2', pools ? pools.elem2 : null);
+  }
+
+  function updateBuilderLvlTabsUI(lvl) {
+    document.querySelectorAll('.atk-lvl-tab-btn').forEach(btn => {
+      const btnLvl = parseInt(btn.dataset.lvl);
+      if (btnLvl === lvl) btn.classList.add('active');
+      else btn.classList.remove('active');
+    });
+
+    const tagEl = document.getElementById('atk-builder-pools-lvl-tag');
+    if (tagEl) {
+      if (lvl === 1) tagEl.textContent = '[Seviye 1 - Taban]';
+      else tagEl.textContent = `[Seviye ${lvl} Özel Zar]`;
+    }
+
+    const hintEl = document.getElementById('atk-lvl-tab-hint');
+    const copyBtn = document.getElementById('btn-copy-base-to-lvl');
+    const clearBtn = document.getElementById('btn-clear-curr-lvl');
+
+    if (lvl === 1) {
+      if (hintEl) hintEl.innerHTML = `📌 <strong>Seviye 1 (Taban Zar Havuzu)</strong>: Bu seviyedeki zarlar varsayılan hasar olarak kullanılır.`;
+      if (copyBtn) copyBtn.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = 'none';
+    } else {
+      const hasCustom = builderSlotScaling[lvl] && hasAnyDice(builderSlotScaling[lvl]);
+      if (hintEl) {
+        if (hasCustom) {
+          hintEl.innerHTML = `✨ <strong>Seviye ${lvl} Özel Etkisi</strong>: Bu seviyeye özel hasar zarları tanımlandı.`;
+        } else {
+          hintEl.innerHTML = `ℹ️ <strong>Seviye ${lvl} (Boş)</strong>: Özel zar tanımlanmadı, kullanılırsa <strong>Taban (Lvl 1)</strong> hasarı geçerli olur.`;
+        }
+      }
+      if (copyBtn) copyBtn.style.display = 'inline-block';
+      if (clearBtn) clearBtn.style.display = 'inline-block';
+    }
+  }
+
+  function switchBuilderLevel(targetLvl, saveCurrent = true) {
+    const lvl = Math.max(1, Math.min(4, parseInt(targetLvl) || 1));
+    if (saveCurrent) {
+      const current = readCurrentBuilderPools();
+      if (builderActiveLvl === 1 || hasAnyDice(current)) {
+        builderSlotScaling[builderActiveLvl] = current;
+      } else {
+        builderSlotScaling[builderActiveLvl] = null;
+      }
+    }
+
+    builderActiveLvl = lvl;
+    updateBuilderLvlTabsUI(lvl);
+
+    const poolToLoad = builderSlotScaling[lvl];
+    writeBuilderPools(poolToLoad || null);
+  }
+
   function formatPoolSummary(pools) {
     if (!pools) return 'Havuz boş';
     const parts = [];
@@ -1954,10 +2123,9 @@
       if (diceParts.length > 0) parts.push(`${label}: ${diceParts.join('+')}`);
     };
 
-    formatPool(pools.phys || pools.physical, 'Fiz');
+    formatPool(pools.phys || pools.physical, 'Ana');
     formatPool(pools.elem1, 'Ateş');
     formatPool(pools.elem2, 'Buz');
-    formatPool(pools.spell, 'Büyü');
 
     return parts.join(' | ') || 'Havuz boş';
   }
@@ -1990,20 +2158,23 @@
     const nameInput = document.getElementById('atk-builder-name');
     if (nameInput) nameInput.value = '';
 
-    const typeSelect = document.getElementById('atk-builder-type');
-    if (typeSelect) typeSelect.value = 'physical';
-
     const statSelect = document.getElementById('atk-builder-stat');
     if (statSelect) statSelect.value = 'STR';
 
-    const spellLvlSelect = document.getElementById('atk-builder-spell-level');
-    if (spellLvlSelect) spellLvlSelect.value = '1';
+    const physTypeSelect = document.getElementById('atk-builder-phys-type');
+    if (physTypeSelect) physTypeSelect.value = 'slashing';
 
     const countInput = document.getElementById('atk-builder-count');
     if (countInput) countInput.value = '1';
 
-    const physTypeSelect = document.getElementById('atk-builder-phys-type');
-    if (physTypeSelect) physTypeSelect.value = 'slashing';
+    const consumesSlotCheck = document.getElementById('atk-builder-consumes-slot');
+    if (consumesSlotCheck) consumesSlotCheck.checked = false;
+
+    const spellSlotSection = document.getElementById('atk-builder-spell-slot-section');
+    if (spellSlotSection) spellSlotSection.style.display = 'none';
+
+    const baseSpellLvlSelect = document.getElementById('atk-builder-base-spell-level');
+    if (baseSpellLvlSelect) baseSpellLvlSelect.value = '1';
 
     const halfMissCheck = document.getElementById('atk-builder-half-miss');
     if (halfMissCheck) halfMissCheck.checked = false;
@@ -2020,17 +2191,11 @@
     const descInput = document.getElementById('atk-builder-desc');
     if (descInput) descInput.value = '';
 
-    // Tüm zar havuzu steppers sıfırla
-    ['phys', 'elem1', 'elem2', 'spell'].forEach(prefix => {
-      [4, 6, 8, 10, 12, 20].forEach(sides => {
-        const el = document.getElementById(`atk-bpool-${prefix}-d${sides}`);
-        if (el) el.value = 0;
-      });
-      const bonusEl = document.getElementById(`atk-bpool-${prefix}-bonus`);
-      if (bonusEl) bonusEl.value = 0;
-    });
+    builderSlotScaling = { 1: null, 2: null, 3: null, 4: null };
+    builderActiveLvl = 1;
+    writeBuilderPools(null);
+    updateBuilderLvlTabsUI(1);
 
-    // Status effect dropdown sıfırla
     populateStatusEffectsSelect();
     const statusSelect = document.getElementById('atk-builder-status-effect');
     if (statusSelect) statusSelect.value = '';
@@ -2084,12 +2249,22 @@
         card.classList.add('equipped-active');
       }
 
-      const typeLabel = preset.attackType === 'spell' ? `✨ Büyü (Lvl ${preset.spellLevel || 1})` : '⚔️ Fiziksel';
+      const typeLabel = preset.consumesSpellSlot
+        ? `✨ Büyü (Min Lvl ${preset.baseSpellLevel || 1})`
+        : (preset.attackType === 'spell' ? '✨ Büyü' : '⚔️ Fiziksel');
       const halfBadge = preset.halfDamageOnMiss ? `<span class="atk-preset-chip" style="background:rgba(230,126,34,0.2); border-color:#e67e22;">🛡️ Iska: ½ Hasar</span>` : '';
       const aoeBadge = preset.isAoe ? `<span class="atk-preset-chip" style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;">💥 Alan: ${preset.aoeRadius || 1}m</span>` : '';
       const statusBadge = preset.statusEffectsToApply?.length
         ? `<span class="atk-preset-chip" style="background:rgba(241,196,15,0.2); border-color:#f1c40f;">${preset.statusEffectsToApply[0].icon || '✨'} ${preset.statusEffectsToApply[0].name}</span>`
         : '';
+
+      let scalingBadge = '';
+      if (preset.consumesSpellSlot && preset.slotScaling) {
+        const scaledLvls = Object.keys(preset.slotScaling).filter(l => parseInt(l) > 1 && preset.slotScaling[l] && hasAnyDice(preset.slotScaling[l].dicePools || preset.slotScaling[l]));
+        if (scaledLvls.length > 0) {
+          scalingBadge = `<span class="atk-preset-chip" style="background:rgba(56,189,248,0.2); border-color:#38bdf8; color:#7dd3fc;">⚡ Lvl ${scaledLvls.join(', ')} Özel</span>`;
+        }
+      }
 
       card.innerHTML = `
         <div>
@@ -2099,6 +2274,7 @@
           </div>
           <div class="atk-preset-badge-row" style="margin: 4px 0;">
             <span class="atk-preset-chip">${typeLabel}</span>
+            ${scalingBadge}
             ${halfBadge}
             ${aoeBadge}
             ${statusBadge}
@@ -2181,12 +2357,10 @@
     // Builder alanlarını doldur
     document.getElementById('atk-builder-id').value = preset.id || '';
     document.getElementById('atk-builder-name').value = preset.name || '';
-    document.getElementById('atk-builder-type').value = preset.attackType || 'physical';
     document.getElementById('atk-builder-stat').value = preset.stat || 'STR';
-    document.getElementById('atk-builder-spell-level').value = preset.spellLevel || 1;
     document.getElementById('atk-builder-count').value = preset.attackCount || 1;
     const physTypeSelect = document.getElementById('atk-builder-phys-type');
-    if (physTypeSelect) physTypeSelect.value = preset.physicalDamageType || 'slashing';
+    if (physTypeSelect) physTypeSelect.value = preset.physicalDamageType || (preset.attackType === 'spell' ? 'magic' : 'slashing');
     document.getElementById('atk-builder-half-miss').checked = Boolean(preset.halfDamageOnMiss);
 
     const aoeCheck = document.getElementById('atk-builder-is-aoe');
@@ -2200,22 +2374,30 @@
 
     document.getElementById('atk-builder-desc').value = preset.description || '';
 
-    // Zar steppers
-    const setSteppers = (channel, prefix) => {
-      const p = (preset.dicePools && (preset.dicePools[channel] || preset.dicePools[channel === 'phys' ? 'physical' : channel])) || {};
-      const d = p.dice || {};
-      [4, 6, 8, 10, 12, 20].forEach(sides => {
-        const el = document.getElementById(`atk-bpool-${prefix}-d${sides}`);
-        if (el) el.value = d[sides] || d[`d${sides}`] || 0;
-      });
-      const bonusEl = document.getElementById(`atk-bpool-${prefix}-bonus`);
-      if (bonusEl) bonusEl.value = p.bonus || 0;
-    };
+    // Büyü Slotu Yapılandırması
+    const consumesCheck = document.getElementById('atk-builder-consumes-slot');
+    if (consumesCheck) consumesCheck.checked = Boolean(preset.consumesSpellSlot);
 
-    setSteppers('phys', 'phys');
-    setSteppers('elem1', 'elem1');
-    setSteppers('elem2', 'elem2');
-    setSteppers('spell', 'spell');
+    const spellSection = document.getElementById('atk-builder-spell-slot-section');
+    if (spellSection) spellSection.style.display = preset.consumesSpellSlot ? 'block' : 'none';
+
+    const baseLvlSelect = document.getElementById('atk-builder-base-spell-level');
+    if (baseLvlSelect) baseLvlSelect.value = preset.baseSpellLevel || preset.spellLevel || 1;
+
+    // Seviye zarlarını builder state'e yükle
+    builderSlotScaling = { 1: null, 2: null, 3: null, 4: null };
+    builderSlotScaling[1] = preset.dicePools || null;
+
+    if (preset.slotScaling) {
+      for (let l = 2; l <= 4; l++) {
+        const s = preset.slotScaling[l];
+        if (s) {
+          builderSlotScaling[l] = s.dicePools || s;
+        }
+      }
+    }
+
+    switchBuilderLevel(1, false);
 
     // Status Effect
     populateStatusEffectsSelect();
@@ -2260,32 +2442,41 @@
       return null;
     }
 
-    const attackType = document.getElementById('atk-builder-type')?.value || 'physical';
+    // Aktif seviyedeki son değişiklikleri kaydet
+    const currPools = readCurrentBuilderPools();
+    if (builderActiveLvl === 1 || hasAnyDice(currPools)) {
+      builderSlotScaling[builderActiveLvl] = currPools;
+    } else {
+      builderSlotScaling[builderActiveLvl] = null;
+    }
+
+    const consumesSpellSlot = Boolean(document.getElementById('atk-builder-consumes-slot')?.checked);
+    const baseSpellLevel = parseInt(document.getElementById('atk-builder-base-spell-level')?.value) || 1;
     const physicalDamageType = document.getElementById('atk-builder-phys-type')?.value || 'slashing';
     const stat = document.getElementById('atk-builder-stat')?.value || 'STR';
-    const spellLevel = parseInt(document.getElementById('atk-builder-spell-level')?.value) || 1;
     const attackCount = parseInt(document.getElementById('atk-builder-count')?.value) || 1;
     const halfDamageOnMiss = document.getElementById('atk-builder-half-miss')?.checked || false;
     const isAoe = Boolean(document.getElementById('atk-builder-is-aoe')?.checked);
     const aoeRadius = Math.max(0.5, parseFloat(document.getElementById('atk-builder-aoe-radius')?.value) || 1);
     const description = document.getElementById('atk-builder-desc')?.value.trim() || '';
 
-    const readSteppers = (prefix) => {
-      const dice = {};
-      [4, 6, 8, 10, 12, 20].forEach(sides => {
-        const val = parseInt(document.getElementById(`atk-bpool-${prefix}-d${sides}`)?.value) || 0;
-        if (val > 0) dice[sides] = val;
-      });
-      const bonus = parseInt(document.getElementById(`atk-bpool-${prefix}-bonus`)?.value) || 0;
-      return { dice, bonus, weakness: false, resistance: false };
-    };
+    // Taban zar havuzu (Seviye 1)
+    const basePools = builderSlotScaling[1] || currPools;
 
-    const dicePools = {
-      phys: readSteppers('phys'),
-      elem1: readSteppers('elem1'),
-      elem2: readSteppers('elem2'),
-      spell: readSteppers('spell')
-    };
+    // Seviye ölçeklemeleri
+    const slotScaling = {};
+    if (consumesSpellSlot) {
+      for (let lvl = 1; lvl <= 4; lvl++) {
+        if (lvl === 1) {
+          slotScaling[1] = { dicePools: basePools };
+        } else if (builderSlotScaling[lvl] && hasAnyDice(builderSlotScaling[lvl])) {
+          slotScaling[lvl] = { dicePools: builderSlotScaling[lvl] };
+        } else {
+          // Boş bırakılmış seviye -> varsayılan taban kullanılacak
+          slotScaling[lvl] = null;
+        }
+      }
+    }
 
     // Status effect
     const statusEffectsToApply = [];
@@ -2300,11 +2491,14 @@
       id: id || ('atk_custom_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
       name,
       stat,
-      attackType,
+      attackType: consumesSpellSlot ? 'spell' : 'physical',
       physicalDamageType,
-      spellLevel,
+      consumesSpellSlot,
+      baseSpellLevel,
+      spellLevel: baseSpellLevel,
+      slotScaling,
       attackCount,
-      dicePools,
+      dicePools: basePools,
       statusEffectsToApply,
       halfDamageOnMiss,
       isAoe,
@@ -2378,6 +2572,49 @@
     }
   });
 
+  // Büyü Slotu Harcar Checkbox değişiminde slot bölümünü göster/gizle
+  document.getElementById('atk-builder-consumes-slot')?.addEventListener('change', (e) => {
+    const spellSection = document.getElementById('atk-builder-spell-slot-section');
+    if (spellSection) {
+      spellSection.style.display = e.target.checked ? 'block' : 'none';
+    }
+  });
+
+  // Builder Seviye Sekmeleri Tıklama
+  document.querySelectorAll('.atk-lvl-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lvl = parseInt(btn.dataset.lvl);
+      if (lvl) switchBuilderLevel(lvl, true);
+    });
+  });
+
+  // Builder Tabanı Kopyala & Seviyeyi Sıfırla Butonları
+  document.getElementById('btn-copy-base-to-lvl')?.addEventListener('click', () => {
+    if (builderActiveLvl <= 1) return;
+    const base = builderSlotScaling[1] || readCurrentBuilderPools();
+    if (base) {
+      builderSlotScaling[builderActiveLvl] = JSON.parse(JSON.stringify(base));
+      writeBuilderPools(builderSlotScaling[builderActiveLvl]);
+      updateBuilderLvlTabsUI(builderActiveLvl);
+    }
+  });
+
+  document.getElementById('btn-clear-curr-lvl')?.addEventListener('click', () => {
+    if (builderActiveLvl <= 1) return;
+    builderSlotScaling[builderActiveLvl] = null;
+    writeBuilderPools(null);
+    updateBuilderLvlTabsUI(builderActiveLvl);
+  });
+
+  // Saldırı Panelindeki Büyü Slotu Radyo Butonları
+  document.querySelectorAll('input[name="atk-active-spell-level"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectActiveSpellLevel(e.target.value);
+      }
+    });
+  });
+
   // Modal Sekmeleri
   document.querySelectorAll('.atk-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2407,9 +2644,8 @@
   document.getElementById('btn-save-atk-preset')?.addEventListener('click', () => savePresetFromBuilder(false));
   document.getElementById('btn-equip-and-save-preset')?.addEventListener('click', () => savePresetFromBuilder(true));
 
-  // Saldırı butonları
-  btnPhysicalAttack?.addEventListener('click', performPhysicalAttack);
-  btnSpellAttack?.addEventListener('click', performSpellAttack);
+  // Tekil Saldır butonu
+  btnAttack?.addEventListener('click', performAttack);
   btnApplyDamage?.addEventListener('click', applyDamage);
   btnClearLog?.addEventListener('click', () => { if (combatLog) combatLog.innerHTML = ''; });
   btnClearResist?.addEventListener('click', clearResistances);

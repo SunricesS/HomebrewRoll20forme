@@ -392,19 +392,20 @@
                             </div>
                         </div>
 
-                        <!-- Fiziksel Saldırı -->
+                        <!-- Saldırı / Hasar Kanalları -->
                         <div class="atk-section">
-                            <h5>⚔️ Fiziksel Saldırı</h5>
+                            <h5>⚔️ Hasar Kanalları</h5>
 
-                            <!-- Fiziksel Kanal -->
+                            <!-- Fiziksel / Ana Kanal -->
                             <div class="atk-damage-channel" data-channel="phys">
                                 <div class="atk-channel-header">
                                     <div class="atk-channel-title-row">
-                                        <span class="atk-channel-label">Fiziksel:</span>
-                                        <select id="atk-phys-damage-type" class="atk-select-damage-type" title="Fiziksel Hasar Türü">
+                                        <span class="atk-channel-label">Fiziksel/Ana:</span>
+                                        <select id="atk-phys-damage-type" class="atk-select-damage-type" title="Hasar Türü">
                                             <option value="slashing">⚔️ Kesme</option>
                                             <option value="bludgeoning">🔨 Ezme</option>
                                             <option value="piercing">🏹 Delme</option>
+                                            <option value="magic">✨ Büyü</option>
                                         </select>
                                     </div>
                                     <div id="atk-phys-target-status" class="atk-channel-target-status"></div>
@@ -515,64 +516,28 @@
                                 </div>
                             </div>
 
-                            <button id="atk-btn-physical" class="atk-btn atk-btn-physical">FİZİKSEL / SİLAH SALDIRISI</button>
-                        </div>
-
-                        <!-- Büyü Saldırısı -->
-                        <div class="atk-section">
-                            <h5>Büyü Saldırısı</h5>
-                            <div class="atk-spell-slots">
-                                <div class="atk-slot"><span>Lvl 1:</span> <span id="atk-slot-lvl1" class="atk-slot-count">0</span></div>
-                                <div class="atk-slot"><span>Lvl 2:</span> <span id="atk-slot-lvl2" class="atk-slot-count">0</span></div>
-                                <div class="atk-slot"><span>Lvl 3:</span> <span id="atk-slot-lvl3" class="atk-slot-count">0</span></div>
-                                <div class="atk-slot"><span>Lvl 4:</span> <span id="atk-slot-lvl4" class="atk-slot-count">0</span></div>
-                            </div>
-                            <div class="atk-spell-level-row">
-                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl1" checked> Lvl 1</label>
-                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl2"> Lvl 2</label>
-                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl3"> Lvl 3</label>
-                                <label><input type="radio" name="atk-spell-level" id="atk-spell-lvl4"> Lvl 4</label>
-                            </div>
-
-                            <!-- Büyü Hasar Kanalı -->
-                            <div class="atk-damage-channel" data-channel="spell">
-                                <div class="atk-channel-header">
-                                    <span class="atk-channel-label" style="color:var(--accent-hover, #38bdf8);">Büyü Hasarı</span>
-                                    <div id="atk-spell-target-status" class="atk-channel-target-status"></div>
+                            <!-- Büyü Slotu & Seviye Seçimi (Preset büyü slotu harcadığında veya serbest slot kullanımında görünür) -->
+                            <div id="atk-spell-slot-control-group" class="atk-spell-slot-control-group" style="display:none;">
+                                <div class="atk-slot-control-header">
+                                    <span class="atk-slot-control-title">✨ Büyü Slotu Kullanımı</span>
+                                    <span id="atk-slot-control-badge" class="atk-slot-badge-info">Gerekli: Min Lvl 1</span>
                                 </div>
-
-                                <div class="atk-pool-display" id="atk-spell-display">
-                                    <div class="atk-pool-badges" id="atk-spell-badges">
-                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
-                                    </div>
-                                    <div class="atk-pool-result hidden" id="atk-spell-result">
-                                        <div class="atk-result-total">Toplam: <span id="atk-spell-total-val">0</span></div>
-                                        <div class="atk-result-breakdown" id="atk-spell-breakdown-val"></div>
-                                    </div>
+                                <div class="atk-spell-slots">
+                                    <div class="atk-slot" data-slot-level="1"><span>Lvl 1:</span> <span id="atk-slot-lvl1" class="atk-slot-count">0</span></div>
+                                    <div class="atk-slot" data-slot-level="2"><span>Lvl 2:</span> <span id="atk-slot-lvl2" class="atk-slot-count">0</span></div>
+                                    <div class="atk-slot" data-slot-level="3"><span>Lvl 3:</span> <span id="atk-slot-lvl3" class="atk-slot-count">0</span></div>
+                                    <div class="atk-slot" data-slot-level="4"><span>Lvl 4:</span> <span id="atk-slot-lvl4" class="atk-slot-count">0</span></div>
                                 </div>
-
-                                <div class="atk-dice-toolbar">
-                                    <div class="atk-dice-buttons">
-                                        <button type="button" class="atk-die-btn atk-die-4" data-die="4" title="d4 ekle">d4</button>
-                                        <button type="button" class="atk-die-btn atk-die-6" data-die="6" title="d6 ekle">d6</button>
-                                        <button type="button" class="atk-die-btn atk-die-8" data-die="8" title="d8 ekle">d8</button>
-                                        <button type="button" class="atk-die-btn atk-die-10" data-die="10" title="d10 ekle">d10</button>
-                                        <button type="button" class="atk-die-btn atk-die-12" data-die="12" title="d12 ekle">d12</button>
-                                        <button type="button" class="atk-die-btn atk-die-20" data-die="20" title="d20 ekle">d20</button>
-                                    </div>
-                                    <div class="atk-dice-actions">
-                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
-                                            <button type="button" class="atk-bonus-btn atk-bonus-minus" data-action="minus">-</button>
-                                            <input type="number" class="atk-bonus-input" id="atk-spell-bonus" value="0" placeholder="0">
-                                            <button type="button" class="atk-bonus-btn atk-bonus-plus" data-action="plus">+</button>
-                                        </div>
-                                        <button type="button" class="atk-action-btn atk-btn-roll" id="atk-spell-roll" title="Sadece bu havuzu at">Zar At</button>
-                                        <button type="button" class="atk-action-btn atk-btn-clear" id="atk-spell-clear" title="Havuzu temizle">Temizle</button>
-                                    </div>
+                                <div class="atk-spell-level-row" id="atk-active-spell-level-row">
+                                    <label class="atk-level-radio-label"><input type="radio" name="atk-active-spell-level" value="1" id="atk-active-spell-lvl1" checked> <span>Lvl 1</span></label>
+                                    <label class="atk-level-radio-label"><input type="radio" name="atk-active-spell-level" value="2" id="atk-active-spell-lvl2"> <span>Lvl 2</span></label>
+                                    <label class="atk-level-radio-label"><input type="radio" name="atk-active-spell-level" value="3" id="atk-active-spell-lvl3"> <span>Lvl 3</span></label>
+                                    <label class="atk-level-radio-label"><input type="radio" name="atk-active-spell-level" value="4" id="atk-active-spell-lvl4"> <span>Lvl 4</span></label>
                                 </div>
+                                <div id="atk-slot-scaling-note" class="atk-slot-scaling-note"></div>
                             </div>
 
-                            <button id="atk-btn-spell" class="atk-btn atk-btn-spell">BÜYÜ SALDIRISI</button>
+                            <button id="atk-btn-attack" class="atk-btn atk-btn-attack atk-btn-physical">⚔️ SALDIR</button>
                         </div>
 
                         <!-- Savaş Logu -->
@@ -917,21 +882,11 @@
                 <div class="atk-builder-form">
                     <input type="hidden" id="atk-builder-id" value="">
                     
-                    <div class="stats-grid stats-grid-2col">
+                    <div class="stats-grid stats-grid-3col">
                         <div class="form-group">
                             <label>Saldırı Adı:</label>
-                            <input type="text" id="atk-builder-name" placeholder="Örn: Alev Kılıcı, Yıldırım Oku" class="input-light">
+                            <input type="text" id="atk-builder-name" placeholder="Örn: Kutsal Darbe, Alev Oku" class="input-light">
                         </div>
-                        <div class="form-group">
-                            <label>Saldırı Türü:</label>
-                            <select id="atk-builder-type" class="atk-select">
-                                <option value="physical">⚔️ Fiziksel Saldırı</option>
-                                <option value="spell">✨ Büyü Saldırısı</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="stats-grid stats-grid-3col">
                         <div class="form-group">
                             <label>ZarStat (Bonus):</label>
                             <select id="atk-builder-stat" class="atk-select">
@@ -943,36 +898,71 @@
                                 <option value="CHR">CHR</option>
                             </select>
                         </div>
-                        <div class="form-group" id="atk-builder-spell-level-group">
-                            <label>Büyü Seviyesi:</label>
-                            <select id="atk-builder-spell-level" class="atk-select">
-                                <option value="1">Seviye 1 (1x)</option>
-                                <option value="2">Seviye 2 (1.5x)</option>
-                                <option value="3">Seviye 3 (2x)</option>
-                                <option value="4">Seviye 4 (2.5x)</option>
-                            </select>
-                        </div>
                         <div class="form-group">
-                            <label>Saldırı Adedi:</label>
-                            <input type="number" id="atk-builder-count" value="1" min="1" max="20" class="input-light">
-                        </div>
-                        <div class="form-group" id="atk-builder-phys-type-group">
-                            <label>Fiziksel Tür:</label>
+                            <label>Hasar Türü:</label>
                             <select id="atk-builder-phys-type" class="atk-select">
                                 <option value="slashing">⚔️ Kesme</option>
                                 <option value="bludgeoning">🔨 Ezme</option>
                                 <option value="piercing">🏹 Delme</option>
+                                <option value="magic">✨ Büyü</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid stats-grid-2col" style="margin-top:8px;">
+                        <div class="form-group">
+                            <label>Saldırı Adedi:</label>
+                            <input type="number" id="atk-builder-count" value="1" min="1" max="20" class="input-light">
+                        </div>
+                        <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
+                            <label class="status-checkbox-label" style="margin-top:14px;">
+                                <input type="checkbox" id="atk-builder-consumes-slot">
+                                <span style="color:var(--accent-hover, #38bdf8); font-weight:700;">✨ Büyü Slotu Harcar</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Büyü Slotu & Seviye Ölçekleme Alanı (Büyü Slotu Harcar seçilince görünür) -->
+                    <div id="atk-builder-spell-slot-section" class="atk-builder-spell-section" style="display:none;">
+                        <div class="stats-grid stats-grid-2col" style="align-items:center;">
+                            <div class="form-group">
+                                <label style="color:#93c5fd; font-weight:600;">Taban Büyü Seviyesi (Minimum):</label>
+                                <select id="atk-builder-base-spell-level" class="atk-select">
+                                    <option value="1">Seviye 1 Slot</option>
+                                    <option value="2">Seviye 2 Slot</option>
+                                    <option value="3">Seviye 3 Slot</option>
+                                    <option value="4">Seviye 4 Slot</option>
+                                </select>
+                            </div>
+                            <div style="font-size:12px; color:#cbd5e1; padding-top:12px;">
+                                En az bu seviye slot ile saldıralabilir. Üst slotlarla saldırdığında aşağıdaki seviye zarları geçerli olur.
+                            </div>
+                        </div>
+
+                        <!-- Seviye Sekmeleri -->
+                        <div class="atk-builder-lvl-tabs" id="atk-builder-lvl-tabs">
+                            <button type="button" class="atk-lvl-tab-btn active" data-lvl="1">Seviye 1 (Taban)</button>
+                            <button type="button" class="atk-lvl-tab-btn" data-lvl="2">Seviye 2</button>
+                            <button type="button" class="atk-lvl-tab-btn" data-lvl="3">Seviye 3</button>
+                            <button type="button" class="atk-lvl-tab-btn" data-lvl="4">Seviye 4</button>
+                        </div>
+
+                        <div class="atk-lvl-tab-banner" id="atk-lvl-tab-banner">
+                            <span id="atk-lvl-tab-hint">📌 <strong>Seviye 1 (Taban Zar Havuzu)</strong>: Bu seviyedeki zarlar varsayılan hasar olarak kullanılır.</span>
+                            <div class="atk-lvl-tab-actions">
+                                <button type="button" id="btn-copy-base-to-lvl" class="atk-mini-btn" style="display:none;" title="Taban seviyedeki zarları bu seviyeye kopyalar">📋 Tabanı Kopyala</button>
+                                <button type="button" id="btn-clear-curr-lvl" class="atk-mini-btn" style="display:none;" title="Bu seviyeyi boş bırakır (Taban değerler geçerli olur)">🗑️ Seviyeyi Sıfırla (Boş Bırak)</button>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Zar Havuzları Yapılandırması -->
                     <div class="atk-builder-pools-section">
-                        <label class="status-section-label">🎲 Zar Havuzları:</label>
+                        <label class="status-section-label">🎲 Zar Havuzları <span id="atk-builder-pools-lvl-tag" style="color:var(--gold, #fbbf24); font-size:11px;">[Seviye 1 - Taban]</span>:</label>
 
-                        <!-- Fiziksel Havuz -->
+                        <!-- Fiziksel / Ana Havuz -->
                         <div class="atk-builder-pool-row" id="atk-builder-phys-row">
-                            <span class="pool-row-label">Fiziksel:</span>
+                            <span class="pool-row-label">Ana Hasar:</span>
                             <div class="pool-dice-steppers">
                                 <span class="stepper-item">d4:<input type="number" id="atk-bpool-phys-d4" min="0" max="20" value="0" class="mini-num"></span>
                                 <span class="stepper-item">d6:<input type="number" id="atk-bpool-phys-d6" min="0" max="20" value="0" class="mini-num"></span>
@@ -1009,20 +999,6 @@
                                 <span class="stepper-item">d12:<input type="number" id="atk-bpool-elem2-d12" min="0" max="20" value="0" class="mini-num"></span>
                                 <span class="stepper-item">d20:<input type="number" id="atk-bpool-elem2-d20" min="0" max="20" value="0" class="mini-num"></span>
                                 <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-elem2-bonus" value="0" class="mini-num"></span>
-                            </div>
-                        </div>
-
-                        <!-- Büyü Havuzu -->
-                        <div class="atk-builder-pool-row" id="atk-builder-spell-row">
-                            <span class="pool-row-label">Büyü:</span>
-                            <div class="pool-dice-steppers">
-                                <span class="stepper-item">d4:<input type="number" id="atk-bpool-spell-d4" min="0" max="20" value="0" class="mini-num"></span>
-                                <span class="stepper-item">d6:<input type="number" id="atk-bpool-spell-d6" min="0" max="20" value="0" class="mini-num"></span>
-                                <span class="stepper-item">d8:<input type="number" id="atk-bpool-spell-d8" min="0" max="20" value="0" class="mini-num"></span>
-                                <span class="stepper-item">d10:<input type="number" id="atk-bpool-spell-d10" min="0" max="20" value="0" class="mini-num"></span>
-                                <span class="stepper-item">d12:<input type="number" id="atk-bpool-spell-d12" min="0" max="20" value="0" class="mini-num"></span>
-                                <span class="stepper-item">d20:<input type="number" id="atk-bpool-spell-d20" min="0" max="20" value="0" class="mini-num"></span>
-                                <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-spell-bonus" value="0" class="mini-num"></span>
                             </div>
                         </div>
                     </div>
