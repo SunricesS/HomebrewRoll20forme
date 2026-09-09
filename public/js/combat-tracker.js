@@ -524,8 +524,10 @@
           let badgesHtml = '';
           if (hasHalfDamage) badgesHtml += '<span class="bg3-hotbar-slot-badge" title="Iska durumunda yarı hasar">½ Iska</span>';
           if (statusIcon) badgesHtml += `<span class="bg3-hotbar-slot-badge" title="Durum efekti uygular">${statusIcon}</span>`;
+          if (preset.isAoe) badgesHtml += `<span class="bg3-hotbar-slot-badge" style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;" title="Alan Hasarı: ${preset.aoeRadius || 1}m">💥 ${preset.aoeRadius || 1}m</span>`;
 
-          slot.title = `${preset.name} (${preset.attackType === 'spell' ? 'Büyü' : 'Fiziksel'})\nZar: ${diceFormula}${preset.halfDamageOnMiss ? '\nIska: 1/2 Hasar' : ''}`;
+          const aoeTitle = preset.isAoe ? `\nAlan Hasarı: ${preset.aoeRadius || 1}m` : '';
+          slot.title = `${preset.name} (${preset.attackType === 'spell' ? 'Büyü' : 'Fiziksel'})\nZar: ${diceFormula}${preset.halfDamageOnMiss ? '\nIska: 1/2 Hasar' : ''}${aoeTitle}`;
 
           slot.innerHTML = `
             <div class="bg3-hotbar-slot-icon">${typeIcon}</div>

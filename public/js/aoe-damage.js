@@ -78,7 +78,7 @@
   /**
    * Haritadaki tüm tokenların AoE çemberi içinde kalıp kalmadığını kontrol eder.
    */
-  function detectTokensInAoe(cx, cy, r) {
+  function detectTokensInAoe(cx, cy, r, highlight = false) {
     const inside = [];
     if (!gameMap) return inside;
 
@@ -105,7 +105,9 @@
       const isInside = dist <= (r + tokenRadius * 0.7);
 
       if (isInside) {
-        tokenEl.classList.add('token-aoe-targeted');
+        if (highlight) {
+          tokenEl.classList.add('token-aoe-targeted');
+        }
 
         // Token verisini çöz
         let targetData = null;
@@ -120,7 +122,9 @@
             hp: m.hp,
             maxHp: m.maxHp,
             imgUrl: m.imgUrl || null,
-            color: m.color || '#e74c3c'
+            color: m.color || '#e74c3c',
+            x: tokenCx,
+            y: tokenCy
           };
         }
         // 2. Oyuncu karakteri mi?
@@ -135,7 +139,9 @@
               hp: p.character.hp_current,
               maxHp: p.character.hp_max,
               imgUrl: p.character.avatar_url || p.imgUrl || null,
-              color: p.color || '#3498db'
+              color: p.color || '#3498db',
+              x: tokenCx,
+              y: tokenCy
             };
           }
         }
@@ -144,7 +150,9 @@
           inside.push(targetData);
         }
       } else {
-        tokenEl.classList.remove('token-aoe-targeted');
+        if (highlight) {
+          tokenEl.classList.remove('token-aoe-targeted');
+        }
       }
     });
 
@@ -291,7 +299,7 @@
       }
 
       // Alandaki hedefleri anlık tespit et ve parlat
-      detectedTargets = detectTokensInAoe(aoeCenter.x, aoeCenter.y, aoeRadius);
+      detectedTargets = detectTokensInAoe(aoeCenter.x, aoeCenter.y, aoeRadius, true);
     });
 
     targetingLayer.addEventListener('mouseup', (e) => {
@@ -317,7 +325,7 @@
       }
 
       // Nihai hedef tespiti
-      detectedTargets = detectTokensInAoe(aoeCenter.x, aoeCenter.y, aoeRadius);
+      detectedTargets = detectTokensInAoe(aoeCenter.x, aoeCenter.y, aoeRadius, true);
 
       // Hedefleme katmanının tıklamalarını kapat ve hasar modalını aç
       targetingLayer.classList.remove('active');
@@ -659,6 +667,10 @@
     // İlk yüklemede durum sorgula
     socket.emit('getCombatState');
   }
+
+  // Dışa aktarılan global API'ler
+  window.__webdnd_detectTokensInAoe = detectTokensInAoe;
+  window.__webdnd_showAoeVisualEffects = showAoeVisualEffects;
 
   console.log('WebDND AoE Damage modülü yüklendi.');
 })();

@@ -323,6 +323,7 @@
                                     <span id="atk-preset-badge-type" class="atk-preset-chip">Fiziksel</span>
                                     <span id="atk-preset-badge-halfmiss" class="atk-preset-chip hidden">🛡️ Iska: ½ Hasar</span>
                                     <span id="atk-preset-badge-status" class="atk-preset-chip hidden">✨ Durum</span>
+                                    <span id="atk-preset-badge-aoe" class="atk-preset-chip hidden" style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;">💥 Alan Hasarı</span>
                                 </div>
                                 <div id="atk-preset-desc-text" class="atk-preset-desc-text"></div>
                             </div>
@@ -1039,6 +1040,25 @@
                                 <input type="checkbox" id="atk-builder-half-miss">
                                 <span>🛡️ Iska Olsa Bile Yarım Hasar Vur</span>
                             </label>
+                        </div>
+                    </div>
+
+                    <!-- Alan Hasarı (AoE) Yapılandırması -->
+                    <div class="stats-grid stats-grid-2col" style="margin-top:10px; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.28); border-radius:6px; padding:10px 12px;">
+                        <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
+                            <label class="status-checkbox-label">
+                                <input type="checkbox" id="atk-builder-is-aoe">
+                                <span style="color:#f87171; font-weight:700;">💥 Alan Hasarı (AoE)</span>
+                            </label>
+                            <span style="font-size:11px; color:#94a3b8; margin-top:2px;">Saldırı isabet ettiğinde hedef çevresindeki düşmanlara patlama hasarı verir</span>
+                        </div>
+                        <div class="form-group" id="atk-builder-aoe-radius-group" style="display:none; justify-content:center;">
+                            <label style="color:#f87171; font-size:12px; font-weight:600; margin-bottom:4px;">Patlama Yarıçapı:</label>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <input type="number" id="atk-builder-aoe-radius" value="1" min="0.5" step="0.5" max="30" class="input-light" style="width:75px; text-align:center;">
+                                <span style="font-size:12px; color:#cbd5e1; font-weight:500;">Metre (m)</span>
+                                <span style="font-size:11px; color:#94a3b8;">(~1 grid karesi)</span>
+                            </div>
                         </div>
                     </div>
 

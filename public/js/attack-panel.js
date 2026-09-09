@@ -17,6 +17,7 @@
   let selectedAttacker = null; // { type, id, name, data }
   let selectedTargets = [];    // Array of { type, id, name, data, tokenEl }
   let lastAttackResults = [];  // Array of { totalDamage, targetId, targetType, targetName, attackerName, statusEffectsToApply }
+  let pendingAoEExplosions = []; // Array of { cx, cy, radiusPx, damage, affectedTargets }
   let allCharactersCache = [];
 
   // === HAZIR SALDIRI PRESETLERİ STATE ===
@@ -40,6 +41,7 @@
   const presetBadgeType = document.getElementById('atk-preset-badge-type');
   const presetBadgeHalfMiss = document.getElementById('atk-preset-badge-halfmiss');
   const presetBadgeStatus = document.getElementById('atk-preset-badge-status');
+  const presetBadgeAoe = document.getElementById('atk-preset-badge-aoe');
   const presetDescText = document.getElementById('atk-preset-desc-text');
 
   const attackerSelect = document.getElementById('atk-attacker-select');
@@ -180,6 +182,57 @@
         chimeOsc.start(now);
         chimeOsc.stop(now + 0.45);
       }
+    } catch (e) {}
+  }
+
+  /**
+   * Tok, derin bas ve alev rüzgarı içeren Web Audio API patlama sesi sentezler.
+   */
+  function playExplosionSound() {
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // 1. Derin Bas Patlama Çöküşü (Sub-bass Drop)
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(28, now + 0.65);
+
+      gain.gain.setValueAtTime(0.85, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.7);
+
+      // 2. Patlama Alev & Rüzgar Gürültüsü (Lowpass Filtered Noise Burst)
+      const bufferSize = Math.floor(ctx.sampleRate * 0.55);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const noiseSource = ctx.createBufferSource();
+      noiseSource.buffer = noiseBuffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(500, now);
+      filter.frequency.exponentialRampToValueAtTime(70, now + 0.55);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.75, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+      noiseSource.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+
+      noiseSource.start(now);
     } catch (e) {}
   }
 
@@ -661,7 +714,8 @@
       const typeIcon = p.attackType === 'spell' ? '✨' : '⚔️';
       const halfIcon = p.halfDamageOnMiss ? ' [½]' : '';
       const statusIcon = p.statusEffectsToApply?.length ? ` [${p.statusEffectsToApply[0].icon || '✨'}]` : '';
-      opt.textContent = `${typeIcon} ${p.name} (${p.stat})${halfIcon}${statusIcon}`;
+      const aoeIcon = p.isAoe ? ` [💥 ${p.aoeRadius || 1}m]` : '';
+      opt.textContent = `${typeIcon} ${p.name} (${p.stat})${halfIcon}${statusIcon}${aoeIcon}`;
       presetSelect.appendChild(opt);
     });
 
@@ -784,6 +838,15 @@
         presetBadgeStatus.textContent = `${eff.icon || '✨'} ${eff.name || 'Durum'}`;
       } else {
         presetBadgeStatus.classList.add('hidden');
+      }
+    }
+
+    if (presetBadgeAoe) {
+      if (preset.isAoe) {
+        presetBadgeAoe.classList.remove('hidden');
+        presetBadgeAoe.textContent = `💥 Alan: ${preset.aoeRadius || 1}m`;
+      } else {
+        presetBadgeAoe.classList.add('hidden');
       }
     }
 
@@ -1404,6 +1467,7 @@
 
     // Her hedef için ayrı saldırı
     lastAttackResults = [];
+    pendingAoEExplosions = [];
     btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
     btnSpellAttack && (btnSpellAttack.disabled = true);
 
@@ -1461,6 +1525,7 @@
 
     // Her hedef için ayrı saldırı
     lastAttackResults = [];
+    pendingAoEExplosions = [];
     btnPhysicalAttack && (btnPhysicalAttack.disabled = true);
     btnSpellAttack && (btnSpellAttack.disabled = true);
 
@@ -1581,7 +1646,10 @@
 
       // Sonucu sakla (çoklu hasar uygulama için)
       const hasCritical = result.attacks ? result.attacks.some(a => a.isCritical) : false;
-      if (result.totalDamage > 0 || (result.statusEffectsToApply && result.statusEffectsToApply.length > 0)) {
+      const isSuccessfulHit = result.attacks ? result.attacks.some(a => a.hit) : false;
+      const isEffective = result.totalDamage > 0 || (result.statusEffectsToApply && result.statusEffectsToApply.length > 0);
+
+      if (isEffective) {
         lastAttackResults.push({
           totalDamage: result.totalDamage,
           targetId: target.id,
@@ -1593,12 +1661,133 @@
           attackType: body.attackType || 'physical',
           physicalDamageType: body.physicalDamageType || 'slashing'
         });
+
+        // Alan Hasarı (AoE) kontrolü ve çevre hedeflere yayılım
+        if (activeEquippedPreset && activeEquippedPreset.isAoe && (isSuccessfulHit || (body.halfDamageOnMiss && result.totalDamage > 0))) {
+          triggerAoEForTarget(target, result.totalDamage, body);
+        }
       }
 
     } catch (err) {
       console.error('Saldırı hatası:', err);
       addCombatLog(`<span class="atk-log-error">HATA (${escapeHtml(target.name)}): ${escapeHtml(err.message)}</span>`, 'error');
     }
+  }
+
+  /**
+   * Alan hasarlı bir saldırı başarılı olduğunda çevre tokenları tespit eder,
+   * patlama görseli ve sesini tetikler, hasar listesine ekler.
+   */
+  function triggerAoEForTarget(target, damage, body) {
+    if (!activeEquippedPreset || !activeEquippedPreset.isAoe || damage <= 0) return;
+
+    const tokenEl = findTokenElement(target.type, target.id);
+    if (!tokenEl) {
+      addCombatLog(
+        `<span class="atk-log-aoe" style="color:#f59e0b; font-size:11px;">⚠️ "${escapeHtml(target.name)}" tokenı haritada tespit edilemediği için alan hasarı uygulanamadı.</span>`,
+        'error'
+      );
+      return;
+    }
+
+    const tLeft = parseFloat(tokenEl.style.left) || tokenEl.offsetLeft || 0;
+    const tTop = parseFloat(tokenEl.style.top) || tokenEl.offsetTop || 0;
+    const tSize = tokenEl.offsetWidth || 50;
+    const cx = Math.round(tLeft + tSize / 2);
+    const cy = Math.round(tTop + tSize / 2);
+
+    const aoeRadiusMeters = Math.max(0.5, parseFloat(activeEquippedPreset.aoeRadius) || 1);
+    const aoeRadiusPx = Math.round(aoeRadiusMeters * 50); // 1m = 50px
+
+    // Çevredeki tokenları tespit et
+    let nearbyTokens = [];
+    if (typeof window.__webdnd_detectTokensInAoe === 'function') {
+      nearbyTokens = window.__webdnd_detectTokensInAoe(cx, cy, aoeRadiusPx, false);
+    } else {
+      const allMapTokens = document.querySelectorAll('#map-content .token');
+      allMapTokens.forEach(el => {
+        const tid = el.dataset.id;
+        if (!tid) return;
+        const l = parseFloat(el.style.left) || el.offsetLeft || 0;
+        const t = parseFloat(el.style.top) || el.offsetTop || 0;
+        const sz = el.offsetWidth || 50;
+        const ex = l + sz / 2;
+        const ey = t + sz / 2;
+        const dist = Math.hypot(ex - cx, ey - cy);
+        if (dist <= aoeRadiusPx + (sz / 2) * 0.7) {
+          if (window.__webdnd_markers && window.__webdnd_markers[tid]) {
+            const m = window.__webdnd_markers[tid];
+            nearbyTokens.push({ type: 'marker', id: m.id, name: m.name || 'İşaret' });
+          } else if (typeof allPlayers !== 'undefined' && allPlayers[tid]?.character) {
+            const p = allPlayers[tid];
+            nearbyTokens.push({ type: 'character', id: p.character.id, name: p.character.name || 'Oyuncu' });
+          }
+        }
+      });
+    }
+
+    // Ana hedefi, saldıranı ve zaten listelenmiş hedefleri filtrele
+    const splashTargets = nearbyTokens.filter(t => {
+      if (!t || !t.id) return false;
+      // 1. Ana hedefin kendisi hariç
+      if (String(t.id) === String(target.id) && t.type === target.type) return false;
+      // 2. Saldıranın kendisi hariç (kendi kendini vurmasın)
+      if (selectedAttacker && String(t.id) === String(selectedAttacker.id) && t.type === selectedAttacker.type) return false;
+      // 3. Bu turda zaten hasar listesinde olanlar hariç
+      if (lastAttackResults.some(r => String(r.targetId) === String(t.id) && r.targetType === t.type)) return false;
+      return true;
+    });
+
+    // Çevre hedefleri hasar kuyruğuna ekle
+    splashTargets.forEach(st => {
+      lastAttackResults.push({
+        totalDamage: damage,
+        targetId: st.id,
+        targetType: st.type,
+        targetName: st.name,
+        attackerName: selectedAttacker?.name,
+        statusEffectsToApply: body.statusEffectsToApply || [],
+        isCritical: false,
+        attackType: body.attackType || 'spell',
+        physicalDamageType: body.physicalDamageType || 'slashing',
+        isAoESplash: true,
+        splashCenterTargetName: target.name
+      });
+    });
+
+    // Savaş günlüğüne alan hasarı dökümünü yazdır
+    if (splashTargets.length > 0) {
+      addCombatLog(
+        `<span class="atk-log-aoe" style="color:#f87171; font-weight:bold;">💥 [ALAN HASARI (${aoeRadiusMeters}m)]: "${escapeHtml(activeEquippedPreset.name)}" patladı! ${escapeHtml(target.name)} çevresindeki ${splashTargets.length} hedef etkilendi:</span>`,
+        'header'
+      );
+      splashTargets.forEach(st => {
+        const effLabel = (body.statusEffectsToApply?.length) ? ` <span style="color:#f1c40f;">[✨ ${body.statusEffectsToApply.map(e => e.name).join(', ')}]</span>` : '';
+        addCombatLog(
+          `<span class="atk-log-hit" style="color:#fca5a5; padding-left:14px;">↳ 💥 <strong>${escapeHtml(st.name)}</strong>: ${damage} Hasar${effLabel}</span>`,
+          'hit'
+        );
+      });
+    } else {
+      addCombatLog(
+        `<span class="atk-log-aoe" style="color:#94a3b8; font-size:11px; padding-left:8px;">💥 [ALAN HASARI (${aoeRadiusMeters}m)]: ${escapeHtml(target.name)} çevresinde başka hedef bulunamadı.</span>`,
+        'aoe'
+      );
+    }
+
+    // Patlama ve görsel efektleri "Hasarı Uygula" anında oynatılmak üzere kaydet
+    const allAffectedForVisual = [
+      { type: target.type, id: target.id, damage: damage },
+      ...splashTargets.map(st => ({ type: st.type, id: st.id, damage: damage }))
+    ];
+
+    pendingAoEExplosions.push({
+      cx,
+      cy,
+      radiusPx: aoeRadiusPx,
+      damage,
+      affectedTargets: allAffectedForVisual
+    });
   }
 
   /**
@@ -1612,12 +1801,14 @@
 
     if (btnApplyDamage) {
       btnApplyDamage.classList.remove('hidden');
+      const splashCount = lastAttackResults.filter(r => r.isAoESplash).length;
       if (lastAttackResults.length === 1) {
         const r = lastAttackResults[0];
         btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar Uygula → ${escapeHtml(r.targetName)}`;
       } else {
         const totalAll = lastAttackResults.reduce((sum, r) => sum + r.totalDamage, 0);
-        btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef, toplam ${totalAll})`;
+        const splashNote = splashCount > 0 ? ` (${splashCount} alan)` : '';
+        btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef${splashNote}, toplam ${totalAll})`;
       }
     }
   }
@@ -1638,6 +1829,43 @@
       if (btnApplyDamage) {
         btnApplyDamage.classList.add('btn-apply-damage-hit');
         setTimeout(() => btnApplyDamage.classList.remove('btn-apply-damage-hit'), 350);
+      }
+
+      // 1. Bekleyen AoE patlama ve sarsıntı efektlerini "Hasarı Uygula" anında tetikle
+      if (pendingAoEExplosions.length > 0) {
+        pendingAoEExplosions.forEach(exp => {
+          // A. Haritada patlama dalgası (aoe-explosion-burst)
+          if (typeof window.__webdnd_showAoeVisualEffects === 'function') {
+            window.__webdnd_showAoeVisualEffects(
+              { x: exp.cx, y: exp.cy, radius: exp.radiusPx },
+              exp.damage,
+              exp.affectedTargets
+            );
+          }
+
+          // B. Harita ekran sarsıntısı (Screenshake)
+          const gameMapEl = document.getElementById('game-map');
+          if (gameMapEl) {
+            gameMapEl.classList.remove('map-screen-shake', 'map-screen-shake-crit');
+            void gameMapEl.offsetWidth;
+            gameMapEl.classList.add('map-screen-shake');
+            setTimeout(() => gameMapEl.classList.remove('map-screen-shake'), 280);
+          }
+
+          // C. Tüm oyuncuların ekranlarına patlamayı yayınla
+          if (typeof socket !== 'undefined') {
+            socket.emit('triggerAoeExplosion', {
+              aoeInfo: { x: exp.cx, y: exp.cy, radius: exp.radiusPx },
+              damage: exp.damage,
+              affectedTargets: exp.affectedTargets
+            });
+          }
+        });
+
+        // D. Tok patlama sesi sentezi (Web Audio API)
+        playExplosionSound();
+
+        pendingAoEExplosions = [];
       }
 
       for (const attackResult of lastAttackResults) {
@@ -1681,6 +1909,7 @@
       }
 
       lastAttackResults = [];
+      pendingAoEExplosions = [];
       btnApplyDamage.classList.add('hidden');
 
       // Seçicileri yenile
@@ -1779,6 +2008,15 @@
     const halfMissCheck = document.getElementById('atk-builder-half-miss');
     if (halfMissCheck) halfMissCheck.checked = false;
 
+    const aoeCheck = document.getElementById('atk-builder-is-aoe');
+    if (aoeCheck) aoeCheck.checked = false;
+
+    const aoeRadiusInput = document.getElementById('atk-builder-aoe-radius');
+    if (aoeRadiusInput) aoeRadiusInput.value = '1';
+
+    const aoeRadiusGroup = document.getElementById('atk-builder-aoe-radius-group');
+    if (aoeRadiusGroup) aoeRadiusGroup.style.display = 'none';
+
     const descInput = document.getElementById('atk-builder-desc');
     if (descInput) descInput.value = '';
 
@@ -1848,6 +2086,7 @@
 
       const typeLabel = preset.attackType === 'spell' ? `✨ Büyü (Lvl ${preset.spellLevel || 1})` : '⚔️ Fiziksel';
       const halfBadge = preset.halfDamageOnMiss ? `<span class="atk-preset-chip" style="background:rgba(230,126,34,0.2); border-color:#e67e22;">🛡️ Iska: ½ Hasar</span>` : '';
+      const aoeBadge = preset.isAoe ? `<span class="atk-preset-chip" style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;">💥 Alan: ${preset.aoeRadius || 1}m</span>` : '';
       const statusBadge = preset.statusEffectsToApply?.length
         ? `<span class="atk-preset-chip" style="background:rgba(241,196,15,0.2); border-color:#f1c40f;">${preset.statusEffectsToApply[0].icon || '✨'} ${preset.statusEffectsToApply[0].name}</span>`
         : '';
@@ -1861,6 +2100,7 @@
           <div class="atk-preset-badge-row" style="margin: 4px 0;">
             <span class="atk-preset-chip">${typeLabel}</span>
             ${halfBadge}
+            ${aoeBadge}
             ${statusBadge}
           </div>
           <div class="atk-preset-card-pools">${formatPoolSummary(preset.dicePools)}</div>
@@ -1948,6 +2188,16 @@
     const physTypeSelect = document.getElementById('atk-builder-phys-type');
     if (physTypeSelect) physTypeSelect.value = preset.physicalDamageType || 'slashing';
     document.getElementById('atk-builder-half-miss').checked = Boolean(preset.halfDamageOnMiss);
+
+    const aoeCheck = document.getElementById('atk-builder-is-aoe');
+    if (aoeCheck) aoeCheck.checked = Boolean(preset.isAoe);
+
+    const aoeRadiusInput = document.getElementById('atk-builder-aoe-radius');
+    if (aoeRadiusInput) aoeRadiusInput.value = preset.aoeRadius || 1;
+
+    const aoeRadiusGroup = document.getElementById('atk-builder-aoe-radius-group');
+    if (aoeRadiusGroup) aoeRadiusGroup.style.display = preset.isAoe ? 'flex' : 'none';
+
     document.getElementById('atk-builder-desc').value = preset.description || '';
 
     // Zar steppers
@@ -2016,6 +2266,8 @@
     const spellLevel = parseInt(document.getElementById('atk-builder-spell-level')?.value) || 1;
     const attackCount = parseInt(document.getElementById('atk-builder-count')?.value) || 1;
     const halfDamageOnMiss = document.getElementById('atk-builder-half-miss')?.checked || false;
+    const isAoe = Boolean(document.getElementById('atk-builder-is-aoe')?.checked);
+    const aoeRadius = Math.max(0.5, parseFloat(document.getElementById('atk-builder-aoe-radius')?.value) || 1);
     const description = document.getElementById('atk-builder-desc')?.value.trim() || '';
 
     const readSteppers = (prefix) => {
@@ -2055,6 +2307,8 @@
       dicePools,
       statusEffectsToApply,
       halfDamageOnMiss,
+      isAoe,
+      aoeRadius,
       extraDamage: 0,
       description
     };
@@ -2115,6 +2369,14 @@
   });
   document.getElementById('btn-catalog-new-preset')?.addEventListener('click', openNewPresetBuilder);
   document.getElementById('btn-builder-reset')?.addEventListener('click', resetPresetBuilder);
+
+  // AoE Checkbox değişiminde yarıçap grubunu göster/gizle
+  document.getElementById('atk-builder-is-aoe')?.addEventListener('change', (e) => {
+    const radiusGroup = document.getElementById('atk-builder-aoe-radius-group');
+    if (radiusGroup) {
+      radiusGroup.style.display = e.target.checked ? 'flex' : 'none';
+    }
+  });
 
   // Modal Sekmeleri
   document.querySelectorAll('.atk-tab-btn').forEach(btn => {

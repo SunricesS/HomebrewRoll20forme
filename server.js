@@ -1685,6 +1685,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Saldırı paneli veya presetlerden gelen anlık patlama görseli yayını
+  socket.on('triggerAoeExplosion', (data) => {
+    if (!data || typeof data !== 'object') return;
+    io.emit('aoeDamageApplied', data);
+  });
+
   // ---- DM: Arka Plan Güncelle ----
   socket.on('updateBg', (url) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
@@ -2071,6 +2077,8 @@ io.on('connection', (socket) => {
       halfDamageOnMiss: Boolean(preset.halfDamageOnMiss),
       extraDamage: clampNumber(parseInt(preset.extraDamage) || 0, 0, 1000),
       attackCount: clampNumber(parseInt(preset.attackCount) || 1, 1, 20),
+      isAoe: Boolean(preset.isAoe),
+      aoeRadius: Math.max(0.5, parseFloat(preset.aoeRadius) || 1),
       description: truncateStr(preset.description || '', 200)
     };
 
@@ -2091,7 +2099,13 @@ io.on('connection', (socket) => {
         attack_type: newPreset.attackType,
         physical_damage_type: newPreset.physicalDamageType,
         spell_level: newPreset.spellLevel,
-        dice_pools: newPreset.dicePools,
+        dice_pools: {
+          ...newPreset.dicePools,
+          _aoe: {
+            isAoe: newPreset.isAoe,
+            radius: newPreset.aoeRadius
+          }
+        },
         status_effects_to_apply: newPreset.statusEffectsToApply,
         half_damage_on_miss: newPreset.halfDamageOnMiss,
         extra_damage: newPreset.extraDamage,
@@ -2256,6 +2270,8 @@ async function restoreAttackPresets() {
         halfDamageOnMiss: Boolean(row.half_damage_on_miss ?? row.halfDamageOnMiss),
         extraDamage: row.extra_damage ?? row.extraDamage ?? 0,
         attackCount: row.attack_count ?? row.attackCount ?? 1,
+        isAoe: Boolean(row.is_aoe ?? row.isAoe ?? row.dice_pools?._aoe?.isAoe),
+        aoeRadius: parseFloat(row.aoe_radius ?? row.aoeRadius ?? row.dice_pools?._aoe?.radius) || 1,
         description: row.description || ''
       }));
       attackPresets = dbPresets;
