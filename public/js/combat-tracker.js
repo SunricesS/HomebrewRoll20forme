@@ -153,6 +153,14 @@
    */
   function renderCombatBar() {
     if (!combatState.active || !combatState.combatants || combatState.combatants.length === 0) {
+      window.__webdnd_combatActive = false;
+      if (typeof window.__webdnd_refreshDarknessBars === 'function') {
+        window.__webdnd_refreshDarknessBars();
+      }
+      if (typeof window.__webdnd_updateTurnInfo === 'function') {
+        window.__webdnd_updateTurnInfo(null);
+      }
+
       container.classList.add('hidden');
       if (bottomHotbar) bottomHotbar.classList.add('hidden');
       if (floatingBtn) floatingBtn.classList.remove('active');
@@ -162,6 +170,11 @@
       updateMapActiveTokenHighlight(null);
       lastSyncedAttackerTurnKey = null;
       return;
+    }
+
+    window.__webdnd_combatActive = true;
+    if (typeof window.__webdnd_refreshDarknessBars === 'function') {
+      window.__webdnd_refreshDarknessBars();
     }
 
     // Barı göster
@@ -191,6 +204,11 @@
       updateMapActiveTokenHighlight(activeCombatant.id);
       renderBottomHotbar(activeCombatant);
 
+      // Kenan modu kontrol paneli tur kartını güncelle
+      if (typeof window.__webdnd_updateTurnInfo === 'function') {
+        window.__webdnd_updateTurnInfo(activeCombatant);
+      }
+
       // Turu olan tokeni otomatik olarak DM saldırı panelinde "Saldıran" olarak seç ve önceki hedefleri temizle
       const currentTurnKey = `${combatState.round}:${activeIdx}:${activeCombatant.id}`;
       if (lastSyncedAttackerTurnKey !== currentTurnKey) {
@@ -202,6 +220,9 @@
     } else {
       lastSyncedAttackerTurnKey = null;
       if (bottomHotbar) bottomHotbar.classList.add('hidden');
+      if (typeof window.__webdnd_updateTurnInfo === 'function') {
+        window.__webdnd_updateTurnInfo(null);
+      }
     }
 
     combatState.combatants.forEach((c, idx) => {
@@ -617,12 +638,23 @@
     });
 
     socket.on('combatStarted', (data) => {
+      window.__webdnd_combatActive = true;
+      if (typeof window.__webdnd_refreshDarknessBars === 'function') {
+        window.__webdnd_refreshDarknessBars();
+      }
       if (typeof addLogHtml === 'function') {
         addLogHtml('<span style="color:var(--gold, #fbbf24); font-weight:700;">⚔️ Savaş Modu Başladı! İnisiyatif zarları atıldı.</span>');
       }
     });
 
     socket.on('combatEnded', () => {
+      window.__webdnd_combatActive = false;
+      if (typeof window.__webdnd_refreshDarknessBars === 'function') {
+        window.__webdnd_refreshDarknessBars();
+      }
+      if (typeof window.__webdnd_updateTurnInfo === 'function') {
+        window.__webdnd_updateTurnInfo(null);
+      }
       updateMapActiveTokenHighlight(null);
       if (bottomHotbar) {
         bottomHotbar.classList.add('hidden');

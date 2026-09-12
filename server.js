@@ -1143,6 +1143,9 @@ async function processCombatantTurnEnd(combatant) {
   io.emit('combatStateUpdated', combatState);
 }
 
+// === OYUN MODU SİSTEMİ (GÜNEŞ & KENAN) ===
+let currentGameMode = 'gunes'; // 'gunes' veya 'kenan'
+
 // === SAVAŞ / İNİSİYATİF DURUMU (BG3 COMBAT TRACKER) ===
 let combatState = {
   active: false,
@@ -1185,6 +1188,12 @@ function calculateInitiativeForCombat() {
       role: p.role || 'player',
       hpCurrent: hpCurrent,
       hpMax: hpMax,
+      ac: p.character?.ac ?? 10,
+      ac_bonus: p.character?.ac_bonus ?? 0,
+      stats: p.character?.stats || null,
+      darkness: p.character?.darkness != null ? p.character.darkness : 0,
+      maxDarkness: p.character?.max_darkness != null ? p.character.max_darkness : 100,
+      hasDarkness: true,
       chrStat: chrStat,
       chrBonus: chrBonus,
       chrMod: chrMod,
@@ -1216,6 +1225,12 @@ function calculateInitiativeForCombat() {
       role: 'marker',
       hpCurrent: hpCurrent,
       hpMax: hpMax,
+      ac: m.ac != null ? m.ac : 10,
+      ac_bonus: m.ac_bonus != null ? m.ac_bonus : 0,
+      stats: m.stats || null,
+      hasDarkness: Boolean(m.hasDarkness),
+      darkness: m.darkness != null ? m.darkness : 0,
+      maxDarkness: m.maxDarkness != null ? m.maxDarkness : 100,
       chrStat: chrStat,
       chrBonus: chrBonus,
       chrMod: chrMod,
@@ -1275,6 +1290,15 @@ io.on('connection', (socket) => {
   // Supabase'den yüklenmiş mevcut efekt ve saldırı şablonlarını hemen istemciye gönder
   socket.emit('customEffectsUpdated', customStatusPresets);
   socket.emit('attackPresetsUpdated', attackPresets);
+  socket.emit('gameModeUpdated', currentGameMode);
+
+  // Oyun Modu Değiştirme (DM veya Oyuncu)
+  socket.on('setGameMode', (mode) => {
+    if (mode !== 'gunes' && mode !== 'kenan') return;
+    currentGameMode = mode;
+    io.emit('gameModeUpdated', currentGameMode);
+    console.log('Oyun modu güncellendi:', currentGameMode);
+  });
 
   // ---- Oyuncu Katılma ----
   socket.on('playerJoin', async (data) => {
@@ -1433,6 +1457,9 @@ io.on('connection', (socket) => {
         chr_bonus: clampNumber(markerData.stats?.chr_bonus, 0, 30),
       } : null,
       size: clampNumber(markerData.size || 50, 10, 500),
+      hasDarkness: Boolean(markerData.hasDarkness),
+      darkness: markerData.darkness != null ? clampNumber(markerData.darkness, 0, 99999) : 0,
+      maxDarkness: markerData.maxDarkness != null ? clampNumber(markerData.maxDarkness, 1, 99999) : 100,
       isMarker: true,
       assignedAttacks: Array.isArray(markerData.assignedAttacks) ? markerData.assignedAttacks : []
     };
@@ -1455,6 +1482,12 @@ io.on('connection', (socket) => {
         role: 'marker',
         hpCurrent: newMarker.hp,
         hpMax: newMarker.maxHp,
+        ac: newMarker.ac != null ? newMarker.ac : 10,
+        ac_bonus: newMarker.ac_bonus != null ? newMarker.ac_bonus : 0,
+        stats: newMarker.stats || null,
+        hasDarkness: newMarker.hasDarkness,
+        darkness: newMarker.darkness,
+        maxDarkness: newMarker.maxDarkness,
         chrStat,
         chrBonus,
         chrMod,
@@ -1507,6 +1540,9 @@ io.on('connection', (socket) => {
     if (data.assignedAttacks !== undefined && Array.isArray(data.assignedAttacks)) {
       m.assignedAttacks = data.assignedAttacks;
     }
+    if (data.hasDarkness !== undefined) m.hasDarkness = Boolean(data.hasDarkness);
+    if (data.darkness !== undefined) m.darkness = data.darkness != null ? clampNumber(data.darkness, 0, 99999) : 0;
+    if (data.maxDarkness !== undefined) m.maxDarkness = data.maxDarkness != null ? clampNumber(data.maxDarkness, 1, 99999) : 100;
     if (data.stats && typeof data.stats === 'object') {
       m.stats = {
         str: clampNumber(data.stats.str, 0, 30),
@@ -1536,6 +1572,9 @@ io.on('connection', (socket) => {
         if (data.hp !== undefined) c.hpCurrent = m.hp;
         if (data.maxHp !== undefined) c.hpMax = m.maxHp;
         if (data.assignedAttacks !== undefined) c.assignedAttacks = m.assignedAttacks;
+        if (data.hasDarkness !== undefined) c.hasDarkness = m.hasDarkness;
+        if (data.darkness !== undefined) c.darkness = m.darkness;
+        if (data.maxDarkness !== undefined) c.maxDarkness = m.maxDarkness;
         c.isDead = m.hp !== null && m.hp <= 0;
       }
       io.emit('combatStateUpdated', combatState);
@@ -1754,6 +1793,10 @@ io.on('connection', (socket) => {
     if (data.ac !== undefined) updates.ac = clampNumber(data.ac, 0, 50);
     if (data.ac_bonus !== undefined) updates.ac_bonus = clampNumber(data.ac_bonus, 0, 50);
     if (data.corruption !== undefined) updates.corruption = clampNumber(data.corruption, 0, 100);
+    if (data.darkness !== undefined) updates.darkness = clampNumber(data.darkness, 0, 99999);
+    if (data.max_darkness !== undefined || data.maxDarkness !== undefined) {
+      updates.max_darkness = clampNumber(data.max_darkness ?? data.maxDarkness, 1, 99999);
+    }
     if (data.assignedAttacks !== undefined && Array.isArray(data.assignedAttacks)) {
       updates.assignedAttacks = data.assignedAttacks;
       updates.stats.assignedAttacks = data.assignedAttacks;
@@ -1772,8 +1815,11 @@ io.on('connection', (socket) => {
       .update(updates)
       .eq('id', data.characterId);
 
-    if (error && error.message && error.message.includes('column') && updates.assignedAttacks !== undefined) {
-      const { assignedAttacks, ...safeUpdates } = updates;
+    if (error && error.message && error.message.includes('column')) {
+      const safeUpdates = { ...updates };
+      if (safeUpdates.assignedAttacks !== undefined) delete safeUpdates.assignedAttacks;
+      if (safeUpdates.darkness !== undefined) delete safeUpdates.darkness;
+      if (safeUpdates.max_darkness !== undefined) delete safeUpdates.max_darkness;
       const retry = await supabase.from('characters').update(safeUpdates).eq('id', data.characterId);
       error = retry.error;
     }
@@ -1799,8 +1845,10 @@ io.on('connection', (socket) => {
 
       if (combatState.active) {
         const c = combatState.combatants.find(item => item.id === data.id || item.characterId === data.characterId);
-        if (c && updates.assignedAttacks !== undefined) {
-          c.assignedAttacks = updates.assignedAttacks;
+        if (c) {
+          if (updates.assignedAttacks !== undefined) c.assignedAttacks = updates.assignedAttacks;
+          if (updates.darkness !== undefined) c.darkness = updates.darkness;
+          if (updates.max_darkness !== undefined) c.maxDarkness = updates.max_darkness;
           io.emit('combatStateUpdated', combatState);
         }
       }
@@ -2194,12 +2242,19 @@ async function backupMapState() {
       fog_data: typeof fogGrid !== 'undefined' ? fogGrid : null,
       fog_uncovered: typeof fogUncovered !== 'undefined' ? fogUncovered : null,
       markers: typeof markers !== 'undefined' ? markers : {},
+      game_mode: currentGameMode,
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('map_state')
       .upsert(payload);
+
+    if (error && error.message && error.message.includes('column')) {
+      const { game_mode, ...safePayload } = payload;
+      const retry = await supabase.from('map_state').upsert(safePayload);
+      error = retry.error;
+    }
 
     if (error) {
       if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
@@ -2239,6 +2294,9 @@ async function restoreMapState() {
       if (data.fog_uncovered) fogUncovered = data.fog_uncovered;
       if (data.markers && typeof data.markers === 'object') {
         markers = data.markers;
+      }
+      if (data.game_mode) {
+        currentGameMode = data.game_mode;
       }
       console.log('Map durumu başarıyla geri yüklendi.');
     } else {

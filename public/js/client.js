@@ -26,6 +26,12 @@ const allPlayers = {};
 const gameMapContainer = document.getElementById('game-map');
 const gameMap = document.getElementById('map-content');
 
+// === Oyun Modu & Savaş State ===
+let currentGameMode = 'gunes';
+window.__webdnd_gameMode = currentGameMode;
+window.__webdnd_combatActive = false;
+window.__webdnd_currentActiveCombatant = null;
+
 // Marker verilerini attack-panel.js için global olarak expose et
 window.__webdnd_markers = {};
 
@@ -100,6 +106,194 @@ function updateHpBadge(tokenEl, hpCurrent, hpMax) {
 }
 
 /**
+ * Token üzerindeki Karanlık (Darkness) barını oluşturur veya günceller.
+ * Sadece Kenan oyun modunda VE savaş modu aktifken görünür.
+ */
+function updateTokenDarknessBar(tokenEl, playerData) {
+  if (!tokenEl) return;
+  let darknessBar = tokenEl.querySelector('.token-darkness-bar');
+
+  const isCombatActive = window.__webdnd_combatActive === true;
+  if (currentGameMode !== 'kenan' || !isCombatActive) {
+    if (darknessBar) darknessBar.remove();
+    return;
+  }
+
+  // Eğer bir NPC / Marker ise ve karanlığa sahip değilse bar olmasın
+  if (playerData.isMarker && !playerData.hasDarkness) {
+    if (darknessBar) darknessBar.remove();
+    return;
+  }
+
+  let curDarkness = 0;
+  let maxDarkness = 100;
+  if (playerData.isMarker) {
+    curDarkness = playerData.darkness != null ? playerData.darkness : 0;
+    maxDarkness = playerData.maxDarkness != null ? playerData.maxDarkness : 100;
+  } else if (playerData.character) {
+    curDarkness = playerData.character.darkness != null ? playerData.character.darkness : 0;
+    maxDarkness = playerData.character.max_darkness != null ? playerData.character.max_darkness : 100;
+  }
+
+  if (!darknessBar) {
+    darknessBar = document.createElement('div');
+    darknessBar.className = 'token-darkness-bar';
+    darknessBar.innerHTML = `
+      <div class="token-darkness-bar-fill"></div>
+      <span class="token-darkness-bar-text"></span>
+    `;
+    tokenEl.appendChild(darknessBar);
+  }
+
+  const fillEl = darknessBar.querySelector('.token-darkness-bar-fill');
+  const textEl = darknessBar.querySelector('.token-darkness-bar-text');
+  const pct = maxDarkness > 0 ? Math.min(100, Math.max(0, (curDarkness / maxDarkness) * 100)) : 0;
+  if (fillEl) fillEl.style.width = pct + '%';
+  if (textEl) textEl.textContent = `🌑 ${curDarkness}/${maxDarkness}`;
+}
+
+/**
+ * Haritadaki tüm tokenların karanlık barlarını yeniden kontrol edip çizer.
+ */
+function refreshAllDarknessBars() {
+  Object.keys(tokens).forEach(id => {
+    const el = tokens[id];
+    const pData = allPlayers[id] || (window.__webdnd_markers && window.__webdnd_markers[id]);
+    if (el && pData) {
+      updateTokenDarknessBar(el, pData);
+    }
+  });
+}
+window.__webdnd_refreshDarknessBars = refreshAllDarknessBars;
+
+/**
+ * Oyun modunu uygular ('gunes' veya 'kenan')
+ */
+function applyGameMode(mode) {
+  currentGameMode = mode || 'gunes';
+  window.__webdnd_gameMode = currentGameMode;
+  document.body.dataset.gameMode = currentGameMode;
+
+  const btnGunes = document.getElementById('btn-mode-gunes');
+  const btnKenan = document.getElementById('btn-mode-kenan');
+  if (btnGunes) btnGunes.classList.toggle('active', currentGameMode === 'gunes');
+  if (btnKenan) btnKenan.classList.toggle('active', currentGameMode === 'kenan');
+
+  refreshAllDarknessBars();
+  renderKenanTurnInfo(window.__webdnd_currentActiveCombatant);
+}
+
+/**
+ * Kontrol Paneli Aktif Tur Kartını çizer (Kenan Modu)
+ */
+function renderKenanTurnInfo(combatant) {
+  const container = document.getElementById('kenan-turn-info-card');
+  if (!container) return;
+
+  if (currentGameMode !== 'kenan' || !combatant || !window.__webdnd_combatActive) {
+    container.innerHTML = `
+      <div class="kenan-turn-idle-state">
+        <span class="idle-icon">⚔️</span>
+        <span class="idle-text">Savaş modu başladığında sıradaki savaşçının detayları burada görüntülenir.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const isEnemy = Boolean(combatant.isMarker);
+  const name = combatant.name || (isEnemy ? 'NPC' : 'Oyuncu');
+  const roleBadge = isEnemy ? '👹 Canavar / NPC' : '🛡️ Oyuncu';
+  const hpCur = combatant.hpCurrent != null ? combatant.hpCurrent : (combatant.hp != null ? combatant.hp : 0);
+  const hpMax = combatant.hpMax != null ? combatant.hpMax : (combatant.maxHp != null ? combatant.maxHp : 100);
+  const hpPct = hpMax > 0 ? Math.min(100, Math.max(0, (hpCur / hpMax) * 100)) : 0;
+
+  const hasDarkness = isEnemy ? Boolean(combatant.hasDarkness) : true;
+  const darkCur = combatant.darkness != null ? combatant.darkness : 0;
+  const darkMax = combatant.maxDarkness != null ? combatant.maxDarkness : 100;
+  const darkPct = darkMax > 0 ? Math.min(100, Math.max(0, (darkCur / darkMax) * 100)) : 0;
+
+  const ac = combatant.ac != null ? combatant.ac : 10;
+  const acBonus = combatant.ac_bonus != null ? combatant.ac_bonus : 0;
+  const acTotal = ac + acBonus;
+
+  const stats = combatant.stats || {};
+  const str = stats.str ?? 10;
+  const dex = stats.dex ?? 10;
+  const con = stats.con ?? 10;
+  const chr = combatant.chrStat ?? stats.chr ?? 10;
+
+  let avatarHtml = '';
+  if (combatant.imgUrl) {
+    avatarHtml = `<img src="${escapeHtml(combatant.imgUrl)}" class="kenan-turn-card-avatar" alt="Avatar" />`;
+  } else {
+    const initial = (name.charAt(0) || '?').toUpperCase();
+    const bgCol = combatant.color || '#4c1d95';
+    avatarHtml = `<div class="kenan-turn-card-avatar" style="background:${bgCol};">${escapeHtml(initial)}</div>`;
+  }
+
+  let darknessBarHtml = '';
+  if (hasDarkness) {
+    darknessBarHtml = `
+      <div class="kenan-turn-bar-item">
+        <div class="kenan-turn-bar-header">
+          <span style="color:#c084fc;">🌑 Karanlık</span>
+          <span style="color:#e9d5ff;">${darkCur} / ${darkMax}</span>
+        </div>
+        <div class="kenan-turn-bar-track">
+          <div class="kenan-turn-bar-fill-darkness" style="width: ${darkPct}%;"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = `
+    <div class="kenan-turn-card-header">
+      ${avatarHtml}
+      <div class="kenan-turn-card-title-wrap">
+        <div class="kenan-turn-card-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+        <span class="kenan-turn-card-role-badge ${isEnemy ? 'is-enemy' : ''}">${roleBadge}</span>
+      </div>
+    </div>
+
+    <div class="kenan-turn-card-bars">
+      <div class="kenan-turn-bar-item">
+        <div class="kenan-turn-bar-header">
+          <span style="color:#4ade80;">❤️ Can (HP)</span>
+          <span style="color:#bbf7d0;">${hpCur} / ${hpMax}</span>
+        </div>
+        <div class="kenan-turn-bar-track">
+          <div class="kenan-turn-bar-fill-hp" style="width: ${hpPct}%;"></div>
+        </div>
+      </div>
+      ${darknessBarHtml}
+    </div>
+
+    <div class="kenan-turn-stats-row">
+      <div class="kenan-turn-stat-box">
+        <span class="kenan-turn-stat-label">🛡️ AC</span>
+        <span class="kenan-turn-stat-value">${acTotal}</span>
+      </div>
+      <div class="kenan-turn-stat-box">
+        <span class="kenan-turn-stat-label">STR</span>
+        <span class="kenan-turn-stat-value">${str}</span>
+      </div>
+      <div class="kenan-turn-stat-box">
+        <span class="kenan-turn-stat-label">DEX</span>
+        <span class="kenan-turn-stat-value">${dex}</span>
+      </div>
+      <div class="kenan-turn-stat-box">
+        <span class="kenan-turn-stat-label">CHR</span>
+        <span class="kenan-turn-stat-value">${chr}</span>
+      </div>
+    </div>
+  `;
+}
+window.__webdnd_updateTurnInfo = (combatant) => {
+  window.__webdnd_currentActiveCombatant = combatant;
+  renderKenanTurnInfo(combatant);
+};
+
+/**
  * Bir fonksiyonu belirli bir aralıkla sınırlar (throttle).
  */
 function throttle(fn, delay) {
@@ -172,9 +366,29 @@ socket.on('connect', () => {
   }
 });
 
+// Oyun Modu Değiştirme Butonları Dinleyicileri
+const btnModeGunes = document.getElementById('btn-mode-gunes');
+const btnModeKenan = document.getElementById('btn-mode-kenan');
+if (btnModeGunes) {
+  btnModeGunes.addEventListener('click', () => {
+    socket.emit('setGameMode', 'gunes');
+    applyGameMode('gunes');
+  });
+}
+if (btnModeKenan) {
+  btnModeKenan.addEventListener('click', () => {
+    socket.emit('setGameMode', 'kenan');
+    applyGameMode('kenan');
+  });
+}
+
 // ============================================================
 // SOCKET EVENT HANDLER'LARI
 // ============================================================
+
+socket.on('gameModeUpdated', (mode) => {
+  applyGameMode(mode);
+});
 
 socket.on('currentPlayers', (players) => {
   Object.assign(allPlayers, players);
@@ -228,6 +442,23 @@ socket.on('updateMarkerData', (markerData) => {
   }
   if (typeof refreshBatchAssignModalIfOpen === 'function') {
     refreshBatchAssignModalIfOpen();
+  }
+  // Kenan Modu: Aktif tur kartı bu marker ise güncelle
+  if (window.__webdnd_currentActiveCombatant && window.__webdnd_currentActiveCombatant.id === markerData.id) {
+    Object.assign(window.__webdnd_currentActiveCombatant, {
+      name: markerData.name,
+      imgUrl: markerData.imgUrl,
+      color: markerData.color,
+      hpCurrent: markerData.hp,
+      hpMax: markerData.maxHp,
+      darkness: markerData.darkness,
+      maxDarkness: markerData.maxDarkness,
+      hasDarkness: markerData.hasDarkness,
+      ac: markerData.ac,
+      ac_bonus: markerData.ac_bonus,
+      stats: markerData.stats
+    });
+    renderKenanTurnInfo(window.__webdnd_currentActiveCombatant);
   }
 });
 
@@ -328,6 +559,23 @@ socket.on('characterUpdated', (data) => {
   const t = tokens[data.id];
   if (t) {
     updateHpBadge(t, allPlayers[data.id].character.hp_current, allPlayers[data.id].character.hp_max);
+    updateTokenDarknessBar(t, allPlayers[data.id]);
+  }
+
+  // Kenan Modu: Aktif turdaki savaşçı bu oyuncuysa tur kartını güncelle
+  if (window.__webdnd_currentActiveCombatant && 
+      (window.__webdnd_currentActiveCombatant.id === data.id || 
+       window.__webdnd_currentActiveCombatant.characterId === allPlayers[data.id].character.id)) {
+    Object.assign(window.__webdnd_currentActiveCombatant, {
+      hpCurrent: allPlayers[data.id].character.hp_current,
+      hpMax: allPlayers[data.id].character.hp_max,
+      darkness: allPlayers[data.id].character.darkness,
+      maxDarkness: allPlayers[data.id].character.max_darkness,
+      ac: allPlayers[data.id].character.ac,
+      ac_bonus: allPlayers[data.id].character.ac_bonus,
+      stats: allPlayers[data.id].character.stats
+    });
+    renderKenanTurnInfo(window.__webdnd_currentActiveCombatant);
   }
 
   // DM editör kayıt butonu güncelle
@@ -482,6 +730,9 @@ function addToken(playerData) {
     updateHpBadge(t, hpCurrent, hpMax);
   }
 
+  // Kenan Modu: Karanlık Barı
+  updateTokenDarknessBar(t, playerData);
+
   // Durum Efekt Rozetleri
   updateTokenStatusBadges(t, playerData);
 
@@ -558,6 +809,9 @@ function updateToken(playerData) {
     const badge = t.querySelector('.token-hp-badge');
     if (badge) badge.remove();
   }
+
+  // Kenan Modu: Karanlık Barı güncelle
+  updateTokenDarknessBar(t, playerData);
 
   // Durum Efekt Rozetleri güncelle
   updateTokenStatusBadges(t, playerData);
@@ -849,16 +1103,33 @@ if (btnAddMarker) {
       chr_bonus: getNum('dm-marker-chr-bonus'),
     };
 
+    // Kenan Modu: Karanlık Değerleri
+    const hasDarknessCb = document.getElementById('dm-marker-has-darkness');
+    const hasDarkness = Boolean(hasDarknessCb && hasDarknessCb.checked);
+    const darknessEl = document.getElementById('dm-marker-darkness');
+    const maxDarknessEl = document.getElementById('dm-marker-max-darkness');
+    const darkness = darknessEl && darknessEl.value !== '' ? parseInt(darknessEl.value) : 0;
+    const maxDarkness = maxDarknessEl && maxDarknessEl.value !== '' ? parseInt(maxDarknessEl.value) : 100;
+
     // Seçili saldırı presetlerini al (Opsiyonel)
     const createAttacksCbs = document.querySelectorAll('#dm-create-token-attacks-list input[type="checkbox"]:checked');
     const assignedAttacks = Array.from(createAttacksCbs).map(cb => cb.value);
 
-    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats, assignedAttacks });
+    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats, assignedAttacks, hasDarkness, darkness, maxDarkness });
 
     // Sadece adı temizle — HP/AC/stat değerleri bir sonraki aynı tür düşman için kalır
     nameEl.value = '';
     if (imgEl) imgEl.value = '';
   });
+
+  // Kenan Modu: Token oluşturma formunda checkbox değişim dinleyicisi
+  const createHasDarknessCheckbox = document.getElementById('dm-marker-has-darkness');
+  const createDarknessInputsWrap = document.getElementById('dm-marker-darkness-inputs');
+  if (createHasDarknessCheckbox && createDarknessInputsWrap) {
+    createHasDarknessCheckbox.addEventListener('change', () => {
+      createDarknessInputsWrap.classList.toggle('hidden', !createHasDarknessCheckbox.checked);
+    });
+  }
 }
 
 // ---- Marker Düzenleme Modalı ----
@@ -901,6 +1172,18 @@ function openMarkerEditor(markerInput) {
 
   const acBonusEl = document.getElementById('dm-marker-edit-ac-bonus');
   if (acBonusEl) acBonusEl.value = markerData.ac_bonus != null ? markerData.ac_bonus : (markerData.acBonus != null ? markerData.acBonus : 0);
+
+  // Kenan Modu: Marker Karanlık Alanları
+  const editHasDarknessCb = document.getElementById('dm-marker-edit-has-darkness');
+  const editDarknessInputsWrap = document.getElementById('dm-marker-edit-darkness-inputs');
+  const editDarknessInput = document.getElementById('dm-marker-edit-darkness');
+  const editMaxDarknessInput = document.getElementById('dm-marker-edit-max-darkness');
+
+  const hasDarkness = Boolean(markerData.hasDarkness);
+  if (editHasDarknessCb) editHasDarknessCb.checked = hasDarkness;
+  if (editDarknessInputsWrap) editDarknessInputsWrap.classList.toggle('hidden', !hasDarkness);
+  if (editDarknessInput) editDarknessInput.value = markerData.darkness != null ? markerData.darkness : 0;
+  if (editMaxDarknessInput) editMaxDarknessInput.value = markerData.maxDarkness != null ? markerData.maxDarkness : 100;
 
   // Stat değerleri
   const stats = markerData.stats || {};
@@ -1193,6 +1476,14 @@ if (btnSaveMarkerEdit) {
     const assignedCheckboxes = document.querySelectorAll('#dm-marker-assigned-attacks input[type="checkbox"]:checked');
     const assignedAttacks = Array.from(assignedCheckboxes).map(cb => cb.value);
 
+    // Kenan Modu: Marker Karanlık Değerleri
+    const editHasDarknessCb = document.getElementById('dm-marker-edit-has-darkness');
+    const hasDarkness = Boolean(editHasDarknessCb && editHasDarknessCb.checked);
+    const editDarknessEl = document.getElementById('dm-marker-edit-darkness');
+    const editMaxDarknessEl = document.getElementById('dm-marker-edit-max-darkness');
+    const darkness = editDarknessEl && editDarknessEl.value !== '' ? parseInt(editDarknessEl.value) : 0;
+    const maxDarkness = editMaxDarknessEl && editMaxDarknessEl.value !== '' ? parseInt(editMaxDarknessEl.value) : 100;
+
     socket.emit('editMarker', {
       id: editingMarkerId,
       name,
@@ -1204,12 +1495,24 @@ if (btnSaveMarkerEdit) {
       ac,
       ac_bonus,
       stats,
-      assignedAttacks
+      assignedAttacks,
+      hasDarkness,
+      darkness,
+      maxDarkness
     });
 
     document.getElementById('dm-marker-editor-modal').classList.add('hidden');
     editingMarkerId = null;
   });
+
+  // Modal içindeki checkbox dinleyicisi
+  const editHasDarknessCb = document.getElementById('dm-marker-edit-has-darkness');
+  const editDarknessInputsWrap = document.getElementById('dm-marker-edit-darkness-inputs');
+  if (editHasDarknessCb && editDarknessInputsWrap) {
+    editHasDarknessCb.addEventListener('change', () => {
+      editDarknessInputsWrap.classList.toggle('hidden', !editHasDarknessCb.checked);
+    });
+  }
 }
 
 // ---- DM Kalem Rengi ----
@@ -1438,6 +1741,12 @@ function showDmEditor(playerInput) {
   if (acEl) acEl.value = c.ac ?? 10;
   if (acBonusEl) acBonusEl.value = c.ac_bonus ?? 0;
   if (corruptionEl) corruptionEl.value = c.corruption ?? 0;
+
+  // Kenan Modu: Darkness
+  const darknessEl = document.getElementById('dm-edit-darkness');
+  const maxDarknessEl = document.getElementById('dm-edit-max-darkness');
+  if (darknessEl) darknessEl.value = c.darkness != null ? c.darkness : 0;
+  if (maxDarknessEl) maxDarknessEl.value = c.max_darkness != null ? c.max_darkness : 100;
 
   // Stats & Bonuslar
   document.getElementById('dm-edit-str').value = c.stats?.str ?? 10;
@@ -1736,6 +2045,8 @@ function saveDmEditorState(playerId) {
     ac: parseInt(document.getElementById('dm-edit-ac')?.value) || 10,
     ac_bonus: parseInt(document.getElementById('dm-edit-ac-bonus')?.value) || 0,
     corruption: parseInt(document.getElementById('dm-edit-corruption')?.value) || 0,
+    darkness: parseInt(document.getElementById('dm-edit-darkness')?.value) || 0,
+    max_darkness: parseInt(document.getElementById('dm-edit-max-darkness')?.value) || 100,
     assignedAttacks: assignedAttacks
   };
 

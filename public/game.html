@@ -115,7 +115,24 @@
         <!-- Sağ Taraf (%25): Kontrol Paneli -->
         <div id="panel-resize-handle" title="Paneli yeniden boyutlandır"></div>
         <div id="control-panel">
-            <h3>Kontrol Paneli</h3>
+            <div class="control-panel-header-row">
+                <h3 class="control-panel-title">Kontrol Paneli</h3>
+                <div class="game-mode-widget" id="game-mode-widget">
+                    <div class="game-mode-toggle-group" id="game-mode-toggle-group">
+                        <button type="button" class="mode-btn active" id="btn-mode-gunes" data-mode="gunes" title="Güneş Modu (Varsayılan Oyun Deneyimi)">☀️ Güneş</button>
+                        <button type="button" class="mode-btn" id="btn-mode-kenan" data-mode="kenan" title="Kenan Modu (Karanlık Sistemi & Tur Bilgisi)">🌑 Kenan</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kenan Modu: Aktif Tur Bilgisi Kartı -->
+            <div id="kenan-turn-info-card" class="kenan-only kenan-turn-info-card">
+                <div class="kenan-turn-idle-state">
+                    <span class="idle-icon">⚔️</span>
+                    <span class="idle-text">Savaş modu başladığında sıradaki savaşçının detayları burada görüntülenir.</span>
+                </div>
+            </div>
+
             <p>Durum: <span id="status">Bağlanıyor...</span></p>
 
             <!-- Zar Atma Paneli -->
@@ -171,6 +188,18 @@
                         <div class="stats-grid stats-grid-2col">
                             <div class="form-group"><label>AC:</label><input type="number" id="dm-marker-ac" placeholder="örn: 12" value="10"></div>
                             <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-marker-ac-bonus" placeholder="0" value="0"></div>
+                        </div>
+
+                        <!-- Kenan Modu: Marker Karanlık Alanı -->
+                        <div class="kenan-only dm-kenan-marker-darkness-section" style="margin-top:6px; padding:8px; background:rgba(147, 51, 234, 0.1); border-radius:6px; border:1px solid rgba(168, 85, 247, 0.35);">
+                            <div class="form-group form-group-checkbox" style="display:flex; align-items:center; gap:8px; margin:0 0 4px 0;">
+                                <input type="checkbox" id="dm-marker-has-darkness" style="width:16px; height:16px; cursor:pointer;">
+                                <label for="dm-marker-has-darkness" style="cursor:pointer; font-weight:700; color:#c084fc; font-size:12px; margin:0;">🌑 Karanlığa Sahip Olsun</label>
+                            </div>
+                            <div id="dm-marker-darkness-inputs" class="stats-grid stats-grid-2col hidden" style="margin-top:6px;">
+                                <div class="form-group"><label style="color:#c084fc; font-size:11px;">Mevcut Karanlık:</label><input type="number" id="dm-marker-darkness" placeholder="0" value="0" min="0"></div>
+                                <div class="form-group"><label style="color:#c084fc; font-size:11px;">Maks Karanlık:</label><input type="number" id="dm-marker-max-darkness" placeholder="100" value="100" min="1"></div>
+                            </div>
                         </div>
                         <!-- Stat Değerleri -->
                         <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;">Stat / Bonus (Saldırı için)</p>
@@ -232,6 +261,12 @@
                             <div class="form-group"><label>AC:</label><input type="number" id="dm-edit-ac"></div>
                             <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-edit-ac-bonus"></div>
                             <div class="form-group"><label>Yozlaşma:</label><input type="number" id="dm-edit-corruption"></div>
+                        </div>
+
+                        <!-- Kenan Modu: Oyuncu Karanlık Değerleri -->
+                        <div class="kenan-only dm-player-darkness-section stats-grid stats-grid-2col" style="margin-top:6px; padding:6px 8px; background:rgba(147, 51, 234, 0.1); border-radius:6px; border:1px solid rgba(168, 85, 247, 0.35);">
+                            <div class="form-group"><label style="color:#c084fc; font-weight:700; font-size:11px;">🌑 Karanlık:</label><input type="number" id="dm-edit-darkness" placeholder="0" min="0"></div>
+                            <div class="form-group"><label style="color:#c084fc; font-weight:700; font-size:11px;">Maks Karanlık:</label><input type="number" id="dm-edit-max-darkness" placeholder="100" min="1"></div>
                         </div>
                         <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;">Stat / Bonus</p>
                         <div class="stats-grid">
@@ -613,6 +648,18 @@
             <div class="stats-grid stats-grid-2col">
                 <div class="form-group"><label>AC:</label><input type="number" id="dm-marker-edit-ac"></div>
                 <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-marker-edit-ac-bonus"></div>
+            </div>
+
+            <!-- Kenan Modu: Marker Karanlık Alanı -->
+            <div class="kenan-only dm-kenan-marker-darkness-edit-section" style="margin-top:6px; padding:8px; background:rgba(147, 51, 234, 0.1); border-radius:6px; border:1px solid rgba(168, 85, 247, 0.35);">
+                <div class="form-group form-group-checkbox" style="display:flex; align-items:center; gap:8px; margin:0 0 4px 0;">
+                    <input type="checkbox" id="dm-marker-edit-has-darkness" style="width:16px; height:16px; cursor:pointer;">
+                    <label for="dm-marker-edit-has-darkness" style="cursor:pointer; font-weight:700; color:#c084fc; font-size:12px; margin:0;">🌑 Karanlığa Sahip Olsun</label>
+                </div>
+                <div id="dm-marker-edit-darkness-inputs" class="stats-grid stats-grid-2col hidden" style="margin-top:6px;">
+                    <div class="form-group"><label style="color:#c084fc; font-size:11px;">Mevcut Karanlık:</label><input type="number" id="dm-marker-edit-darkness" placeholder="0" min="0"></div>
+                    <div class="form-group"><label style="color:#c084fc; font-size:11px;">Maks Karanlık:</label><input type="number" id="dm-marker-edit-max-darkness" placeholder="100" min="1"></div>
+                </div>
             </div>
             <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;">Stat / Bonus</p>
             <div class="stats-grid">
