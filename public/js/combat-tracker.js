@@ -111,9 +111,11 @@
    * Haritadaki tüm tokenlar arasından sadece aktif sıradakine tur vurgusu halkası ekler.
    */
   function updateMapActiveTokenHighlight(activeCombatantId) {
-    // Önceki tüm aktif halkaları temizle
+    // Önceki tüm aktif halkaları ve beacon elemanlarını temizle
     document.querySelectorAll('.combat-active-token').forEach(el => {
       el.classList.remove('combat-active-token');
+      const beacon = el.querySelector('.token-combat-turn-beacon');
+      if (beacon) beacon.remove();
     });
 
     if (!combatState.active || !activeCombatantId) return;
@@ -141,8 +143,50 @@
 
     if (activeEl) {
       activeEl.classList.add('combat-active-token');
+
+      // Aktif tur göstergesi (Her türlü status efektinde net parlayan dış halka, radar dalgası ve SIRA ▼ oku)
+      let beacon = activeEl.querySelector('.token-combat-turn-beacon');
+      if (!beacon) {
+        beacon = document.createElement('div');
+        beacon.className = 'token-combat-turn-beacon';
+        beacon.innerHTML = `
+          <div class="turn-beacon-ring"></div>
+          <div class="turn-beacon-pulse-wave"></div>
+          <div class="turn-beacon-arrow">
+            <span class="turn-beacon-text">SIRA</span>
+            <span class="turn-beacon-arrow-icon">▼</span>
+          </div>
+        `;
+        activeEl.appendChild(beacon);
+      }
+
+      // Ping dalgası
+      activeEl.classList.remove('combat-ping-pulse');
+      void activeEl.offsetWidth; // Reflow
+      activeEl.classList.add('combat-ping-pulse');
     }
   }
+
+  window.__webdnd_updateActiveTokenHighlight = updateMapActiveTokenHighlight;
+
+  /**
+   * Combat tracker inisiyatif kartlarındaki kırmızı hedef seçim çerçevelerini günceller.
+   */
+  function refreshCombatCardsTargeting() {
+    document.querySelectorAll('.bg3-combat-card').forEach(card => {
+      const isMarker = card.dataset.isMarker === "true";
+      const targetId = isMarker ? card.dataset.id : (card.dataset.characterId || card.dataset.id);
+      const targetType = isMarker ? 'marker' : 'character';
+      const isTargeted = typeof window.__webdnd_isTargetSelected === 'function' &&
+                         window.__webdnd_isTargetSelected(targetType, targetId);
+      if (isTargeted) {
+        card.classList.add('card-target-selected');
+      } else {
+        card.classList.remove('card-target-selected');
+      }
+    });
+  }
+  window.__webdnd_refreshCombatCardsTargeting = refreshCombatCardsTargeting;
 
   // === RENDER İŞLEMLERİ ===
 
@@ -244,10 +288,25 @@
       // Tip / Rol Sınıfları
       if (c.isMarker) {
         card.classList.add('card-enemy');
+        if (c.objectType === 'explosive') {
+          card.classList.add('card-object-explosive');
+        } else if (c.objectType === 'aura') {
+          card.classList.add('card-object-aura');
+        }
       } else if (c.role === 'dm') {
         card.classList.add('card-dm');
       } else {
         card.classList.add('card-player');
+      }
+
+      card.dataset.id = String(c.id);
+      if (c.characterId) card.dataset.characterId = String(c.characterId);
+      if (c.isMarker) card.dataset.isMarker = "true";
+
+      const cardTargetType = c.isMarker ? 'marker' : 'character';
+      const cardTargetId = c.isMarker ? c.id : (c.characterId || c.id);
+      if (typeof window.__webdnd_isTargetSelected === 'function' && window.__webdnd_isTargetSelected(cardTargetType, cardTargetId)) {
+        card.classList.add('card-target-selected');
       }
 
       // Border rengini token rengine uyarla
@@ -375,7 +434,13 @@
       // 5. Karakter Adı Etiketi
       const nameLabel = document.createElement('div');
       nameLabel.className = 'bg3-card-name-label';
-      nameLabel.textContent = c.name || 'Bilinmiyor';
+      if (c.objectType === 'explosive') {
+        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-explosive">💣 PATLAYICI</span> ${escapeHtml(c.name || 'Nesne')}`;
+      } else if (c.objectType === 'aura') {
+        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-aura">🔮 TOTEM</span> ${escapeHtml(c.name || 'Nesne')}`;
+      } else {
+        nameLabel.textContent = c.name || 'Bilinmiyor';
+      }
       nameLabel.title = c.name || 'Bilinmiyor';
       card.appendChild(nameLabel);
 
@@ -383,13 +448,30 @@
       if (isActive) {
         const activeBanner = document.createElement('div');
         activeBanner.className = 'bg3-active-name-banner';
-        activeBanner.innerHTML = `<span class="bg3-active-name-text">${escapeHtml(c.name)}</span>`;
+        const objBadge = c.objectType === 'explosive' ? '💣 ' : (c.objectType === 'aura' ? '🔮 ' : '');
+        activeBanner.innerHTML = `<span class="bg3-active-name-text">${objBadge}${escapeHtml(c.name)}</span>`;
         card.appendChild(activeBanner);
       }
 
-      // Tıklama Olayı: Haritada tokene git / DM ise sırayı geçir
+      // Tıklama Olayı: Haritada tokene git / Ctrl+Click ile hedef seç / DM ise sırayı geçir
       card.addEventListener('click', (e) => {
         e.stopPropagation();
+
+        // Ctrl+Click ile kart üzerinden de doğrudan hedef seçilebilsin
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          const targetInfo = {
+            type: c.isMarker ? 'marker' : 'character',
+            id: c.isMarker ? c.id : (c.characterId || c.id),
+            name: c.name,
+            data: c
+          };
+          if (typeof window.__webdnd_ctrlClickTarget === 'function') {
+            window.__webdnd_ctrlClickTarget(targetInfo, null);
+          }
+          return;
+        }
+
         focusTokenOnMap(c.id);
 
         if (typeof role !== 'undefined' && role === 'dm') {

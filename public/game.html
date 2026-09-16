@@ -163,11 +163,25 @@
                 </div>
 
                 <details class="dm-collapsible dm-create-token-section">
-                    <summary>Yeni Token Oluştur</summary>
+                    <summary>Yeni Token Oluştur & Hazır Şemalar</summary>
                     <div class="dm-collapsible-body">
+                        <!-- Hazır Şema Seçimi & Yönetimi -->
+                        <div class="token-schema-box">
+                            <div class="token-schema-header">
+                                <span class="token-schema-title">📜 Kayıtlı Hazır Şemalar</span>
+                                <span id="dm-token-preset-badge" class="token-schema-badge">0 Şema</span>
+                            </div>
+                            <div class="token-schema-row">
+                                <select id="dm-token-preset-select" class="atk-select token-schema-select">
+                                    <option value="">— Hazır Şema Seç (Değerleri Doldur) —</option>
+                                </select>
+                                <button type="button" id="btn-delete-token-preset" class="atk-mini-btn token-schema-del-btn" title="Seçili Şemayı Supabase'den Sil" style="display: none;">🗑️</button>
+                            </div>
+                        </div>
+
                         <div class="form-group">
-                            <label>İşaret/Token Adı (harf):</label>
-                            <input type="text" id="dm-marker-name" maxlength="2" placeholder="Ör: G"
+                            <label>Token / İşaret Adı:</label>
+                            <input type="text" id="dm-marker-name" maxlength="40" placeholder="Ör: Goblin Okçu veya G"
                                 class="input-light">
                         </div>
                         <div class="form-group form-group-relative">
@@ -178,6 +192,86 @@
                         <div class="form-group">
                             <label>Renk:</label>
                             <input type="color" id="dm-marker-color" value="#f1c40f">
+                        </div>
+
+                        <!-- Cansız Obje Türü Seçimi -->
+                        <div class="form-group" style="margin-top:4px;">
+                            <label>Token / Varlık Türü:</label>
+                            <select id="dm-marker-type" class="atk-select" style="width:100%; font-size:12px; font-weight:700;">
+                                <option value="creature">👤 Canlı Yaratık / NPC</option>
+                                <option value="explosive">💣 Patlayıcı Nesne (Ölümde Patlar)</option>
+                                <option value="aura">🔮 Aura / Totem (Her Tur Etki Yayar)</option>
+                            </select>
+                        </div>
+
+                        <!-- Cansız Obje Özel Ayarları -->
+                        <div id="dm-marker-object-config-wrap" class="hidden object-config-card" style="margin: 8px 0; padding: 10px; background: rgba(30, 20, 10, 0.45); border-radius: 8px; border: 1px dashed #f59e0b;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                                <strong id="dm-marker-object-badge-title" style="font-size:12px; color:#f59e0b;">⚙️ Nesne İşlev Ayarları</strong>
+                                <span id="dm-marker-object-hint" style="font-size:10px; color:#cbd5e1;">Patlama / Alan Etkisi</span>
+                            </div>
+                            <div class="stats-grid stats-grid-2col">
+                                <div class="form-group">
+                                    <label style="font-size:11px;">Etki Yarıçapı (px):</label>
+                                    <input type="number" id="dm-marker-obj-radius" value="120" min="20" max="2000" placeholder="120">
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size:11px;">Hasar Miktarı:</label>
+                                    <input type="number" id="dm-marker-obj-damage" value="20" min="0" placeholder="0">
+                                </div>
+                            </div>
+                            <div class="stats-grid stats-grid-2col" style="margin-top: 4px;">
+                                <div class="form-group">
+                                    <label style="font-size:11px;">Hasar Türü:</label>
+                                    <select id="dm-marker-obj-damage-type" class="atk-select" style="font-size:11px;">
+                                        <option value="fire">🔥 Ateş (Fire)</option>
+                                        <option value="necrotic">💀 Nekrotik (Necrotic)</option>
+                                        <option value="poison">🧪 Zehir (Poison)</option>
+                                        <option value="acid">🧪 Asit (Acid)</option>
+                                        <option value="lightning">⚡ Yıldırım (Lightning)</option>
+                                        <option value="cold">❄️ Soğuk (Cold)</option>
+                                        <option value="force">🌀 Kuvvet (Force)</option>
+                                        <option value="radiant">✨ Işıma (Radiant)</option>
+                                        <option value="physical">⚔️ Fiziksel (Physical)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size:11px;">Hedef Filtresi:</label>
+                                    <select id="dm-marker-obj-target-filter" class="atk-select" style="font-size:11px;">
+                                        <option value="all">👥 Herkes (Dost & Düşman)</option>
+                                        <option value="players">🛡️ Sadece Oyuncular</option>
+                                        <option value="markers">👾 Sadece Yaratıklar</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Uygulanacak Durum Efektleri -->
+                            <div class="form-group" style="margin-top: 6px;">
+                                <label style="font-size:11px;">✨ Verilecek Durum Efekti:</label>
+                                <div style="display:flex; gap:6px;">
+                                    <select id="dm-marker-obj-effect-select" class="atk-select" style="flex:1; font-size:11px;">
+                                        <option value="">— Durum Efekti Seç (Opsiyonel) —</option>
+                                    </select>
+                                    <input type="number" id="dm-marker-obj-effect-duration" placeholder="Tur" min="1" max="20" style="width:55px; font-size:11px;" title="Boş ise varsayılan/kalıcı">
+                                    <button type="button" id="dm-marker-obj-btn-add-effect" class="atk-mini-btn" style="padding:2px 8px;">➕</button>
+                                </div>
+                                <div id="dm-marker-obj-selected-effects" class="status-target-effects-list" style="margin-top: 4px; min-height: 20px;"></div>
+                            </div>
+
+                            <!-- Patlayıcıya Özel: Patlayınca Yok Ol -->
+                            <div id="dm-marker-obj-destroy-row" class="form-group form-group-checkbox" style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                                <input type="checkbox" id="dm-marker-obj-destroy" checked style="width:15px; height:15px; cursor:pointer;">
+                                <label for="dm-marker-obj-destroy" style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Patlayınca Haritadan Silinsin</label>
+                            </div>
+
+                            <!-- Auraya Özel: Tetiklenme Zamanı -->
+                            <div id="dm-marker-obj-timing-row" class="form-group hidden" style="margin-top:6px;">
+                                <label style="font-size:11px; color:#c084fc;">🔮 Aura Tetiklenme Zamanı:</label>
+                                <select id="dm-marker-obj-timing" class="atk-select" style="font-size:11px;">
+                                    <option value="turn">⚡ Sırası Geldiğinde (Her Tur)</option>
+                                    <option value="round">🔄 Raund Başlangıcında</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="stats-grid stats-grid-3col">
                             <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-hp" placeholder="örn: 10"></div>
@@ -220,7 +314,11 @@
                                 </div>
                             </details>
                         </div>
-                        <button id="btn-add-marker" class="btn primary action-btn">İşaret Ekle</button>
+                        <!-- Aksiyon Butonları (Spawn & Şema Kaydet) -->
+                        <div class="token-create-actions-group">
+                            <button type="button" id="btn-add-marker" class="btn primary action-btn token-spawn-btn" title="Belirtilen özelliklerdeki tokeni haritaya yerleştirir">🚀 Haritaya Spawn Et</button>
+                            <button type="button" id="btn-save-token-preset" class="btn secondary action-btn token-save-preset-btn" title="Girilen can, stat, isim ve resim değerlerini Supabase'e şema olarak kaydeder">💾 Şema Olarak Kaydet</button>
+                        </div>
                     </div>
                 </details>
 
@@ -639,6 +737,89 @@
             <div class="form-group">
                 <label>Renk:</label>
                 <input type="color" id="dm-marker-edit-color" value="#f1c40f">
+            </div>
+
+            <!-- Token / Varlık Türü (Düzenleme) -->
+            <div class="form-group" style="margin-top:4px;">
+                <label>Token / Varlık Türü:</label>
+                <select id="dm-marker-edit-type" class="atk-select" style="width:100%; font-size:12px; font-weight:700;">
+                    <option value="creature">👤 Canlı Yaratık / NPC</option>
+                    <option value="explosive">💣 Patlayıcı Nesne (Ölümde Patlar)</option>
+                    <option value="aura">🔮 Aura / Totem (Her Tur Etki Yayar)</option>
+                </select>
+            </div>
+
+            <!-- Cansız Obje Özel Ayarları (Düzenleme) -->
+            <div id="dm-marker-edit-object-config-wrap" class="hidden object-config-card" style="margin: 8px 0; padding: 10px; background: rgba(30, 20, 10, 0.45); border-radius: 8px; border: 1px dashed #f59e0b;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <strong id="dm-marker-edit-object-badge-title" style="font-size:12px; color:#f59e0b;">⚙️ Nesne İşlev Ayarları</strong>
+                    <div style="display:flex; gap:4px;">
+                        <button type="button" id="dm-marker-btn-test-detonate" class="atk-mini-btn" style="background:#dc2626; color:#fff; border-color:#ef4444;" title="Şimdi Patlat">💥 Patlat</button>
+                        <button type="button" id="dm-marker-btn-test-aura" class="atk-mini-btn" style="background:#7c3aed; color:#fff; border-color:#a855f7;" title="Aura Nabzı Gönder">🔮 Nabız Ver</button>
+                    </div>
+                </div>
+                <div class="stats-grid stats-grid-2col">
+                    <div class="form-group">
+                        <label style="font-size:11px;">Etki Yarıçapı (px):</label>
+                        <input type="number" id="dm-marker-edit-obj-radius" value="120" min="20" max="2000" placeholder="120">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:11px;">Hasar Miktarı:</label>
+                        <input type="number" id="dm-marker-edit-obj-damage" value="20" min="0" placeholder="0">
+                    </div>
+                </div>
+                <div class="stats-grid stats-grid-2col" style="margin-top: 4px;">
+                    <div class="form-group">
+                        <label style="font-size:11px;">Hasar Türü:</label>
+                        <select id="dm-marker-edit-obj-damage-type" class="atk-select" style="font-size:11px;">
+                            <option value="fire">🔥 Ateş (Fire)</option>
+                            <option value="necrotic">💀 Nekrotik (Necrotic)</option>
+                            <option value="poison">🧪 Zehir (Poison)</option>
+                            <option value="acid">🧪 Asit (Acid)</option>
+                            <option value="lightning">⚡ Yıldırım (Lightning)</option>
+                            <option value="cold">❄️ Soğuk (Cold)</option>
+                            <option value="force">🌀 Kuvvet (Force)</option>
+                            <option value="radiant">✨ Işıma (Radiant)</option>
+                            <option value="physical">⚔️ Fiziksel (Physical)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:11px;">Hedef Filtresi:</label>
+                        <select id="dm-marker-edit-obj-target-filter" class="atk-select" style="font-size:11px;">
+                            <option value="all">👥 Herkes (Dost & Düşman)</option>
+                            <option value="players">🛡️ Sadece Oyuncular</option>
+                            <option value="markers">👾 Sadece Yaratıklar</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Uygulanacak Durum Efektleri -->
+                <div class="form-group" style="margin-top: 6px;">
+                    <label style="font-size:11px;">✨ Verilecek Durum Efekti:</label>
+                    <div style="display:flex; gap:6px;">
+                        <select id="dm-marker-edit-obj-effect-select" class="atk-select" style="flex:1; font-size:11px;">
+                            <option value="">— Durum Efekti Seç (Opsiyonel) —</option>
+                        </select>
+                        <input type="number" id="dm-marker-edit-obj-effect-duration" placeholder="Tur" min="1" max="20" style="width:55px; font-size:11px;" title="Boş ise varsayılan/kalıcı">
+                        <button type="button" id="dm-marker-edit-obj-btn-add-effect" class="atk-mini-btn" style="padding:2px 8px;">➕</button>
+                    </div>
+                    <div id="dm-marker-edit-obj-selected-effects" class="status-target-effects-list" style="margin-top: 4px; min-height: 20px;"></div>
+                </div>
+
+                <!-- Patlayıcıya Özel: Patlayınca Yok Ol -->
+                <div id="dm-marker-edit-obj-destroy-row" class="form-group form-group-checkbox" style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                    <input type="checkbox" id="dm-marker-edit-obj-destroy" checked style="width:15px; height:15px; cursor:pointer;">
+                    <label for="dm-marker-edit-obj-destroy" style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Patlayınca Haritadan Silinsin</label>
+                </div>
+
+                <!-- Auraya Özel: Tetiklenme Zamanı -->
+                <div id="dm-marker-edit-obj-timing-row" class="form-group hidden" style="margin-top:6px;">
+                    <label style="font-size:11px; color:#c084fc;">🔮 Aura Tetiklenme Zamanı:</label>
+                    <select id="dm-marker-edit-obj-timing" class="atk-select" style="font-size:11px;">
+                        <option value="turn">⚡ Sırası Geldiğinde (Her Tur)</option>
+                        <option value="round">🔄 Raund Başlangıcında</option>
+                    </select>
+                </div>
             </div>
             <div class="stats-grid stats-grid-3col">
                 <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-edit-hp"></div>

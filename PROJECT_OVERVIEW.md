@@ -96,6 +96,27 @@ DM'in durum efektleri panelinde oluşturduğu ve özelleştirdiği durum etkisi 
 - `effects` (jsonb) - Etki parametreleri (Örn: `{ dotDamage: { min: 1, max: 6 }, blind: true, paralyzed: true }`).
 - `created_at` (timestamptz) - Oluşturulma tarihi.
 
+### 3.7. `token_presets` Tablosu
+DM'in haritaya eklediği yaratık ve NPC şablonlarını (şemalarını) kalıcı olarak saklar.
+- `id` (text, Primary Key) - Şema benzersiz kimliği (Örn: `token_preset_...` veya `tp_...`).
+- `name` (text) - Şema / Yaratık adı (Örn: `Goblin Okçu`, `Ork Savaşçı`).
+- `img_url` (text, nullable) - Token görsel URL'si.
+- `color` (text) - Token rengi (Varsayılan `#f1c40f`).
+- `hp` (int, nullable) - Başlangıç mevcut can değeri.
+- `max_hp` (int, nullable) - Maksimum can değeri.
+- `size` (int) - Token boyutu (piksel, varsayılan `50`).
+- `ac` (int) - Zırh sınıfı (Varsayılan `10`).
+- `ac_bonus` (int) - AC bonusu.
+- `stats` (jsonb) - D&D statları ve bonusları (`{ str, str_bonus, dex, dex_bonus, ... }`).
+- `has_darkness` (boolean) - Kenan modu karanlık alanı aktif mi?
+- `darkness` (int) - Mevcut karanlık.
+- `max_darkness` (int) - Maksimum karanlık.
+- `assigned_attacks` (jsonb) - Şemaya atanmış hazır saldırı ID'leri listesi.
+- `object_type` (text) - Varlık türü (`creature`, `explosive`, `aura`).
+- `object_config` (jsonb, nullable) - Cansız obje ayarları (yarıçap, hasar, durum efektleri vb.).
+- `created_at` (timestamptz) - Oluşturulma tarihi.
+- `updated_at` (timestamptz) - Son güncelleme tarihi.
+
 ---
 
 ## 4. REST API Endpoint'leri
@@ -152,6 +173,9 @@ Web tabanlı eşzamanlı harita etkileşimleri ve zar atma olayları WebSocket �
 - `rollDice` (`{ diceType, rollerName }`): Sunucu tarafında rastgele zar atılıp herkese yayınlanmasını tetikler.
 - `playerMovement` (`{ id, x, y }`): Bir token'ın harita üzerindeki yeni koordinatını sunucuya bildirir.
 - `forceSave` (): DM'in harita durumunu veritabanına anlık yedeklemesini tetikler.
+- `getTokenPresets` (): DM'in kayıtlı token şemalarını talep etmesi.
+- `saveTokenPreset` (`presetData`): DM'in yeni bir token şeması kaydetmesi veya güncellemesi (Supabase senkronize).
+- `deleteTokenPreset` (`presetId`): DM'in bir token şemasını silmesi (Supabase senkronize).
 
 ### 5.2. Sunucudan Yayınlanan veya Gönderilen Eventler (Server -> Client)
 - `currentPlayers` (`players` listesi): Sadece yeni katılan istemciye mevcut tüm oyuncuları gönderir.
@@ -163,6 +187,7 @@ Web tabanlı eşzamanlı harita etkileşimleri ve zar atma olayları WebSocket �
 - `updateMarkerData` (`marker` nesnesi): İşaretçinin HP ve boyut güncellemelerini yayınlar.
 - `updateBg` (`mapBgUrl`): Herkese güncel arka plan URL'sini bildirir.
 - `tokenAppearanceUpdated` (`{ id, imgUrl, color }`): Bir token'ın görüntüsünün değiştiğini bildirir.
+- `tokenPresetsUpdated` (`presets` listesi): Tüm DM istemcilerine güncel token şeması listesini yayınlar.
 - `characterUpdated` (`{ id, updates }`): Karakter kartındaki can/stat güncellemelerini yayınlar.
 - `drawHistory` (`drawHistory` dizisi): Bağlanıldığında veya temizlendiğinde tüm çizim geçmişini gönderir.
 - `draw` (`line` nesnesi): Anlık olarak çizilen çizgiyi diğer istemcilere yayınlar.

@@ -266,15 +266,21 @@
   }
 
   const recentImpacts = new Set();
+  const localExecutedImpactIds = new Set();
 
   /**
    * Hedef token üzerinde sarsıntı, kesme efekti, sıçrayan hasar metni ve ses efektini tetikler.
    */
   function triggerHitImpact(data) {
-    const { targetType, targetId, damage, isCritical, attackType } = data || {};
+    const { targetType, targetId, damage, isCritical, attackType, impactId } = data || {};
     const key = `${targetType}:${targetId}`;
     recentImpacts.add(key);
-    setTimeout(() => recentImpacts.delete(key), 700);
+    setTimeout(() => recentImpacts.delete(key), 3500);
+
+    if (impactId) {
+      localExecutedImpactIds.add(impactId);
+      setTimeout(() => localExecutedImpactIds.delete(impactId), 20000);
+    }
 
     // 1. Organik Vuruş Sesi Çal
     playHitSound({ isCritical, attackType, damage });
@@ -1039,6 +1045,10 @@
     // Önceki saldıranın form değerlerini kaydet
     saveAttackerForm();
 
+    lastAttackResults = [];
+    pendingSpellSlotToConsume = null;
+    if (btnApplyDamage) btnApplyDamage.classList.add('hidden');
+
     selectedAttacker = resolveSelection(attackerSelect?.value);
     if (!selectedAttacker) {
       if (attackerInfo) attackerInfo.innerHTML = '<span class="atk-hint">Saldıran seçilmedi</span>';
@@ -1198,15 +1208,24 @@
       // Kaldır (toggle off)
       const removed = selectedTargets.splice(existingIdx, 1)[0];
       const el = tokenEl || removed.tokenEl || findTokenElForTarget(removed);
-      if (el) el.classList.remove('token-target-selected');
+      if (el) {
+        el.classList.remove('token-target-selected');
+        const b = el.querySelector('.token-target-beacon');
+        if (b) b.remove();
+      }
       const freshEl = findTokenElForTarget(removed);
-      if (freshEl) freshEl.classList.remove('token-target-selected');
+      if (freshEl) {
+        freshEl.classList.remove('token-target-selected');
+        const b = freshEl.querySelector('.token-target-beacon');
+        if (b) b.remove();
+      }
     } else {
       // Ekle
       addTargetToList(targetInfo, tokenEl);
     }
 
     renderSelectedTargets();
+    syncAllTargetBeacons();
     // Combobox'u temizle (çoklu seçim Ctrl+Click üzerinden yönetiliyor)
     if (targetSelect) targetSelect.value = '';
     if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
@@ -1239,6 +1258,7 @@
     if (resolvedTokenEl) resolvedTokenEl.classList.add('token-target-selected');
 
     renderSelectedTargets();
+    syncAllTargetBeacons();
     if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
       window.__webdnd_refreshStatusToolbox();
     }
@@ -1254,10 +1274,19 @@
     if (idx >= 0) {
       const removed = selectedTargets.splice(idx, 1)[0];
       const el = removed.tokenEl || findTokenElForTarget(removed);
-      if (el) el.classList.remove('token-target-selected');
+      if (el) {
+        el.classList.remove('token-target-selected');
+        const b = el.querySelector('.token-target-beacon');
+        if (b) b.remove();
+      }
       const freshEl = findTokenElForTarget(removed);
-      if (freshEl) freshEl.classList.remove('token-target-selected');
+      if (freshEl) {
+        freshEl.classList.remove('token-target-selected');
+        const b = freshEl.querySelector('.token-target-beacon');
+        if (b) b.remove();
+      }
       renderSelectedTargets();
+      syncAllTargetBeacons();
       if (typeof window.__webdnd_refreshStatusToolbox === 'function') {
         window.__webdnd_refreshStatusToolbox();
       }
@@ -1265,16 +1294,90 @@
   }
 
   /**
-   * Tüm hedeflerin token çerçevesini kaldırır.
+   * Haritadaki tüm hedef tokenlara tactical reticle, kırmızı beacon halkası
+   * ve çoklu hedef seçiminde numaralandırılmış rozetleri (🎯 #1, 🎯 #2 ...) senkronize eder.
+   * Durum efekti veya obje türü ne olursa olsun hedefin seçili olduğunu kesinleştirir.
+   */
+  function syncAllTargetBeacons() {
+    const isMulti = selectedTargets.length > 1;
+    const activeTargetElements = new Set();
+
+    selectedTargets.forEach((target, index) => {
+      const el = target.tokenEl || findTokenElForTarget(target);
+      if (!el) return;
+      target.tokenEl = el;
+      activeTargetElements.add(el);
+
+      el.classList.add('token-target-selected');
+
+      const badgeNumber = index + 1;
+      const badgeText = isMulti ? `🎯 #${badgeNumber}` : `🎯 HEDEF`;
+
+      let beacon = el.querySelector('.token-target-beacon');
+      if (!beacon) {
+        beacon = document.createElement('div');
+        beacon.className = 'token-target-beacon';
+        beacon.innerHTML = `
+          <div class="target-beacon-ring"></div>
+          <div class="target-beacon-reticle">
+            <span class="target-corner corner-tl"></span>
+            <span class="target-corner corner-tr"></span>
+            <span class="target-corner corner-bl"></span>
+            <span class="target-corner corner-br"></span>
+          </div>
+          <div class="target-beacon-badge"></div>
+        `;
+        el.appendChild(beacon);
+      }
+
+      const badgeEl = beacon.querySelector('.target-beacon-badge');
+      if (badgeEl && badgeEl.textContent !== badgeText) {
+        badgeEl.textContent = badgeText;
+      }
+    });
+
+    // Artık seçili olmayan ama hedef beacon veya class taşıyan elemanları temizle
+    document.querySelectorAll('.token.token-target-selected').forEach(el => {
+      if (!activeTargetElements.has(el)) {
+        el.classList.remove('token-target-selected');
+        const b = el.querySelector('.token-target-beacon');
+        if (b) b.remove();
+      }
+    });
+
+    document.querySelectorAll('.token-target-beacon').forEach(b => {
+      const parent = b.closest('.token');
+      if (!parent || !activeTargetElements.has(parent)) {
+        b.remove();
+      }
+    });
+
+    if (typeof window.__webdnd_refreshCombatCardsTargeting === 'function') {
+      window.__webdnd_refreshCombatCardsTargeting();
+    }
+  }
+
+  /**
+   * Tüm hedeflerin token çerçevesini ve beacon elemanlarını kaldırır.
    */
   function clearAllTargetHighlights() {
     selectedTargets.forEach(t => {
       const el = t.tokenEl || findTokenElForTarget(t);
-      if (el) el.classList.remove('token-target-selected');
+      if (el) {
+        el.classList.remove('token-target-selected');
+        const b = el.querySelector('.token-target-beacon');
+        if (b) b.remove();
+      }
     });
     document.querySelectorAll('.token.token-target-selected, .token-target-selected').forEach(el => {
       el.classList.remove('token-target-selected');
     });
+    document.querySelectorAll('.token-target-beacon').forEach(el => {
+      el.remove();
+    });
+    if (typeof window.__webdnd_refreshCombatCardsTargeting === 'function') {
+      window.__webdnd_refreshCombatCardsTargeting();
+    }
   }
 
   /**
@@ -1369,6 +1472,7 @@
     });
 
     updateTargetResistanceBadges();
+    syncAllTargetBeacons();
   }
 
   // Ctrl+Click callback'ini kaydet
@@ -1553,6 +1657,61 @@
   // SALDIRI İŞLEMLERİ (TEKİL SALDIR BUTONU)
   // ============================================================
 
+  let pendingSpellSlotToConsume = null;
+
+  /**
+   * "Hasarı Uygula" butonuna basıldığında bekleyen büyü slotunu düşürür ve veritabanını günceller.
+   */
+  async function consumePendingSpellSlot() {
+    if (!pendingSpellSlotToConsume) return;
+    const { attacker, spellLevel } = pendingSpellSlotToConsume;
+    pendingSpellSlotToConsume = null;
+
+    const currentSlots = parseInt(slotDisplays[spellLevel]?.textContent || '0');
+    const newSlotCount = Math.max(0, currentSlots - 1);
+    if (slotDisplays[spellLevel]) {
+      slotDisplays[spellLevel].textContent = newSlotCount;
+      const slotCard = document.querySelector(`.atk-slot[data-slot-level="${spellLevel}"]`);
+      if (slotCard) {
+        if (newSlotCount <= 0) slotCard.classList.add('is-out-of-slots');
+        else slotCard.classList.remove('is-out-of-slots');
+      }
+    }
+
+    addCombatLog(
+      `<span class="atk-log-slot" style="color:#38bdf8; font-weight:600;">✨ [BÜYÜ SLOTU]: ${escapeHtml(attacker.name || 'Saldıran')} — Seviye ${spellLevel} büyü slotu harcandı (Kalan: ${newSlotCount}).</span>`,
+      'slot'
+    );
+
+    // DB güncelle (saldıran karakter ise)
+    if (attacker.type === 'character' && attacker.id) {
+      const updatedSlots = {};
+      for (let i = 1; i <= 4; i++) {
+        updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
+      }
+      try {
+        await fetch(`/api/characters/${attacker.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ spell_slots: updatedSlots })
+        });
+      } catch (e) {
+        console.error('Slot güncelleme hatası:', e);
+      }
+    } else if (attacker.type === 'marker' && attacker.id) {
+      // Marker slot güncelle
+      const updatedSlots = {};
+      for (let i = 1; i <= 4; i++) {
+        updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
+      }
+      if (typeof socket !== 'undefined') {
+        socket.emit('editMarker', { id: attacker.id, spell_slots: updatedSlots });
+      }
+    }
+
+    selectActiveSpellLevel(spellLevel);
+  }
+
   async function performAttack() {
     if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
     if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
@@ -1578,6 +1737,14 @@
         alert(`${escapeHtml(selectedAttacker.name)} — Seviye ${chosenSpellLevel} büyü slotu kalmadı! Lütfen başka bir seviye seçin veya dinlenin.`);
         return;
       }
+
+      // Büyü slotunu hemen düşürme, "Hasarı Uygula" anına ertele
+      pendingSpellSlotToConsume = {
+        attacker: { type: selectedAttacker.type, id: selectedAttacker.id, name: selectedAttacker.name },
+        spellLevel: chosenSpellLevel
+      };
+    } else {
+      pendingSpellSlotToConsume = null;
     }
 
     const halfDamageOnMiss = Boolean(activeEquippedPreset?.halfDamageOnMiss);
@@ -1616,48 +1783,6 @@
     showMultiApplyButton();
 
     if (btnAttack) btnAttack.disabled = false;
-
-    // Slotu düşür (saldırandan)
-    if (consumesSlot) {
-      const currentSlots = parseInt(slotDisplays[chosenSpellLevel]?.textContent || '0');
-      const newSlotCount = Math.max(0, currentSlots - 1);
-      if (slotDisplays[chosenSpellLevel]) {
-        slotDisplays[chosenSpellLevel].textContent = newSlotCount;
-        const slotCard = document.querySelector(`.atk-slot[data-slot-level="${chosenSpellLevel}"]`);
-        if (slotCard) {
-          if (newSlotCount <= 0) slotCard.classList.add('is-out-of-slots');
-          else slotCard.classList.remove('is-out-of-slots');
-        }
-      }
-
-      // DB güncelle (saldıran karakter ise)
-      if (selectedAttacker.type === 'character' && selectedAttacker.id) {
-        const updatedSlots = {};
-        for (let i = 1; i <= 4; i++) {
-          updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
-        }
-        try {
-          await fetch(`/api/characters/${selectedAttacker.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ spell_slots: updatedSlots })
-          });
-        } catch (e) {
-          console.error('Slot güncelleme hatası:', e);
-        }
-      } else if (selectedAttacker.type === 'marker' && selectedAttacker.id) {
-        // Marker slot güncelle
-        const updatedSlots = {};
-        for (let i = 1; i <= 4; i++) {
-          updatedSlots[`lvl${i}`] = parseInt(slotDisplays[i]?.textContent || '0');
-        }
-        if (typeof socket !== 'undefined') {
-          socket.emit('editMarker', { id: selectedAttacker.id, spell_slots: updatedSlots });
-        }
-      }
-
-      selectActiveSpellLevel(chosenSpellLevel);
-    }
   }
 
   /**
@@ -1873,7 +1998,7 @@
    * Çoklu hedef sonuçları için "Hasarı Uygula" butonunu gösterir.
    */
   function showMultiApplyButton() {
-    if (lastAttackResults.length === 0) {
+    if (lastAttackResults.length === 0 && !pendingSpellSlotToConsume) {
       if (btnApplyDamage) btnApplyDamage.classList.add('hidden');
       return;
     }
@@ -1881,23 +2006,26 @@
     if (btnApplyDamage) {
       btnApplyDamage.classList.remove('hidden');
       const splashCount = lastAttackResults.filter(r => r.isAoESplash).length;
+      const slotNote = pendingSpellSlotToConsume ? ` (✨ Lvl ${pendingSpellSlotToConsume.spellLevel} Slot)` : '';
       if (lastAttackResults.length === 1) {
         const r = lastAttackResults[0];
-        btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar Uygula → ${escapeHtml(r.targetName)}`;
-      } else {
+        btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar Uygula${slotNote} → ${escapeHtml(r.targetName)}`;
+      } else if (lastAttackResults.length > 1) {
         const totalAll = lastAttackResults.reduce((sum, r) => sum + r.totalDamage, 0);
         const splashNote = splashCount > 0 ? ` (${splashCount} alan)` : '';
-        btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef${splashNote}, toplam ${totalAll})`;
+        btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef${splashNote}, toplam ${totalAll})${slotNote}`;
+      } else if (pendingSpellSlotToConsume) {
+        btnApplyDamage.textContent = `✨ Büyüyü Uygula / Slot Harca${slotNote}`;
       }
     }
   }
 
   /**
-   * Son hesaplanan hasarları ve bağlı durum efektlerini tüm hedeflere uygular.
+   * Son hesaplanan hasarları, büyü slotunu ve bağlı durum efektlerini tüm hedeflere uygular.
    */
   async function applyDamage() {
-    if (lastAttackResults.length === 0) {
-      alert('Uygulanacak hasar yok!');
+    if (lastAttackResults.length === 0 && !pendingSpellSlotToConsume) {
+      alert('Uygulanacak hasar veya büyü yok!');
       return;
     }
 
@@ -1908,6 +2036,11 @@
       if (btnApplyDamage) {
         btnApplyDamage.classList.add('btn-apply-damage-hit');
         setTimeout(() => btnApplyDamage.classList.remove('btn-apply-damage-hit'), 350);
+      }
+
+      // Bekleyen büyü slotunu sadece "Hasarı Uygula" anında düşür
+      if (pendingSpellSlotToConsume) {
+        await consumePendingSpellSlot();
       }
 
       // 1. Bekleyen AoE patlama ve sarsıntı efektlerini "Hasarı Uygula" anında tetikle
@@ -1931,7 +2064,7 @@
             setTimeout(() => gameMapEl.classList.remove('map-screen-shake'), 280);
           }
 
-          // C. Tüm oyuncuların ekranlarına patlamayı yayınla
+          // C. Diğer oyuncuların ekranlarına patlamayı yayınla (broadcast)
           if (typeof socket !== 'undefined') {
             socket.emit('triggerAoeExplosion', {
               aoeInfo: { x: exp.cx, y: exp.cy, radius: exp.radiusPx },
@@ -1947,15 +2080,20 @@
         pendingAoEExplosions = [];
       }
 
+      const senderSocketId = (typeof socket !== 'undefined' && socket.id) ? socket.id : null;
+
       for (const attackResult of lastAttackResults) {
         try {
+          const impactId = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
           // Yerel olarak anında vuruş hissi oynat (sıfır gecikme)
           triggerHitImpact({
             targetType: attackResult.targetType,
             targetId: attackResult.targetId,
             damage: attackResult.totalDamage,
             isCritical: attackResult.isCritical,
-            attackType: attackResult.attackType
+            attackType: attackResult.attackType,
+            impactId
           });
 
           const res = await fetch('/api/combat/apply-damage', {
@@ -1968,7 +2106,9 @@
               statusEffectsToApply: attackResult.statusEffectsToApply,
               isCritical: attackResult.isCritical,
               attackType: attackResult.attackType,
-              damageType: attackResult.physicalDamageType
+              damageType: attackResult.physicalDamageType,
+              impactId,
+              senderSocketId
             })
           });
 
@@ -1989,6 +2129,7 @@
 
       lastAttackResults = [];
       pendingAoEExplosions = [];
+      pendingSpellSlotToConsume = null;
       btnApplyDamage.classList.add('hidden');
 
       // Seçicileri yenile
@@ -2677,6 +2818,7 @@
   window.__webdnd_clearTargets = clearAllTargets;
   window.__webdnd_removeTarget = removeTargetById;
   window.__webdnd_isTargetSelected = isTargetSelected;
+  window.__webdnd_syncAllTargetBeacons = syncAllTargetBeacons;
   window.__webdnd_equipAttackPreset = equipPreset;
   window.__webdnd_unequipAttackPreset = unequipPreset;
   window.__webdnd_getAttackPresets = () => attackPresetsCache;
@@ -2772,6 +2914,16 @@
 
     // Sunucudan gelen vuruş hissi olayı (diğer oyuncuların ekranlarında da görünür)
     socket.on('attackHitImpact', (data) => {
+      if (!data) return;
+      // 1. Bu vuruş isteğini biz gönderdiysek ve yerel olarak zaten anında oynattıysak tekrar oynatma!
+      if (data.senderSocketId && typeof socket !== 'undefined' && data.senderSocketId === socket.id) {
+        return;
+      }
+      // 2. impactId kontrolü (zaten yerel olarak çalıştırıldıysa)
+      if (data.impactId && localExecutedImpactIds.has(data.impactId)) {
+        return;
+      }
+      // 3. Hedef bazlı zaman aralığı kontrolü (aynı hedefe 3500ms içinde çift efekt gelmesini önle)
       const key = `${data.targetType}:${data.targetId}`;
       if (recentImpacts.has(key)) return;
       triggerHitImpact(data);

@@ -626,7 +626,7 @@ app.post('/api/combat/attack', (req, res) => {
 // ---- Hasar Uygula ----
 app.post('/api/combat/apply-damage', async (req, res) => {
   try {
-    const { targetType, targetId, damage, statusEffectsToApply, isCritical, attackType, damageType } = req.body;
+    const { targetType, targetId, damage, statusEffectsToApply, isCritical, attackType, damageType, impactId, senderSocketId } = req.body;
     const safeDamage = clampNumber(damage, 0, 99999);
 
     // Barınak (Shelter) kontrolü
@@ -680,7 +680,7 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         syncCombatantHp(targetId, newHp, charData.hp_max);
       }
 
-      // Vuruş hissi ve darbe efektini tüm istemcilere yayınla
+      // Vuruş hissi ve darbe efektini tüm istemcilere yayınla (gönderen hariç veya duplicate kontrolü ile)
       if (safeDamage > 0) {
         io.emit('attackHitImpact', {
           targetType: 'character',
@@ -688,7 +688,9 @@ app.post('/api/combat/apply-damage', async (req, res) => {
           damage: safeDamage,
           isCritical: Boolean(isCritical),
           attackType: attackType || 'physical',
-          damageType: damageType || 'slashing'
+          damageType: damageType || 'slashing',
+          impactId: impactId || null,
+          senderSocketId: senderSocketId || null
         });
       }
 
@@ -700,7 +702,12 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         io.emit('updateMarkerData', markers[targetId]);
         syncCombatantHp(targetId, markers[targetId].hp, markers[targetId].maxHp);
 
-        // Vuruş hissi ve darbe efektini tüm istemcilere yayınla
+        // Cansız Patlayıcı Obje öldü mü kontrol et
+        if (markers[targetId].hp <= 0 && markers[targetId].objectType === 'explosive' && !markers[targetId].hasExploded) {
+          handleExplosiveMarkerDeath(targetId, 'attack_damage');
+        }
+
+        // Vuruş hissi ve darbe efektini tüm istemcilere yayınla (gönderen hariç veya duplicate kontrolü ile)
         if (safeDamage > 0) {
           io.emit('attackHitImpact', {
             targetType: 'marker',
@@ -708,7 +715,9 @@ app.post('/api/combat/apply-damage', async (req, res) => {
             damage: safeDamage,
             isCritical: Boolean(isCritical),
             attackType: attackType || 'physical',
-            damageType: damageType || 'slashing'
+            damageType: damageType || 'slashing',
+            impactId: impactId || null,
+            senderSocketId: senderSocketId || null
           });
         }
 
@@ -868,6 +877,9 @@ let customStatusPresets = [];
 
 // === HAZIR SALDIRI PRESETLERİ (ATTACK PRESETS) ===
 let attackPresets = [];
+
+// === HAZIR TOKEN ŞEMALARI (TOKEN PRESETS / SCHEMAS) ===
+let tokenPresets = [];
 
 /**
  * Token veya karakterin aktif durum efektlerini döndürür.
@@ -1066,6 +1078,11 @@ async function processCombatantTurnEnd(combatant) {
             combatant.isDead = combatant.hpCurrent <= 0;
             io.emit('updateMarkerData', markers[combatant.id]);
             syncCombatantHp(combatant.id, combatant.hpCurrent, combatant.hpMax);
+
+            // Cansız Patlayıcı Obje DoT hasarıyla öldüyse patlat
+            if (markers[combatant.id].hp <= 0 && markers[combatant.id].objectType === 'explosive' && !markers[combatant.id].hasExploded) {
+              handleExplosiveMarkerDeath(combatant.id, 'dot_damage');
+            }
           } else if (!combatant.isMarker && combatant.characterId) {
             try {
               const { data: charData } = await supabase
@@ -1237,6 +1254,9 @@ function calculateInitiativeForCombat() {
       roll: roll,
       total: total,
       isDead: hpCurrent !== null && hpCurrent <= 0,
+      objectType: m.objectType || 'creature',
+      objectConfig: m.objectConfig || null,
+      hasExploded: Boolean(m.hasExploded),
       activeEffects: m.activeEffects || [],
       assignedAttacks: m.assignedAttacks || []
     });
@@ -1283,6 +1303,305 @@ function syncCombatantHp(id, hpCurrent, hpMax) {
   }
 }
 
+// ============================================================
+// CANSIZ OBJELER (INANIMATE OBJECTS) SİSTEMİ
+// Tür 1: Ölümde Patlayan Obje (Explosive Object)
+// Tür 2: Her Tur Çevresine Etki Yayan Obje (Aura / Totem)
+// ============================================================
+
+/**
+ * Cansız Patlayıcı Obje öldüğünde (HP <= 0) etrafına patlama hasarı ve durum efekti uygular.
+ * Zincirleme patlama (chain reaction) korumalı ve kademeli gecikmeli olarak çalışır.
+ */
+async function handleExplosiveMarkerDeath(markerId, sourceInfo = null) {
+  const marker = markers[markerId];
+  if (!marker || marker.objectType !== 'explosive' || marker.hasExploded) return;
+
+  // Çift tetiklenmeyi ve döngüleri engelle
+  marker.hasExploded = true;
+
+  const cfg = marker.objectConfig || {};
+  const radius = clampNumber(cfg.radius || 120, 20, 2000);
+  const damage = clampNumber(cfg.damage || 20, 0, 99999);
+  const damageType = cfg.damageType || 'fire';
+  const statusEffects = Array.isArray(cfg.statusEffects) ? cfg.statusEffects : [];
+  const targetFilter = cfg.targetFilter || 'all'; // 'all', 'players', 'markers'
+  const destroyOnExplode = cfg.destroyOnExplode !== false;
+
+  const markerSize = marker.size || 50;
+  const cx = (marker.x || 0) + markerSize / 2;
+  const cy = (marker.y || 0) + markerSize / 2;
+
+  const affectedTargets = [];
+  const chainedExplosions = [];
+
+  // 1. Oyuncuları Kontrol Et
+  if (targetFilter === 'all' || targetFilter === 'players') {
+    for (const [socketId, p] of Object.entries(players)) {
+      if (p.role === 'dm' || !p.character) continue;
+      const pSize = 50;
+      const pcx = (p.x || 0) + pSize / 2;
+      const pcy = (p.y || 0) + pSize / 2;
+      const dist = Math.hypot(pcx - cx, pcy - cy);
+      if (dist <= radius + (pSize / 2) * 0.7) {
+        // Shelter kontrolü
+        const targetEffects = getTokenActiveEffects('character', p.character.id);
+        const hasShelter = targetEffects.some(e => e.effects?.shelter);
+        if (hasShelter) continue;
+
+        const oldHp = p.character.hp_current || 0;
+        const newHp = Math.max(0, oldHp - damage);
+        p.character.hp_current = newHp;
+
+        try {
+          await supabase.from('characters').update({ hp_current: newHp }).eq('id', p.character.id);
+        } catch (e) {
+          console.error('Patlama oyuncu HP güncelleme hatası:', e);
+        }
+
+        io.emit('characterUpdated', {
+          id: socketId,
+          updates: { hp_current: newHp, hp_max: p.character.hp_max }
+        });
+        syncCombatantHp(socketId, newHp, p.character.hp_max);
+
+        // Durum efektlerini uygula
+        for (const eff of statusEffects) {
+          applyStatusEffectToTarget('character', p.character.id, eff);
+        }
+
+        affectedTargets.push({
+          type: 'character',
+          id: p.character.id,
+          name: p.character.name || 'Oyuncu',
+          oldHp,
+          newHp,
+          damage
+        });
+      }
+    }
+  }
+
+  // 2. Diğer Marker'ları Kontrol Et
+  if (targetFilter === 'all' || targetFilter === 'markers') {
+    for (const [mid, m] of Object.entries(markers)) {
+      if (mid === markerId || m.hp == null) continue;
+      const mSize = m.size || 50;
+      const mcx = (m.x || 0) + mSize / 2;
+      const mcy = (m.y || 0) + mSize / 2;
+      const dist = Math.hypot(mcx - cx, mcy - cy);
+      if (dist <= radius + (mSize / 2) * 0.7) {
+        // Shelter kontrolü
+        const targetEffects = getTokenActiveEffects('marker', mid);
+        const hasShelter = targetEffects.some(e => e.effects?.shelter);
+        if (hasShelter) continue;
+
+        const oldHp = m.hp;
+        m.hp = Math.max(0, m.hp - damage);
+        io.emit('updateMarkerData', m);
+        syncCombatantHp(mid, m.hp, m.maxHp);
+
+        // Durum efektlerini uygula
+        for (const eff of statusEffects) {
+          applyStatusEffectToTarget('marker', mid, eff);
+        }
+
+        affectedTargets.push({
+          type: 'marker',
+          id: mid,
+          name: m.name || 'Marker',
+          oldHp,
+          newHp: m.hp,
+          damage
+        });
+
+        // Zincirleme patlama kontrolü!
+        if (m.hp <= 0 && m.objectType === 'explosive' && !m.hasExploded) {
+          chainedExplosions.push(mid);
+        }
+      }
+    }
+  }
+
+  // Tüm istemcilere görsel patlama dalgası gönder
+  io.emit('aoeDamageApplied', {
+    damage,
+    aoeInfo: { x: cx, y: cy, radius, damageType },
+    affectedTargets
+  });
+
+  const effNames = statusEffects.map(e => e.name).join(', ');
+  const effStr = effNames ? ` + [✨ ${effNames}]` : '';
+  const names = affectedTargets.map(t => `${t.name} (-${t.damage})`).join(', ');
+  io.emit('logMessage', {
+    message: `💣💥 [NESNE PATLAMASI] "${marker.name}" patladı! (${damage} ${damageType} hasarı${effStr}). Etkilenenler: ${names || 'Kimse etkilenmedi'}`,
+    color: '#ef4444'
+  });
+
+  // Eğer destroyOnExplode ise nesneyi haritadan ve savaştan kaldır
+  if (destroyOnExplode) {
+    setTimeout(() => {
+      if (markers[markerId]) {
+        delete markers[markerId];
+        io.emit('removeMarker', markerId);
+        if (combatState.active) {
+          combatState.combatants = combatState.combatants.filter(c => c.id !== markerId);
+          if (combatState.currentTurnIndex >= combatState.combatants.length) {
+            combatState.currentTurnIndex = Math.max(0, combatState.combatants.length - 1);
+          }
+          io.emit('combatStateUpdated', combatState);
+        }
+        backupMapState();
+      }
+    }, 850);
+  } else {
+    backupMapState();
+  }
+
+  // Zincirleme patlamaları tetikle (350ms kademeli gecikmeyle gerçekçi his)
+  if (chainedExplosions.length > 0) {
+    chainedExplosions.forEach((chainedId, idx) => {
+      setTimeout(() => {
+        handleExplosiveMarkerDeath(chainedId, 'chain_reaction');
+      }, (idx + 1) * 350);
+    });
+  }
+}
+
+/**
+ * Cansız Aura/Totem Objesi canı olduğu müddetçe çevresine hasar ve/veya durum efekti yayar.
+ */
+async function handleAuraMarkerPulse(markerId) {
+  const marker = markers[markerId];
+  if (!marker || marker.objectType !== 'aura' || marker.hp === null || marker.hp <= 0) return;
+
+  const cfg = marker.objectConfig || {};
+  const radius = clampNumber(cfg.radius || 150, 20, 2000);
+  const damage = clampNumber(cfg.damage || 0, 0, 99999);
+  const damageType = cfg.damageType || 'necrotic';
+  const statusEffects = Array.isArray(cfg.statusEffects) ? cfg.statusEffects : [];
+  const targetFilter = cfg.targetFilter || 'all'; // 'all', 'players', 'markers'
+
+  const markerSize = marker.size || 50;
+  const cx = (marker.x || 0) + markerSize / 2;
+  const cy = (marker.y || 0) + markerSize / 2;
+
+  const affectedTargets = [];
+
+  // 1. Oyuncular
+  if (targetFilter === 'all' || targetFilter === 'players') {
+    for (const [socketId, p] of Object.entries(players)) {
+      if (p.role === 'dm' || !p.character) continue;
+      const pSize = 50;
+      const pcx = (p.x || 0) + pSize / 2;
+      const pcy = (p.y || 0) + pSize / 2;
+      const dist = Math.hypot(pcx - cx, pcy - cy);
+      if (dist <= radius + (pSize / 2) * 0.7) {
+        // Shelter kontrolü
+        const targetEffects = getTokenActiveEffects('character', p.character.id);
+        const hasShelter = targetEffects.some(e => e.effects?.shelter);
+        if (hasShelter) continue;
+
+        let newHp = p.character.hp_current || 0;
+        if (damage > 0) {
+          newHp = Math.max(0, newHp - damage);
+          p.character.hp_current = newHp;
+          try {
+            await supabase.from('characters').update({ hp_current: newHp }).eq('id', p.character.id);
+          } catch (e) {
+            console.error('Aura oyuncu HP güncelleme hatası:', e);
+          }
+          io.emit('characterUpdated', {
+            id: socketId,
+            updates: { hp_current: newHp, hp_max: p.character.hp_max }
+          });
+          syncCombatantHp(socketId, newHp, p.character.hp_max);
+        }
+
+        // Durum efektlerini uygula
+        for (const eff of statusEffects) {
+          applyStatusEffectToTarget('character', p.character.id, eff);
+        }
+
+        affectedTargets.push({
+          type: 'character',
+          id: p.character.id,
+          name: p.character.name || 'Oyuncu',
+          damage,
+          newHp
+        });
+      }
+    }
+  }
+
+  // 2. Marker'lar
+  if (targetFilter === 'all' || targetFilter === 'markers') {
+    for (const [mid, m] of Object.entries(markers)) {
+      if (mid === markerId || m.hp == null) continue;
+      const mSize = m.size || 50;
+      const mcx = (m.x || 0) + mSize / 2;
+      const mcy = (m.y || 0) + mSize / 2;
+      const dist = Math.hypot(mcx - cx, mcy - cy);
+      if (dist <= radius + (mSize / 2) * 0.7) {
+        // Shelter kontrolü
+        const targetEffects = getTokenActiveEffects('marker', mid);
+        const hasShelter = targetEffects.some(e => e.effects?.shelter);
+        if (hasShelter) continue;
+
+        if (damage > 0) {
+          m.hp = Math.max(0, m.hp - damage);
+          io.emit('updateMarkerData', m);
+          syncCombatantHp(mid, m.hp, m.maxHp);
+        }
+
+        // Durum efektlerini uygula
+        for (const eff of statusEffects) {
+          applyStatusEffectToTarget('marker', mid, eff);
+        }
+
+        affectedTargets.push({
+          type: 'marker',
+          id: mid,
+          name: m.name || 'Marker',
+          damage,
+          newHp: m.hp
+        });
+      }
+    }
+  }
+
+  // Aura dalga görselini ve floating rakamlarını tüm istemcilere bildir
+  io.emit('objectAuraPulseApplied', {
+    markerId,
+    cx,
+    cy,
+    radius,
+    damage,
+    damageType,
+    affectedTargets
+  });
+
+  const effNames = statusEffects.map(e => e.name).join(', ');
+  const effStr = effNames ? ` + [✨ ${effNames}]` : '';
+  const dmgStr = damage > 0 ? `${damage} ${damageType} hasarı` : 'Aura etkisi';
+  const names = affectedTargets.map(t => `${t.name}${damage > 0 ? ` (-${t.damage})` : ''}`).join(', ');
+  io.emit('logMessage', {
+    message: `🔮⚡ [AURA / TOTEM] "${marker.name}" etrafına aura yaydı! (${dmgStr}${effStr}). Etkilenenler: ${names || 'Kimse etkilenmedi'}`,
+    color: '#a855f7'
+  });
+}
+
+/**
+ * Tur/Round başında 'round' zamanlamalı aura nesnelerini tetikler.
+ */
+async function handleRoundStartAuras() {
+  for (const [mid, m] of Object.entries(markers)) {
+    if (m.objectType === 'aura' && m.hp !== null && m.hp > 0 && m.objectConfig?.triggerTiming === 'round') {
+      await handleAuraMarkerPulse(mid);
+    }
+  }
+}
+
 // === SOCKET.IO EVENT YÖNETİMİ ===
 io.on('connection', (socket) => {
   console.log('Bir oyuncu bağlandı: ' + socket.id);
@@ -1290,6 +1609,7 @@ io.on('connection', (socket) => {
   // Supabase'den yüklenmiş mevcut efekt ve saldırı şablonlarını hemen istemciye gönder
   socket.emit('customEffectsUpdated', customStatusPresets);
   socket.emit('attackPresetsUpdated', attackPresets);
+  socket.emit('tokenPresetsUpdated', tokenPresets);
   socket.emit('gameModeUpdated', currentGameMode);
 
   // Oyun Modu Değiştirme (DM veya Oyuncu)
@@ -1435,7 +1755,7 @@ io.on('connection', (socket) => {
       id: markerId,
       x: clampNumber(markerData.x, 0, 10000),
       y: clampNumber(markerData.y, 0, 10000),
-      name: truncateStr(markerData.name || 'X', 2),
+      name: truncateStr(markerData.name || 'X', 40),
       color: truncateStr(markerData.color || '#f1c40f', 9),
       imgUrl: isValidUrl(markerData.imgUrl) ? markerData.imgUrl : null,
       hp: markerData.hp != null ? clampNumber(markerData.hp, 0, 99999) : null,
@@ -1461,7 +1781,18 @@ io.on('connection', (socket) => {
       darkness: markerData.darkness != null ? clampNumber(markerData.darkness, 0, 99999) : 0,
       maxDarkness: markerData.maxDarkness != null ? clampNumber(markerData.maxDarkness, 1, 99999) : 100,
       isMarker: true,
-      assignedAttacks: Array.isArray(markerData.assignedAttacks) ? markerData.assignedAttacks : []
+      assignedAttacks: Array.isArray(markerData.assignedAttacks) ? markerData.assignedAttacks : [],
+      objectType: (markerData.objectType === 'explosive' || markerData.objectType === 'aura') ? markerData.objectType : 'creature',
+      objectConfig: (markerData.objectType === 'explosive' || markerData.objectType === 'aura') && markerData.objectConfig && typeof markerData.objectConfig === 'object' ? {
+        radius: clampNumber(markerData.objectConfig.radius || (markerData.objectType === 'explosive' ? 120 : 150), 20, 2000),
+        damage: clampNumber(markerData.objectConfig.damage || 0, 0, 99999),
+        damageType: truncateStr(markerData.objectConfig.damageType || (markerData.objectType === 'explosive' ? 'fire' : 'necrotic'), 20),
+        statusEffects: Array.isArray(markerData.objectConfig.statusEffects) ? markerData.objectConfig.statusEffects : [],
+        targetFilter: markerData.objectConfig.targetFilter || 'all',
+        destroyOnExplode: markerData.objectConfig.destroyOnExplode !== false,
+        triggerTiming: markerData.objectConfig.triggerTiming || 'turn'
+      } : null,
+      hasExploded: false
     };
     markers[markerId] = newMarker;
     io.emit('newMarker', newMarker);
@@ -1494,6 +1825,9 @@ io.on('connection', (socket) => {
         roll,
         total,
         isDead: newMarker.hp !== null && newMarker.hp <= 0,
+        objectType: newMarker.objectType,
+        objectConfig: newMarker.objectConfig,
+        hasExploded: newMarker.hasExploded,
         activeEffects: newMarker.activeEffects || [],
         assignedAttacks: newMarker.assignedAttacks || []
       });
@@ -1527,7 +1861,7 @@ io.on('connection', (socket) => {
 
     const m = markers[data.id];
 
-    if (data.name !== undefined) m.name = truncateStr(data.name || 'X', 2);
+    if (data.name !== undefined) m.name = truncateStr(data.name || 'X', 40);
     if (data.color !== undefined) m.color = truncateStr(data.color || '#f1c40f', 9);
     if (data.imgUrl !== undefined) m.imgUrl = isValidUrl(data.imgUrl) ? data.imgUrl : null;
     if (data.hp !== undefined) m.hp = data.hp != null ? clampNumber(data.hp, 0, 99999) : null;
@@ -1559,6 +1893,32 @@ io.on('connection', (socket) => {
         chr_bonus: clampNumber(data.stats.chr_bonus, 0, 30),
       };
     }
+    if (data.objectType !== undefined) {
+      m.objectType = (data.objectType === 'explosive' || data.objectType === 'aura') ? data.objectType : 'creature';
+    }
+    if (data.objectConfig !== undefined) {
+      if (data.objectConfig && typeof data.objectConfig === 'object') {
+        m.objectConfig = {
+          radius: clampNumber(data.objectConfig.radius || (m.objectType === 'explosive' ? 120 : 150), 20, 2000),
+          damage: clampNumber(data.objectConfig.damage || 0, 0, 99999),
+          damageType: truncateStr(data.objectConfig.damageType || (m.objectType === 'explosive' ? 'fire' : 'necrotic'), 20),
+          statusEffects: Array.isArray(data.objectConfig.statusEffects) ? data.objectConfig.statusEffects : [],
+          targetFilter: data.objectConfig.targetFilter || 'all',
+          destroyOnExplode: data.objectConfig.destroyOnExplode !== false,
+          triggerTiming: data.objectConfig.triggerTiming || 'turn'
+        };
+      } else {
+        m.objectConfig = null;
+      }
+    }
+    if (data.hasExploded !== undefined) {
+      m.hasExploded = Boolean(data.hasExploded);
+    }
+
+    // Düzenleme sonucu can 0 olduysa ve patlayıcı ise patlat
+    if (m.hp !== null && m.hp <= 0 && m.objectType === 'explosive' && !m.hasExploded) {
+      handleExplosiveMarkerDeath(m.id, 'edit_hp_zero');
+    }
 
     io.emit('updateMarkerData', m);
 
@@ -1575,6 +1935,9 @@ io.on('connection', (socket) => {
         if (data.hasDarkness !== undefined) c.hasDarkness = m.hasDarkness;
         if (data.darkness !== undefined) c.darkness = m.darkness;
         if (data.maxDarkness !== undefined) c.maxDarkness = m.maxDarkness;
+        c.objectType = m.objectType;
+        c.objectConfig = m.objectConfig;
+        c.hasExploded = m.hasExploded;
         c.isDead = m.hp !== null && m.hp <= 0;
       }
       io.emit('combatStateUpdated', combatState);
@@ -1658,6 +2021,11 @@ io.on('connection', (socket) => {
             newHp: marker.hp,
             damage: safeDamage
           });
+
+          // Cansız Patlayıcı Obje AoE hasarıyla öldüyse patlat
+          if (marker.hp <= 0 && marker.objectType === 'explosive' && !marker.hasExploded) {
+            handleExplosiveMarkerDeath(t.id, 'aoe_damage');
+          }
         }
       } else if (t.type === 'character') {
         try {
@@ -1724,10 +2092,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Saldırı paneli veya presetlerden gelen anlık patlama görseli yayını
+  // Saldırı paneli veya presetlerden gelen anlık patlama görseli yayını (gönderen hariç yayınla, gönderen yerel olarak zaten oynattı)
   socket.on('triggerAoeExplosion', (data) => {
     if (!data || typeof data !== 'object') return;
-    io.emit('aoeDamageApplied', data);
+    socket.broadcast.emit('aoeDamageApplied', data);
   });
 
   // ---- DM: Arka Plan Güncelle ----
@@ -1994,12 +2362,28 @@ io.on('connection', (socket) => {
 
     // 2. Sıradaki combatant'a geç
     let nextIndex = combatState.currentTurnIndex + 1;
+    let roundAdvanced = false;
     if (nextIndex >= combatState.combatants.length) {
       nextIndex = 0;
       combatState.round += 1;
+      roundAdvanced = true;
     }
     combatState.currentTurnIndex = nextIndex;
     io.emit('combatStateUpdated', combatState);
+
+    // 3. Sırası gelen combatant canlı bir Aura/Totem objesi ise aura dalgası yay
+    const nextCombatant = combatState.combatants[nextIndex];
+    if (nextCombatant && nextCombatant.isMarker) {
+      const m = markers[nextCombatant.id];
+      if (m && m.objectType === 'aura' && m.hp !== null && m.hp > 0 && (m.objectConfig?.triggerTiming !== 'round')) {
+        await handleAuraMarkerPulse(nextCombatant.id);
+      }
+    }
+
+    // 4. Yeni raund başladıysa 'round' tetiklemeli aura nesnelerini yay
+    if (roundAdvanced) {
+      await handleRoundStartAuras();
+    }
   });
 
   socket.on('prevCombatTurn', () => {
@@ -2025,6 +2409,15 @@ io.on('connection', (socket) => {
 
     combatState.currentTurnIndex = safeIdx;
     io.emit('combatStateUpdated', combatState);
+
+    // Sırası verilen combatant canlı bir Aura/Totem objesi ise aura dalgası yay
+    const targetCombatant = combatState.combatants[safeIdx];
+    if (targetCombatant && targetCombatant.isMarker) {
+      const m = markers[targetCombatant.id];
+      if (m && m.objectType === 'aura' && m.hp !== null && m.hp > 0) {
+        await handleAuraMarkerPulse(targetCombatant.id);
+      }
+    }
   });
 
   socket.on('rerollCombatInitiative', () => {
@@ -2032,6 +2425,21 @@ io.on('connection', (socket) => {
     combatState.combatants = calculateInitiativeForCombat();
     combatState.currentTurnIndex = 0;
     io.emit('combatStateUpdated', combatState);
+  });
+
+  // ---- DM: Cansız Nesneler Manuel Tetikleme Eventleri ----
+  socket.on('detonateObject', async (markerId) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (markers[markerId] && markers[markerId].objectType === 'explosive') {
+      await handleExplosiveMarkerDeath(markerId, 'dm_manual');
+    }
+  });
+
+  socket.on('triggerObjectAura', async (markerId) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (markers[markerId] && markers[markerId].objectType === 'aura') {
+      await handleAuraMarkerPulse(markerId);
+    }
   });
 
   // ---- STATUS EFFECTS & CUSTOM EFFECT BUILDER SOCKET EVENTLERİ ----
@@ -2193,6 +2601,121 @@ io.on('connection', (socket) => {
       }
     } catch (err) {
       console.error('Supabase attack preset silme istisnası:', err.message);
+    }
+  });
+
+  // ---- TOKEN PRESETS (HAZIR ŞEMALAR) SOCKET EVENTLERİ ----
+  socket.on('getTokenPresets', () => {
+    socket.emit('tokenPresetsUpdated', tokenPresets);
+  });
+
+  socket.on('saveTokenPreset', async (preset) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!preset || !preset.name) return;
+
+    const newPreset = {
+      id: preset.id || ('token_preset_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+      name: truncateStr(preset.name, 40),
+      imgUrl: isValidUrl(preset.imgUrl) ? preset.imgUrl : (preset.imgUrl || ''),
+      color: truncateStr(preset.color || '#f1c40f', 9),
+      hp: preset.hp != null && preset.hp !== '' ? clampNumber(parseInt(preset.hp), 0, 99999) : null,
+      maxHp: preset.maxHp != null && preset.maxHp !== '' ? clampNumber(parseInt(preset.maxHp), 0, 99999) : null,
+      size: clampNumber(parseInt(preset.size) || 50, 10, 500),
+      ac: preset.ac != null && preset.ac !== '' ? clampNumber(parseInt(preset.ac), 0, 50) : 10,
+      acBonus: (preset.acBonus != null || preset.ac_bonus != null) ? clampNumber(parseInt(preset.acBonus ?? preset.ac_bonus) || 0, 0, 50) : 0,
+      stats: preset.stats ? {
+        str: clampNumber(parseInt(preset.stats.str) || 0, 0, 30),
+        str_bonus: clampNumber(parseInt(preset.stats.str_bonus) || 0, 0, 30),
+        dex: clampNumber(parseInt(preset.stats.dex) || 0, 0, 30),
+        dex_bonus: clampNumber(parseInt(preset.stats.dex_bonus) || 0, 0, 30),
+        int: clampNumber(parseInt(preset.stats.int) || 0, 0, 30),
+        int_bonus: clampNumber(parseInt(preset.stats.int_bonus) || 0, 0, 30),
+        con: clampNumber(parseInt(preset.stats.con) || 0, 0, 30),
+        con_bonus: clampNumber(parseInt(preset.stats.con_bonus) || 0, 0, 30),
+        wis: clampNumber(parseInt(preset.stats.wis) || 0, 0, 30),
+        wis_bonus: clampNumber(parseInt(preset.stats.wis_bonus) || 0, 0, 30),
+        chr: clampNumber(parseInt(preset.stats.chr) || 0, 0, 30),
+        chr_bonus: clampNumber(parseInt(preset.stats.chr_bonus) || 0, 0, 30),
+      } : {
+        str: 10, str_bonus: 0,
+        dex: 10, dex_bonus: 0,
+        int: 10, int_bonus: 0,
+        con: 10, con_bonus: 0,
+        wis: 10, wis_bonus: 0,
+        chr: 10, chr_bonus: 0
+      },
+      hasDarkness: Boolean(preset.hasDarkness),
+      darkness: preset.darkness != null ? clampNumber(parseInt(preset.darkness) || 0, 0, 99999) : 0,
+      maxDarkness: preset.maxDarkness != null ? clampNumber(parseInt(preset.maxDarkness) || 100, 1, 99999) : 100,
+      assignedAttacks: Array.isArray(preset.assignedAttacks) ? preset.assignedAttacks : [],
+      objectType: (preset.objectType === 'explosive' || preset.objectType === 'aura') ? preset.objectType : 'creature',
+      objectConfig: (preset.objectType === 'explosive' || preset.objectType === 'aura') && preset.objectConfig && typeof preset.objectConfig === 'object' ? {
+        radius: clampNumber(parseInt(preset.objectConfig.radius) || (preset.objectType === 'explosive' ? 120 : 150), 20, 2000),
+        damage: clampNumber(parseInt(preset.objectConfig.damage) || 0, 0, 99999),
+        damageType: truncateStr(preset.objectConfig.damageType || (preset.objectType === 'explosive' ? 'fire' : 'necrotic'), 20),
+        statusEffects: Array.isArray(preset.objectConfig.statusEffects) ? preset.objectConfig.statusEffects : [],
+        targetFilter: preset.objectConfig.targetFilter || 'all',
+        destroyOnExplode: preset.objectConfig.destroyOnExplode !== false,
+        triggerTiming: preset.objectConfig.triggerTiming || 'turn'
+      } : null
+    };
+
+    const existingIdx = tokenPresets.findIndex(p => p.id === newPreset.id);
+    if (existingIdx >= 0) {
+      tokenPresets[existingIdx] = newPreset;
+    } else {
+      tokenPresets.push(newPreset);
+    }
+
+    io.emit('tokenPresetsUpdated', tokenPresets);
+
+    try {
+      const dbRecord = {
+        id: newPreset.id,
+        name: newPreset.name,
+        img_url: newPreset.imgUrl,
+        color: newPreset.color,
+        hp: newPreset.hp,
+        max_hp: newPreset.maxHp,
+        size: newPreset.size,
+        ac: newPreset.ac,
+        ac_bonus: newPreset.acBonus,
+        stats: newPreset.stats,
+        has_darkness: newPreset.hasDarkness,
+        darkness: newPreset.darkness,
+        max_darkness: newPreset.maxDarkness,
+        assigned_attacks: newPreset.assignedAttacks,
+        object_type: newPreset.objectType,
+        object_config: newPreset.objectConfig,
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('token_presets').upsert(dbRecord);
+      if (error && error.code !== 'PGRST205') {
+        console.error('Supabase token preset kaydetme hatası:', error.message);
+      } else if (!error) {
+        console.log(`[Supabase] "${newPreset.name}" (${newPreset.id}) token şeması başarıyla kaydedildi.`);
+      }
+    } catch (err) {
+      console.error('Supabase token preset kaydetme istisnası:', err.message);
+    }
+  });
+
+  socket.on('deleteTokenPreset', async (presetId) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!presetId) return;
+
+    tokenPresets = tokenPresets.filter(p => p.id !== presetId);
+    io.emit('tokenPresetsUpdated', tokenPresets);
+
+    try {
+      const { error } = await supabase.from('token_presets').delete().eq('id', presetId);
+      if (error && error.code !== 'PGRST205') {
+        console.error('Supabase token preset silme hatası:', error.message);
+      } else if (!error) {
+        console.log(`[Supabase] "${presetId}" token şeması başarıyla silindi.`);
+      }
+    } catch (err) {
+      console.error('Supabase token preset silme istisnası:', err.message);
     }
   });
 
@@ -2388,6 +2911,58 @@ async function restoreStatusPresets() {
   }
 }
 
+// === TOKEN PRESETS RESTORE ===
+async function restoreTokenPresets() {
+  try {
+    const { data, error } = await supabase
+      .from('token_presets')
+      .select('*')
+      .order('created_at', { ascending: true })
+      .limit(10000);
+
+    if (error) {
+      if (error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+        console.error('Token presets yüklenirken Supabase hatası:', error.message);
+      } else if (error.code === 'PGRST205') {
+        console.log('token_presets tablosu henüz veritabanında oluşturulmamış.');
+      }
+      return;
+    }
+
+    if (data) {
+      tokenPresets = data.map(row => ({
+        id: row.id,
+        name: row.name,
+        imgUrl: row.img_url || '',
+        color: row.color || '#f1c40f',
+        hp: row.hp != null ? row.hp : null,
+        maxHp: row.max_hp != null ? row.max_hp : null,
+        size: row.size || 50,
+        ac: row.ac != null ? row.ac : 10,
+        acBonus: row.ac_bonus != null ? row.ac_bonus : 0,
+        stats: row.stats || {
+          str: 10, str_bonus: 0,
+          dex: 10, dex_bonus: 0,
+          int: 10, int_bonus: 0,
+          con: 10, con_bonus: 0,
+          wis: 10, wis_bonus: 0,
+          chr: 10, chr_bonus: 0
+        },
+        hasDarkness: Boolean(row.has_darkness),
+        darkness: row.darkness || 0,
+        maxDarkness: row.max_darkness || 100,
+        assignedAttacks: Array.isArray(row.assigned_attacks) ? row.assigned_attacks : [],
+        objectType: row.object_type || 'creature',
+        objectConfig: row.object_config || null,
+        createdAt: row.created_at
+      }));
+      console.log(`Supabase'den ${tokenPresets.length} adet token şeması (preset) başarıyla yüklendi.`);
+    }
+  } catch (err) {
+    console.error('Token presets geri yüklenirken beklenmeyen hata:', err.message);
+  }
+}
+
 // === SESSION CACHE TEMİZLİĞİ ===
 function cleanupSessionCache() {
   const now = Date.now();
@@ -2405,7 +2980,7 @@ setInterval(cleanupSessionCache, 60 * 60 * 1000); // Her saat cache temizliği
 const PORT = process.env.PORT || 3000;
 
 // Sunucu başlamadan önce durumları geri yükle
-Promise.all([restoreMapState(), restoreAttackPresets(), restoreStatusPresets()]).then(() => {
+Promise.all([restoreMapState(), restoreAttackPresets(), restoreStatusPresets(), restoreTokenPresets()]).then(() => {
   server.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda aktif!`);
   });

@@ -510,8 +510,16 @@
 
   // === GÖRSEL PATLAMA VE FLOATING HASAR EFEKTLERİ ===
 
+  const recentAoeBursts = new Set();
   function showAoeVisualEffects(aoeInfo, damage, affectedTargets) {
     if (!gameMap) return;
+
+    if (aoeInfo && aoeInfo.x != null && aoeInfo.y != null) {
+      const burstKey = `${Math.round(aoeInfo.x)}:${Math.round(aoeInfo.y)}:${damage || 0}`;
+      if (recentAoeBursts.has(burstKey)) return;
+      recentAoeBursts.add(burstKey);
+      setTimeout(() => recentAoeBursts.delete(burstKey), 1200);
+    }
 
     // 1. Daire Alan Patlama Dalgası
     if (aoeInfo && aoeInfo.x != null && aoeInfo.y != null && aoeInfo.radius) {

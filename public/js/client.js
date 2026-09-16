@@ -328,7 +328,10 @@ function getPlayerDisplayName(playerData) {
  * Token üzerindeki baş harfi döndürür.
  */
 function getTokenInitial(playerData) {
-  if (playerData.isMarker) return playerData.name || '?';
+  if (playerData.isMarker) {
+    if (!playerData.name) return '?';
+    return playerData.name.length <= 2 ? playerData.name : playerData.name.substring(0, 2).toUpperCase();
+  }
   if (playerData.role === 'dm') return 'DM';
   if (playerData.character && playerData.character.name) return playerData.character.name.charAt(0).toUpperCase();
   return '?';
@@ -358,9 +361,11 @@ socket.on('connect', () => {
   // Supabase'deki güncel şablonları sunucudan talep et
   socket.emit('getCustomEffects');
   socket.emit('getAttackPresets');
+  socket.emit('getTokenPresets');
 
   if (role === 'dm') {
     document.getElementById('dm-tools').classList.remove('hidden');
+    setupTokenPresetControls();
   } else {
     document.getElementById('player-info-panel').classList.remove('hidden');
   }
@@ -419,6 +424,7 @@ socket.on('removeMarker', (markerId) => {
     tokens[markerId].remove();
     delete tokens[markerId];
   }
+  removeObjectMapRings(markerId);
   if (typeof window.__webdnd_removeTarget === 'function') {
     window.__webdnd_removeTarget('marker', markerId);
   }
@@ -605,8 +611,12 @@ socket.on('updateTokenPosition', (position) => {
     allPlayers[position.id].y = position.y;
   }
   if (window.__webdnd_markers && window.__webdnd_markers[position.id]) {
-    window.__webdnd_markers[position.id].x = position.x;
-    window.__webdnd_markers[position.id].y = position.y;
+    const m = window.__webdnd_markers[position.id];
+    m.x = position.x;
+    m.y = position.y;
+    if (m.objectType === 'explosive' || m.objectType === 'aura') {
+      updateObjectMapRings(position.id, position.x, position.y, m.size || 50, m.objectType, m.objectConfig);
+    }
   }
 });
 
@@ -643,6 +653,9 @@ function addToken(playerData) {
     const targetType = isMarker ? 'marker' : 'character';
     if (window.__webdnd_isTargetSelected(targetType, targetId)) {
       t.classList.add('token-target-selected');
+      if (typeof window.__webdnd_syncAllTargetBeacons === 'function') {
+        setTimeout(window.__webdnd_syncAllTargetBeacons, 20);
+      }
     }
   }
 
@@ -662,8 +675,11 @@ function addToken(playerData) {
   const initial = getTokenInitial(playerData);
 
   if (playerData.isMarker) {
-    t.title = 'İşaret: ' + escapeHtml(playerData.name);
-    t.style.borderRadius = '10%';
+    const objPrefix = playerData.objectType === 'explosive' ? '💣 Patlayıcı: ' : (playerData.objectType === 'aura' ? '🔮 Totem: ' : 'İşaret: ');
+    t.title = objPrefix + escapeHtml(playerData.name);
+    if (!playerData.objectType || playerData.objectType === 'creature') {
+      t.style.borderRadius = '10%';
+    }
 
     // DM eklediği işareti sağ tık ile silebilir
     if (role === 'dm') {
@@ -675,6 +691,9 @@ function addToken(playerData) {
   } else {
     t.title = escapeHtml(getPlayerDisplayName(playerData));
   }
+
+  // Cansız Obje Görsellerini ve Rozetlerini Güncelle
+  updateTokenObjectVisuals(t, playerData);
 
   if (!playerData.imgUrl) {
     t.textContent = initial;
@@ -695,34 +714,31 @@ function addToken(playerData) {
     }
   }
 
-  // Ctrl+Click ile hedef seçimi (DM için)
-  if (role === 'dm') {
-    t.addEventListener('click', (e) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      e.stopPropagation();
+  // Ctrl+Click ile hedef seçimi (Haritadan çoklu hedef işaretleme)
+  t.addEventListener('click', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-      // Hedef bilgilerini çöz
-      let targetInfo = null;
-      if (playerData.isMarker) {
-        // Güncel marker verisini al
-        const currentMarker = window.__webdnd_markers[playerData.id];
-        if (currentMarker) {
-          targetInfo = { type: 'marker', id: currentMarker.id, name: currentMarker.name, data: currentMarker };
-        }
-      } else if (playerData.character) {
-        // Güncel oyuncu verisini al
-        const currentPlayer = allPlayers[playerData.id];
-        if (currentPlayer && currentPlayer.character) {
-          targetInfo = { type: 'character', id: currentPlayer.character.id, name: currentPlayer.character.name, data: currentPlayer.character };
-        }
+    // Hedef bilgilerini çöz
+    let targetInfo = null;
+    if (playerData.isMarker) {
+      const currentMarker = (window.__webdnd_markers && window.__webdnd_markers[playerData.id]) || playerData;
+      if (currentMarker) {
+        targetInfo = { type: 'marker', id: currentMarker.id, name: currentMarker.name, data: currentMarker };
       }
+    } else if (playerData.character) {
+      const currentPlayer = (typeof allPlayers !== 'undefined') ? allPlayers[playerData.id] : null;
+      const char = (currentPlayer && currentPlayer.character) || playerData.character;
+      if (char) {
+        targetInfo = { type: 'character', id: char.id, name: char.name, data: char };
+      }
+    }
 
-      if (targetInfo && typeof window.__webdnd_ctrlClickTarget === 'function') {
-        window.__webdnd_ctrlClickTarget(targetInfo, t);
-      }
-    });
-  }
+    if (targetInfo && typeof window.__webdnd_ctrlClickTarget === 'function') {
+      window.__webdnd_ctrlClickTarget(targetInfo, t);
+    }
+  });
 
   // HP Badge
   const { hpCurrent, hpMax } = extractHp(playerData);
@@ -738,6 +754,19 @@ function addToken(playerData) {
 
   gameMap.appendChild(t);
   tokens[playerData.id] = t;
+
+  // Eğer bu token şu anda aktif turdaysa tur vurgusunu ve beacon'ı hemen ekle
+  if (typeof window.__webdnd_combatActive !== 'undefined' && window.__webdnd_combatActive && window.__webdnd_currentActiveCombatant) {
+    const activeId = String(window.__webdnd_currentActiveCombatant.id);
+    const charId = window.__webdnd_currentActiveCombatant.characterId ? String(window.__webdnd_currentActiveCombatant.characterId) : null;
+    const myIdStr = String(playerData.id);
+    const myCharIdStr = playerData.character ? String(playerData.character.id) : null;
+    if (myIdStr === activeId || (myCharIdStr && myCharIdStr === activeId) || (charId && (myIdStr === charId || myCharIdStr === charId))) {
+      if (typeof window.__webdnd_updateActiveTokenHighlight === 'function') {
+        setTimeout(() => window.__webdnd_updateActiveTokenHighlight(window.__webdnd_currentActiveCombatant.id), 20);
+      }
+    }
+  }
 }
 
 /**
@@ -770,15 +799,22 @@ function updateToken(playerData) {
       t.classList.add('token-target-selected');
     } else {
       t.classList.remove('token-target-selected');
+      const b = t.querySelector('.token-target-beacon');
+      if (b) b.remove();
+    }
+    if (typeof window.__webdnd_syncAllTargetBeacons === 'function') {
+      window.__webdnd_syncAllTargetBeacons();
     }
   }
 
   // Stil güncelle (POZİSYONU SIFIRLAMADAN: updatePosition = false)
   applyTokenStyles(t, playerData, false);
+  updateTokenObjectVisuals(t, playerData);
 
   // Başlık / İsim güncelle
   if (playerData.isMarker) {
-    t.title = 'İşaret: ' + escapeHtml(playerData.name || '');
+    const objPrefix = playerData.objectType === 'explosive' ? '💣 Patlayıcı: ' : (playerData.objectType === 'aura' ? '🔮 Totem: ' : 'İşaret: ');
+    t.title = objPrefix + escapeHtml(playerData.name || '');
   } else {
     t.title = escapeHtml(getPlayerDisplayName(playerData));
   }
@@ -815,6 +851,20 @@ function updateToken(playerData) {
 
   // Durum Efekt Rozetleri güncelle
   updateTokenStatusBadges(t, playerData);
+
+  // Eğer bu token aktif turdaysa vurgu sınıfını ve beacon'ı koru
+  if (typeof window.__webdnd_combatActive !== 'undefined' && window.__webdnd_combatActive && window.__webdnd_currentActiveCombatant) {
+    const activeId = String(window.__webdnd_currentActiveCombatant.id);
+    const charId = window.__webdnd_currentActiveCombatant.characterId ? String(window.__webdnd_currentActiveCombatant.characterId) : null;
+    const myIdStr = String(playerData.id);
+    const myCharIdStr = playerData.character ? String(playerData.character.id) : null;
+    if (myIdStr === activeId || (myCharIdStr && myCharIdStr === activeId) || (charId && (myIdStr === charId || myCharIdStr === charId))) {
+      t.classList.add('combat-active-token');
+      if (!t.querySelector('.token-combat-turn-beacon') && typeof window.__webdnd_updateActiveTokenHighlight === 'function') {
+        window.__webdnd_updateActiveTokenHighlight(window.__webdnd_currentActiveCombatant.id);
+      }
+    }
+  }
 }
 
 /**
@@ -902,6 +952,16 @@ function applyTokenStyles(t, data, updatePosition = true) {
   t.style.width = size + 'px';
   t.style.height = size + 'px';
 
+  if (data.objectType === 'explosive') {
+    t.style.borderRadius = '8px';
+  } else if (data.objectType === 'aura') {
+    t.style.borderRadius = '50%';
+  } else if (data.isMarker) {
+    t.style.borderRadius = '10%';
+  } else {
+    t.style.borderRadius = '50%';
+  }
+
   if (data.imgUrl) {
     t.style.backgroundImage = `url('${encodeURI(data.imgUrl)}')`;
     t.style.backgroundSize = 'cover';
@@ -980,8 +1040,12 @@ document.addEventListener('mousemove', (e) => {
       allPlayers[id].y = newY;
     }
     if (window.__webdnd_markers && window.__webdnd_markers[id]) {
-      window.__webdnd_markers[id].x = newX;
-      window.__webdnd_markers[id].y = newY;
+      const m = window.__webdnd_markers[id];
+      m.x = newX;
+      m.y = newY;
+      if (m.objectType === 'explosive' || m.objectType === 'aura') {
+        updateObjectMapRings(id, newX, newY, m.size || 50, m.objectType, m.objectConfig);
+      }
     }
     throttledMovementEmit(id, newX, newY);
   }
@@ -1006,8 +1070,12 @@ document.addEventListener('touchmove', (e) => {
       allPlayers[id].y = newY;
     }
     if (window.__webdnd_markers && window.__webdnd_markers[id]) {
-      window.__webdnd_markers[id].x = newX;
-      window.__webdnd_markers[id].y = newY;
+      const m = window.__webdnd_markers[id];
+      m.x = newX;
+      m.y = newY;
+      if (m.objectType === 'explosive' || m.objectType === 'aura') {
+        updateObjectMapRings(id, newX, newY, m.size || 50, m.objectType, m.objectConfig);
+      }
     }
     throttledMovementEmit(id, newX, newY);
   }
@@ -1077,9 +1145,9 @@ if (btnAddMarker) {
     const acEl      = document.getElementById('dm-marker-ac');
     const acBonusEl = document.getElementById('dm-marker-ac-bonus');
 
-    const name   = (nameEl.value || 'X').substring(0, 2);
+    const name   = (nameEl.value || 'X').trim();
     const color  = colorEl.value || '#f1c40f';
-    const imgUrl = imgEl ? imgEl.value : '';
+    const imgUrl = imgEl ? imgEl.value.trim() : '';
     const hp     = hpEl    && hpEl.value    !== '' ? parseInt(hpEl.value)    : null;
     const maxHp  = maxHpEl && maxHpEl.value !== '' ? parseInt(maxHpEl.value) : null;
     const size   = sizeEl  && sizeEl.value  !== '' ? parseInt(sizeEl.value)  : 50;
@@ -1115,11 +1183,36 @@ if (btnAddMarker) {
     const createAttacksCbs = document.querySelectorAll('#dm-create-token-attacks-list input[type="checkbox"]:checked');
     const assignedAttacks = Array.from(createAttacksCbs).map(cb => cb.value);
 
-    socket.emit('createMarker', { name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats, assignedAttacks, hasDarkness, darkness, maxDarkness });
+    // Cansız Obje Ayarlarını Al (Opsiyonel)
+    const objectType = document.getElementById('dm-marker-type')?.value || 'creature';
+    let objectConfig = null;
+    if (objectType !== 'creature') {
+      const getObjNum = (id, def) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : def; };
+      objectConfig = {
+        radius: getObjNum('dm-marker-obj-radius', objectType === 'explosive' ? 120 : 150),
+        damage: getObjNum('dm-marker-obj-damage', 0),
+        damageType: document.getElementById('dm-marker-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
+        targetFilter: document.getElementById('dm-marker-obj-target-filter')?.value || 'all',
+        destroyOnExplode: Boolean(document.getElementById('dm-marker-obj-destroy')?.checked),
+        triggerTiming: document.getElementById('dm-marker-obj-timing')?.value || 'turn',
+        statusEffects: Array.isArray(createObjSelectedEffects) ? [...createObjSelectedEffects] : []
+      };
+    }
 
-    // Sadece adı temizle — HP/AC/stat değerleri bir sonraki aynı tür düşman için kalır
-    nameEl.value = '';
-    if (imgEl) imgEl.value = '';
+    socket.emit('createMarker', {
+      name, color, x: 200, y: 200, imgUrl, hp, maxHp, size, ac, acBonus, stats, assignedAttacks, hasDarkness, darkness, maxDarkness,
+      objectType, objectConfig
+    });
+
+    // Spawn bildirim tostu göster
+    const mapContainer = document.getElementById('game-map');
+    if (mapContainer) {
+      const toast = document.createElement('div');
+      toast.className = 'dice-toast';
+      toast.innerHTML = `🚀 <strong>"${escapeHtml(name)}"</strong> haritaya spawn edildi!`;
+      mapContainer.appendChild(toast);
+      setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2500);
+    }
   });
 
   // Kenan Modu: Token oluşturma formunda checkbox değişim dinleyicisi
@@ -1131,6 +1224,303 @@ if (btnAddMarker) {
     });
   }
 }
+
+// ============================================================
+// TOKEN HAZIR ŞEMALARI (TOKEN PRESETS / SCHEMAS) İSTEMCİ YÖNETİMİ
+// ============================================================
+let currentTokenPresets = [];
+
+function renderTokenPresetsDropdown(presets) {
+  if (Array.isArray(presets)) {
+    currentTokenPresets = presets;
+  }
+  const select = document.getElementById('dm-token-preset-select');
+  const badge = document.getElementById('dm-token-preset-badge');
+  const delBtn = document.getElementById('btn-delete-token-preset');
+  if (!select) return;
+
+  const currentVal = select.value;
+  if (badge) {
+    badge.textContent = `${currentTokenPresets.length} Şema`;
+  }
+
+  select.innerHTML = '<option value="">— Hazır Şema Seç (Değerleri Doldur) —</option>';
+  currentTokenPresets.forEach(preset => {
+    const opt = document.createElement('option');
+    opt.value = preset.id;
+    const hpStr = preset.hp != null ? `HP: ${preset.hp}` : '';
+    const acStr = preset.ac != null ? `AC: ${preset.ac}` : '';
+    const meta = [hpStr, acStr].filter(Boolean).join(', ');
+    opt.textContent = `${preset.name}${meta ? ` [${meta}]` : ''}`;
+    select.appendChild(opt);
+  });
+
+  if (currentVal && currentTokenPresets.some(p => p.id === currentVal)) {
+    select.value = currentVal;
+    if (delBtn) delBtn.style.display = 'inline-flex';
+  } else {
+    if (delBtn) delBtn.style.display = 'none';
+  }
+}
+
+function applyTokenPresetToForm(preset) {
+  if (!preset) return;
+
+  const nameEl = document.getElementById('dm-marker-name');
+  if (nameEl) nameEl.value = preset.name || '';
+
+  const imgEl = document.getElementById('dm-marker-img');
+  if (imgEl) imgEl.value = preset.imgUrl || '';
+
+  const colorEl = document.getElementById('dm-marker-color');
+  if (colorEl) colorEl.value = preset.color || '#f1c40f';
+
+  const hpEl = document.getElementById('dm-marker-hp');
+  if (hpEl) hpEl.value = preset.hp != null ? preset.hp : '';
+
+  const maxHpEl = document.getElementById('dm-marker-max-hp');
+  if (maxHpEl) maxHpEl.value = preset.maxHp != null ? preset.maxHp : '';
+
+  const sizeEl = document.getElementById('dm-marker-size');
+  if (sizeEl) sizeEl.value = preset.size || 50;
+
+  const acEl = document.getElementById('dm-marker-ac');
+  if (acEl) acEl.value = preset.ac != null ? preset.ac : 10;
+
+  const acBonusEl = document.getElementById('dm-marker-ac-bonus');
+  if (acBonusEl) acBonusEl.value = (preset.acBonus != null ? preset.acBonus : (preset.ac_bonus != null ? preset.ac_bonus : 0));
+
+  // Statlar
+  const setNum = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val != null ? val : 0;
+  };
+  const stats = preset.stats || {};
+  setNum('dm-marker-str', stats.str != null ? stats.str : 10);
+  setNum('dm-marker-str-bonus', stats.str_bonus != null ? stats.str_bonus : 0);
+  setNum('dm-marker-dex', stats.dex != null ? stats.dex : 10);
+  setNum('dm-marker-dex-bonus', stats.dex_bonus != null ? stats.dex_bonus : 0);
+  setNum('dm-marker-int', stats.int != null ? stats.int : 10);
+  setNum('dm-marker-int-bonus', stats.int_bonus != null ? stats.int_bonus : 0);
+  setNum('dm-marker-con', stats.con != null ? stats.con : 10);
+  setNum('dm-marker-con-bonus', stats.con_bonus != null ? stats.con_bonus : 0);
+  setNum('dm-marker-wis', stats.wis != null ? stats.wis : 10);
+  setNum('dm-marker-wis-bonus', stats.wis_bonus != null ? stats.wis_bonus : 0);
+  setNum('dm-marker-chr', stats.chr != null ? stats.chr : 10);
+  setNum('dm-marker-chr-bonus', stats.chr_bonus != null ? stats.chr_bonus : 0);
+
+  // Kenan Modu Karanlık
+  const hasDarknessCb = document.getElementById('dm-marker-has-darkness');
+  const darknessInputsWrap = document.getElementById('dm-marker-darkness-inputs');
+  if (hasDarknessCb) {
+    hasDarknessCb.checked = Boolean(preset.hasDarkness);
+    if (darknessInputsWrap) {
+      darknessInputsWrap.classList.toggle('hidden', !preset.hasDarkness);
+    }
+  }
+  const darknessEl = document.getElementById('dm-marker-darkness');
+  if (darknessEl) darknessEl.value = preset.darkness != null ? preset.darkness : 0;
+  const maxDarknessEl = document.getElementById('dm-marker-max-darkness');
+  if (maxDarknessEl) maxDarknessEl.value = preset.maxDarkness != null ? preset.maxDarkness : 100;
+
+  // Cansız Obje Ayarları
+  const typeSelect = document.getElementById('dm-marker-type');
+  if (typeSelect) {
+    typeSelect.value = preset.objectType || 'creature';
+    typeSelect.dispatchEvent(new Event('change'));
+  }
+  if (preset.objectConfig) {
+    const cfg = preset.objectConfig;
+    const rEl = document.getElementById('dm-marker-obj-radius');
+    if (rEl && cfg.radius != null) rEl.value = cfg.radius;
+    const dEl = document.getElementById('dm-marker-obj-damage');
+    if (dEl && cfg.damage != null) dEl.value = cfg.damage;
+    const dtEl = document.getElementById('dm-marker-obj-damage-type');
+    if (dtEl && cfg.damageType) dtEl.value = cfg.damageType;
+    const fEl = document.getElementById('dm-marker-obj-target-filter');
+    if (fEl && cfg.targetFilter) fEl.value = cfg.targetFilter;
+    const desEl = document.getElementById('dm-marker-obj-destroy');
+    if (desEl) desEl.checked = cfg.destroyOnExplode !== false;
+    const tmEl = document.getElementById('dm-marker-obj-timing');
+    if (tmEl && cfg.triggerTiming) tmEl.value = cfg.triggerTiming;
+
+    if (Array.isArray(cfg.statusEffects) && typeof createObjSelectedEffects !== 'undefined') {
+      createObjSelectedEffects = [...cfg.statusEffects];
+      if (typeof renderCreateObjSelectedEffects === 'function') {
+        renderCreateObjSelectedEffects();
+      }
+    }
+  }
+
+  // Atanmış Saldırılar
+  const assignedList = Array.isArray(preset.assignedAttacks) ? preset.assignedAttacks : [];
+  const assignedSet = new Set(assignedList);
+  const attackCbs = document.querySelectorAll('#dm-create-token-attacks-list input[type="checkbox"]');
+  attackCbs.forEach(cb => {
+    cb.checked = assignedSet.has(cb.value);
+  });
+}
+
+function setupTokenPresetControls() {
+  const select = document.getElementById('dm-token-preset-select');
+  const delBtn = document.getElementById('btn-delete-token-preset');
+  const saveBtn = document.getElementById('btn-save-token-preset');
+
+  if (select && !select._bound) {
+    select._bound = true;
+    select.addEventListener('change', () => {
+      const presetId = select.value;
+      if (!presetId) {
+        if (delBtn) delBtn.style.display = 'none';
+        return;
+      }
+      const preset = currentTokenPresets.find(p => p.id === presetId);
+      if (preset) {
+        applyTokenPresetToForm(preset);
+        if (delBtn) delBtn.style.display = 'inline-flex';
+      }
+    });
+  }
+
+  if (delBtn && !delBtn._bound) {
+    delBtn._bound = true;
+    delBtn.addEventListener('click', () => {
+      const presetId = select ? select.value : '';
+      if (!presetId) return;
+      const preset = currentTokenPresets.find(p => p.id === presetId);
+      const name = preset ? preset.name : 'Bu şemayı';
+      if (confirm(`"${name}" şablonunu kalıcı olarak silmek istediğinize emin misiniz?`)) {
+        socket.emit('deleteTokenPreset', presetId);
+        if (select) select.value = '';
+        delBtn.style.display = 'none';
+      }
+    });
+  }
+
+  if (saveBtn && !saveBtn._bound) {
+    saveBtn._bound = true;
+    saveBtn.addEventListener('click', () => {
+      const nameEl = document.getElementById('dm-marker-name');
+      let name = (nameEl ? nameEl.value : '').trim();
+
+      if (!name) {
+        name = prompt('Lütfen bu şema için bir isim girin (Örn: Goblin Okçu):', 'Yeni Şema');
+        if (!name || !name.trim()) return;
+        name = name.trim();
+        if (nameEl) nameEl.value = name;
+      }
+
+      // Mevcut seçili şema var mı?
+      const selectedId = select ? select.value : '';
+      const existingPreset = currentTokenPresets.find(p => p.id === selectedId);
+      let presetId = null;
+
+      if (existingPreset && existingPreset.name === name) {
+        presetId = existingPreset.id;
+      } else {
+        presetId = 'tp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      }
+
+      const colorEl = document.getElementById('dm-marker-color');
+      const imgEl = document.getElementById('dm-marker-img');
+      const hpEl = document.getElementById('dm-marker-hp');
+      const maxHpEl = document.getElementById('dm-marker-max-hp');
+      const sizeEl = document.getElementById('dm-marker-size');
+      const acEl = document.getElementById('dm-marker-ac');
+      const acBonusEl = document.getElementById('dm-marker-ac-bonus');
+
+      const color = colorEl ? colorEl.value : '#f1c40f';
+      const imgUrl = imgEl ? imgEl.value.trim() : '';
+      const hp = hpEl && hpEl.value !== '' ? parseInt(hpEl.value) : null;
+      const maxHp = maxHpEl && maxHpEl.value !== '' ? parseInt(maxHpEl.value) : null;
+      const size = sizeEl && sizeEl.value !== '' ? parseInt(sizeEl.value) : 50;
+      const ac = acEl && acEl.value !== '' ? parseInt(acEl.value) : 10;
+      const acBonus = acBonusEl && acBonusEl.value !== '' ? parseInt(acBonusEl.value) : 0;
+
+      const getNum = (id) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : 0; };
+      const stats = {
+        str:       getNum('dm-marker-str'),
+        str_bonus: getNum('dm-marker-str-bonus'),
+        dex:       getNum('dm-marker-dex'),
+        dex_bonus: getNum('dm-marker-dex-bonus'),
+        int:       getNum('dm-marker-int'),
+        int_bonus: getNum('dm-marker-int-bonus'),
+        con:       getNum('dm-marker-con'),
+        con_bonus: getNum('dm-marker-con-bonus'),
+        wis:       getNum('dm-marker-wis'),
+        wis_bonus: getNum('dm-marker-wis-bonus'),
+        chr:       getNum('dm-marker-chr'),
+        chr_bonus: getNum('dm-marker-chr-bonus'),
+      };
+
+      const hasDarknessCb = document.getElementById('dm-marker-has-darkness');
+      const hasDarkness = Boolean(hasDarknessCb && hasDarknessCb.checked);
+      const darknessEl = document.getElementById('dm-marker-darkness');
+      const maxDarknessEl = document.getElementById('dm-marker-max-darkness');
+      const darkness = darknessEl && darknessEl.value !== '' ? parseInt(darknessEl.value) : 0;
+      const maxDarkness = maxDarknessEl && maxDarknessEl.value !== '' ? parseInt(maxDarknessEl.value) : 100;
+
+      const createAttacksCbs = document.querySelectorAll('#dm-create-token-attacks-list input[type="checkbox"]:checked');
+      const assignedAttacks = Array.from(createAttacksCbs).map(cb => cb.value);
+
+      const objectType = document.getElementById('dm-marker-type')?.value || 'creature';
+      let objectConfig = null;
+      if (objectType !== 'creature') {
+        const getObjNum = (id, def) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : def; };
+        objectConfig = {
+          radius: getObjNum('dm-marker-obj-radius', objectType === 'explosive' ? 120 : 150),
+          damage: getObjNum('dm-marker-obj-damage', 0),
+          damageType: document.getElementById('dm-marker-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
+          targetFilter: document.getElementById('dm-marker-obj-target-filter')?.value || 'all',
+          destroyOnExplode: Boolean(document.getElementById('dm-marker-obj-destroy')?.checked),
+          triggerTiming: document.getElementById('dm-marker-obj-timing')?.value || 'turn',
+          statusEffects: Array.isArray(createObjSelectedEffects) ? [...createObjSelectedEffects] : []
+        };
+      }
+
+      const presetData = {
+        id: presetId,
+        name,
+        imgUrl,
+        color,
+        hp,
+        maxHp,
+        size,
+        ac,
+        acBonus,
+        stats,
+        hasDarkness,
+        darkness,
+        maxDarkness,
+        assignedAttacks,
+        objectType,
+        objectConfig
+      };
+
+      socket.emit('saveTokenPreset', presetData);
+
+      // Toast bildirim göster
+      const mapContainer = document.getElementById('game-map');
+      if (mapContainer) {
+        const toast = document.createElement('div');
+        toast.className = 'dice-toast';
+        toast.innerHTML = `💾 <strong>"${escapeHtml(name)}"</strong> şeması başarıyla kaydedildi!`;
+        mapContainer.appendChild(toast);
+        setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+      }
+    });
+  }
+}
+
+// Socket senkronizasyonu: Token Şemaları
+socket.on('tokenPresetsUpdated', (presets) => {
+  if (Array.isArray(presets)) {
+    renderTokenPresetsDropdown(presets);
+  }
+});
+
+// Sayfa ilk yüklendiğinde kontrolleri bağla
+setupTokenPresetControls();
 
 // ---- Marker Düzenleme Modalı ----
 let editingMarkerId = null;
@@ -1205,9 +1595,33 @@ function openMarkerEditor(markerInput) {
   setVal('dm-marker-edit-chr', stats.chr);
   setVal('dm-marker-edit-chr-bonus', stats.chr_bonus);
 
+  // Cansız Obje Ayarlarını Doldur
+  const markerTypeSelect = document.getElementById('dm-marker-edit-type');
+  const objType = markerData.objectType || 'creature';
+  if (markerTypeSelect) markerTypeSelect.value = objType;
+
+  const cfg = markerData.objectConfig || {};
+  const setElVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  setElVal('dm-marker-edit-obj-radius', cfg.radius || (objType === 'explosive' ? 120 : 150));
+  setElVal('dm-marker-edit-obj-damage', cfg.damage != null ? cfg.damage : (objType === 'explosive' ? 20 : 0));
+  setElVal('dm-marker-edit-obj-damage-type', cfg.damageType || (objType === 'explosive' ? 'fire' : 'necrotic'));
+  setElVal('dm-marker-edit-obj-target-filter', cfg.targetFilter || 'all');
+  setElVal('dm-marker-edit-obj-timing', cfg.triggerTiming || 'turn');
+
+  const destroyCb = document.getElementById('dm-marker-edit-obj-destroy');
+  if (destroyCb) destroyCb.checked = cfg.destroyOnExplode !== false;
+
+  editObjSelectedEffects = Array.isArray(cfg.statusEffects) ? JSON.parse(JSON.stringify(cfg.statusEffects)) : [];
+  renderObjSelectedEffects(document.getElementById('dm-marker-edit-obj-selected-effects'), editObjSelectedEffects);
+
+  if (markerTypeSelect) {
+    markerTypeSelect.dispatchEvent(new Event('change'));
+  }
+
   renderMarkerEditorActiveEffects(markerData);
   renderMarkerAssignedAttacks(markerData);
   populateTokenEditorEffectSelect(document.getElementById('dm-marker-add-effect-select'));
+  populateTokenEditorEffectSelect(document.getElementById('dm-marker-edit-obj-effect-select'));
 
   document.getElementById('dm-marker-editor-modal').classList.remove('hidden');
 }
@@ -1484,6 +1898,22 @@ if (btnSaveMarkerEdit) {
     const darkness = editDarknessEl && editDarknessEl.value !== '' ? parseInt(editDarknessEl.value) : 0;
     const maxDarkness = editMaxDarknessEl && editMaxDarknessEl.value !== '' ? parseInt(editMaxDarknessEl.value) : 100;
 
+    // Cansız Obje Ayarlarını Al
+    const objectType = document.getElementById('dm-marker-edit-type')?.value || 'creature';
+    let objectConfig = null;
+    if (objectType !== 'creature') {
+      const getObjNum = (id, def) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : def; };
+      objectConfig = {
+        radius: getObjNum('dm-marker-edit-obj-radius', objectType === 'explosive' ? 120 : 150),
+        damage: getObjNum('dm-marker-edit-obj-damage', 0),
+        damageType: document.getElementById('dm-marker-edit-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
+        targetFilter: document.getElementById('dm-marker-edit-obj-target-filter')?.value || 'all',
+        destroyOnExplode: Boolean(document.getElementById('dm-marker-edit-obj-destroy')?.checked),
+        triggerTiming: document.getElementById('dm-marker-edit-obj-timing')?.value || 'turn',
+        statusEffects: Array.isArray(editObjSelectedEffects) ? [...editObjSelectedEffects] : []
+      };
+    }
+
     socket.emit('editMarker', {
       id: editingMarkerId,
       name,
@@ -1498,7 +1928,9 @@ if (btnSaveMarkerEdit) {
       assignedAttacks,
       hasDarkness,
       darkness,
-      maxDarkness
+      maxDarkness,
+      objectType,
+      objectConfig
     });
 
     document.getElementById('dm-marker-editor-modal').classList.add('hidden');
@@ -1513,7 +1945,363 @@ if (btnSaveMarkerEdit) {
       editDarknessInputsWrap.classList.toggle('hidden', !editHasDarknessCb.checked);
     });
   }
+
+  // Cansız Obje UI Dinleyicilerini Kur
+  setupObjectTypeControls();
 }
+
+// ============================================================
+// CANSIZ OBJELER (INANIMATE OBJECTS) İSTEMCİ YÖNETİMİ
+// ============================================================
+
+const objectMapRings = {}; // markerId -> { auraRingEl, hazardRingEl }
+let createObjSelectedEffects = [];
+let editObjSelectedEffects = [];
+
+/**
+ * Cansız nesnelerin durum efekti çiplerini render eder.
+ */
+function renderObjSelectedEffects(containerEl, effectsArray) {
+  if (!containerEl) return;
+  containerEl.innerHTML = '';
+  if (!effectsArray || effectsArray.length === 0) {
+    containerEl.innerHTML = '<span style="font-size:10px; color:#64748b; font-style:italic;">Seçili durum efekti yok.</span>';
+    return;
+  }
+  effectsArray.forEach((eff, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'status-target-chip';
+    const durText = eff.duration != null ? `${eff.duration}T` : '∞';
+    chip.innerHTML = `
+      <span>${eff.icon || '✨'}</span>
+      <strong>${escapeHtml(eff.name || 'Efekt')}</strong>
+      <span style="font-size:10px; opacity:0.8;">(${durText})</span>
+      <span class="chip-del-btn" title="Kaldır">✕</span>
+    `;
+    chip.querySelector('.chip-del-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      effectsArray.splice(idx, 1);
+      renderObjSelectedEffects(containerEl, effectsArray);
+    });
+    containerEl.appendChild(chip);
+  });
+}
+
+/**
+ * Harita üzerindeki menzil halkalarını (Aura ve Patlama Tehlike Halkaları) günceller.
+ */
+function updateObjectMapRings(tokenId, x, y, size, objectType, objectConfig) {
+  if (!gameMap) return;
+
+  const currentCenter = {
+    x: (x || 0) + (size || 50) / 2,
+    y: (y || 0) + (size || 50) / 2
+  };
+
+  let ringData = objectMapRings[tokenId];
+  if (!ringData) {
+    ringData = { auraRingEl: null, hazardRingEl: null };
+    objectMapRings[tokenId] = ringData;
+  }
+
+  const radius = objectConfig?.radius || (objectType === 'explosive' ? 120 : 150);
+  const diameter = radius * 2;
+
+  // 1. Aura Totem Halkası (Sürekli görünür, mistik dönen daire)
+  if (objectType === 'aura') {
+    if (!ringData.auraRingEl) {
+      ringData.auraRingEl = document.createElement('div');
+      ringData.auraRingEl.className = 'token-aura-ring';
+      ringData.auraRingEl.dataset.forToken = tokenId;
+      gameMap.appendChild(ringData.auraRingEl);
+    }
+    ringData.auraRingEl.style.width = diameter + 'px';
+    ringData.auraRingEl.style.height = diameter + 'px';
+    ringData.auraRingEl.style.left = currentCenter.x + 'px';
+    ringData.auraRingEl.style.top = currentCenter.y + 'px';
+  } else if (ringData.auraRingEl) {
+    ringData.auraRingEl.remove();
+    ringData.auraRingEl = null;
+  }
+
+  // 2. Patlayıcı Tehlike Halkası (Hover ve hedef seçiminde görünür)
+  if (objectType === 'explosive') {
+    if (!ringData.hazardRingEl) {
+      ringData.hazardRingEl = document.createElement('div');
+      ringData.hazardRingEl.className = 'token-hazard-ring';
+      ringData.hazardRingEl.dataset.forToken = tokenId;
+      gameMap.appendChild(ringData.hazardRingEl);
+    }
+    ringData.hazardRingEl.style.width = diameter + 'px';
+    ringData.hazardRingEl.style.height = diameter + 'px';
+    ringData.hazardRingEl.style.left = currentCenter.x + 'px';
+    ringData.hazardRingEl.style.top = currentCenter.y + 'px';
+  } else if (ringData.hazardRingEl) {
+    ringData.hazardRingEl.remove();
+    ringData.hazardRingEl = null;
+  }
+}
+
+/**
+ * Haritadaki halkaları temizler.
+ */
+function removeObjectMapRings(tokenId) {
+  if (objectMapRings[tokenId]) {
+    if (objectMapRings[tokenId].auraRingEl) {
+      objectMapRings[tokenId].auraRingEl.remove();
+    }
+    if (objectMapRings[tokenId].hazardRingEl) {
+      objectMapRings[tokenId].hazardRingEl.remove();
+    }
+    delete objectMapRings[tokenId];
+  }
+}
+
+/**
+ * Token DOM elemanına nesneye özgü sınıfları, rozetleri ve harita halkalarını uygular.
+ */
+function updateTokenObjectVisuals(t, data) {
+  if (!t || !data) return;
+
+  let badgeEl = t.querySelector('.token-object-badge');
+
+  if (data.isMarker && data.objectType === 'explosive') {
+    t.classList.add('token-object', 'token-object-explosive');
+    t.classList.remove('token-object-aura');
+    if (!badgeEl) {
+      badgeEl = document.createElement('span');
+      badgeEl.className = 'token-object-badge badge-explosive';
+      t.appendChild(badgeEl);
+    }
+    badgeEl.className = 'token-object-badge badge-explosive';
+    badgeEl.textContent = '💣';
+    badgeEl.title = 'Patlayıcı Nesne';
+  } else if (data.isMarker && data.objectType === 'aura') {
+    t.classList.add('token-object', 'token-object-aura');
+    t.classList.remove('token-object-explosive');
+    if (!badgeEl) {
+      badgeEl = document.createElement('span');
+      badgeEl.className = 'token-object-badge badge-aura';
+      t.appendChild(badgeEl);
+    }
+    badgeEl.className = 'token-object-badge badge-aura';
+    badgeEl.textContent = '🔮';
+    badgeEl.title = 'Aura / Totem Nesnesi';
+  } else {
+    t.classList.remove('token-object', 'token-object-explosive', 'token-object-aura');
+    if (badgeEl) badgeEl.remove();
+  }
+
+  // Harita menzil halkalarını güncelle
+  const x = parseFloat(t.style.left) || data.x || 0;
+  const y = parseFloat(t.style.top) || data.y || 0;
+  const size = data.size || 50;
+  if (data.isMarker && (data.objectType === 'explosive' || data.objectType === 'aura')) {
+    updateObjectMapRings(data.id, x, y, size, data.objectType, data.objectConfig);
+  } else {
+    removeObjectMapRings(data.id);
+  }
+}
+
+/**
+ * Cansız nesne form kontrollerini ve etkileşim dinleyicilerini bağlar.
+ */
+function setupObjectTypeControls() {
+  const createTypeSelect = document.getElementById('dm-marker-type');
+  const createObjConfigWrap = document.getElementById('dm-marker-object-config-wrap');
+  const createDestroyRow = document.getElementById('dm-marker-obj-destroy-row');
+  const createTimingRow = document.getElementById('dm-marker-obj-timing-row');
+  const createBadgeTitle = document.getElementById('dm-marker-object-badge-title');
+
+  if (createTypeSelect && createObjConfigWrap && !createTypeSelect._bound) {
+    createTypeSelect._bound = true;
+    createTypeSelect.addEventListener('change', () => {
+      const val = createTypeSelect.value;
+      if (val === 'explosive') {
+        createObjConfigWrap.classList.remove('hidden');
+        if (createDestroyRow) createDestroyRow.classList.remove('hidden');
+        if (createTimingRow) createTimingRow.classList.add('hidden');
+        if (createBadgeTitle) createBadgeTitle.textContent = '💣 Patlayıcı Nesne Ayarları';
+        const dmgType = document.getElementById('dm-marker-obj-damage-type');
+        if (dmgType && (!dmgType.value || dmgType.value === 'necrotic')) dmgType.value = 'fire';
+      } else if (val === 'aura') {
+        createObjConfigWrap.classList.remove('hidden');
+        if (createDestroyRow) createDestroyRow.classList.add('hidden');
+        if (createTimingRow) createTimingRow.classList.remove('hidden');
+        if (createBadgeTitle) createBadgeTitle.textContent = '🔮 Aura / Totem Ayarları';
+        const dmgType = document.getElementById('dm-marker-obj-damage-type');
+        if (dmgType && (!dmgType.value || dmgType.value === 'fire')) dmgType.value = 'necrotic';
+      } else {
+        createObjConfigWrap.classList.add('hidden');
+      }
+    });
+  }
+
+  const editTypeSelect = document.getElementById('dm-marker-edit-type');
+  const editObjConfigWrap = document.getElementById('dm-marker-edit-object-config-wrap');
+  const editDestroyRow = document.getElementById('dm-marker-edit-obj-destroy-row');
+  const editTimingRow = document.getElementById('dm-marker-edit-obj-timing-row');
+  const editBadgeTitle = document.getElementById('dm-marker-edit-object-badge-title');
+  const btnDetonate = document.getElementById('dm-marker-btn-test-detonate');
+  const btnAura = document.getElementById('dm-marker-btn-test-aura');
+
+  if (editTypeSelect && editObjConfigWrap && !editTypeSelect._bound) {
+    editTypeSelect._bound = true;
+    editTypeSelect.addEventListener('change', () => {
+      const val = editTypeSelect.value;
+      if (val === 'explosive') {
+        editObjConfigWrap.classList.remove('hidden');
+        if (editDestroyRow) editDestroyRow.classList.remove('hidden');
+        if (editTimingRow) editTimingRow.classList.add('hidden');
+        if (btnDetonate) btnDetonate.style.display = 'inline-block';
+        if (btnAura) btnAura.style.display = 'none';
+        if (editBadgeTitle) editBadgeTitle.textContent = '💣 Patlayıcı Nesne Ayarları';
+      } else if (val === 'aura') {
+        editObjConfigWrap.classList.remove('hidden');
+        if (editDestroyRow) editDestroyRow.classList.add('hidden');
+        if (editTimingRow) editTimingRow.classList.remove('hidden');
+        if (btnDetonate) btnDetonate.style.display = 'none';
+        if (btnAura) btnAura.style.display = 'inline-block';
+        if (editBadgeTitle) editBadgeTitle.textContent = '🔮 Aura / Totem Ayarları';
+      } else {
+        editObjConfigWrap.classList.add('hidden');
+        if (btnDetonate) btnDetonate.style.display = 'none';
+        if (btnAura) btnAura.style.display = 'none';
+      }
+    });
+  }
+
+  // Create form durum efekti ekleme butonu
+  const btnCreateAddObjEff = document.getElementById('dm-marker-obj-btn-add-effect');
+  if (btnCreateAddObjEff && !btnCreateAddObjEff._bound) {
+    btnCreateAddObjEff._bound = true;
+    btnCreateAddObjEff.addEventListener('click', () => {
+      const select = document.getElementById('dm-marker-obj-effect-select');
+      const durInput = document.getElementById('dm-marker-obj-effect-duration');
+      const presetId = select?.value;
+      if (!presetId) return;
+      const preset = currentStatusPresets.find(p => p.id === presetId);
+      if (!preset) return;
+      const eff = JSON.parse(JSON.stringify(preset));
+      eff.id = 'eff_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      const customDur = durInput && durInput.value.trim() !== '' ? parseInt(durInput.value) : null;
+      if (customDur !== null && !isNaN(customDur)) eff.duration = Math.max(1, customDur);
+      createObjSelectedEffects.push(eff);
+      renderObjSelectedEffects(document.getElementById('dm-marker-obj-selected-effects'), createObjSelectedEffects);
+      if (select) select.value = '';
+      if (durInput) durInput.value = '';
+    });
+  }
+
+  // Edit modal durum efekti ekleme butonu
+  const btnEditAddObjEff = document.getElementById('dm-marker-edit-obj-btn-add-effect');
+  if (btnEditAddObjEff && !btnEditAddObjEff._bound) {
+    btnEditAddObjEff._bound = true;
+    btnEditAddObjEff.addEventListener('click', () => {
+      const select = document.getElementById('dm-marker-edit-obj-effect-select');
+      const durInput = document.getElementById('dm-marker-edit-obj-effect-duration');
+      const presetId = select?.value;
+      if (!presetId) return;
+      const preset = currentStatusPresets.find(p => p.id === presetId);
+      if (!preset) return;
+      const eff = JSON.parse(JSON.stringify(preset));
+      eff.id = 'eff_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      const customDur = durInput && durInput.value.trim() !== '' ? parseInt(durInput.value) : null;
+      if (customDur !== null && !isNaN(customDur)) eff.duration = Math.max(1, customDur);
+      editObjSelectedEffects.push(eff);
+      renderObjSelectedEffects(document.getElementById('dm-marker-edit-obj-selected-effects'), editObjSelectedEffects);
+      if (select) select.value = '';
+      if (durInput) durInput.value = '';
+    });
+  }
+
+  // Test butonları: Şimdi Patlat (İki tıkla güvenli tetikleme)
+  const btnTestDetonate = document.getElementById('dm-marker-btn-test-detonate');
+  if (btnTestDetonate && !btnTestDetonate._bound) {
+    btnTestDetonate._bound = true;
+    let detonateConfirmPending = false;
+    btnTestDetonate.addEventListener('click', () => {
+      if (!editingMarkerId) return;
+      if (!detonateConfirmPending) {
+        detonateConfirmPending = true;
+        btnTestDetonate.textContent = 'Emin misin? 💥';
+        btnTestDetonate.style.background = '#b91c1c';
+        setTimeout(() => {
+          detonateConfirmPending = false;
+          if (btnTestDetonate) {
+            btnTestDetonate.textContent = '💥 Patlat';
+            btnTestDetonate.style.background = '#dc2626';
+          }
+        }, 3000);
+        return;
+      }
+      detonateConfirmPending = false;
+      socket.emit('detonateObject', editingMarkerId);
+      document.getElementById('dm-marker-editor-modal').classList.add('hidden');
+      editingMarkerId = null;
+    });
+  }
+
+  // Test butonları: Nabız Ver
+  const btnTestAura = document.getElementById('dm-marker-btn-test-aura');
+  if (btnTestAura && !btnTestAura._bound) {
+    btnTestAura._bound = true;
+    btnTestAura.addEventListener('click', () => {
+      if (!editingMarkerId) return;
+      socket.emit('triggerObjectAura', editingMarkerId);
+    });
+  }
+}
+
+// Sayfa yüklendiğinde kontrolleri hazırla
+setupObjectTypeControls();
+
+// Socket Dinleyicisi: Aura Dalgası Tetiklendiğinde
+socket.on('objectAuraPulseApplied', (data) => {
+  const { markerId, cx, cy, radius, damage, damageType, affectedTargets } = data || {};
+  if (!gameMap) return;
+
+  // Harita üzerinde genişleyen mistik dalga oluştur
+  const wave = document.createElement('div');
+  wave.className = 'aura-pulse-wave';
+  wave.style.setProperty('--wave-diameter', `${(radius || 150) * 2}px`);
+  wave.style.left = `${cx}px`;
+  wave.style.top = `${cy}px`;
+  gameMap.appendChild(wave);
+  setTimeout(() => wave.remove(), 800);
+
+  // Etkilenen hedefler üzerinde floating hasar/aura yazısı göster
+  if (Array.isArray(affectedTargets)) {
+    affectedTargets.forEach(at => {
+      let tokenEl = tokens[at.id];
+      if (!tokenEl && at.type === 'character' && typeof allPlayers !== 'undefined') {
+        const p = Object.values(allPlayers).find(pl => pl.character && String(pl.character.id) === String(at.id));
+        if (p && tokens[p.id]) tokenEl = tokens[p.id];
+      }
+      if (!tokenEl) {
+        tokenEl = document.querySelector(`.token[data-id="${at.id}"]`) ||
+                  document.querySelector(`.token[data-character-id="${at.id}"]`);
+      }
+      if (tokenEl) {
+        const tLeft = parseFloat(tokenEl.style.left) || tokenEl.offsetLeft || 0;
+        const tTop = parseFloat(tokenEl.style.top) || tokenEl.offsetTop || 0;
+        const tSize = tokenEl.offsetWidth || 50;
+
+        const floatText = document.createElement('div');
+        floatText.className = 'aoe-floating-damage';
+        floatText.style.color = '#c084fc';
+        floatText.style.textShadow = '0 0 8px rgba(168, 85, 247, 0.8)';
+        floatText.textContent = damage > 0 ? `-${damage}` : '✨ AURA';
+        floatText.style.left = `${tLeft + tSize / 2}px`;
+        floatText.style.top = `${tTop}px`;
+
+        gameMap.appendChild(floatText);
+        setTimeout(() => floatText.remove(), 1700);
+      }
+    });
+  }
+});
+
 
 // ---- DM Kalem Rengi ----
 const btnUpdateDmPen = document.getElementById('btn-update-dm-pen');
@@ -2381,6 +3169,8 @@ socket.on('customEffectsUpdated', (presets) => {
     renderStatusPresets();
     populateTokenEditorEffectSelect(document.getElementById('dm-marker-add-effect-select'));
     populateTokenEditorEffectSelect(document.getElementById('dm-player-add-effect-select'));
+    populateTokenEditorEffectSelect(document.getElementById('dm-marker-obj-effect-select'));
+    populateTokenEditorEffectSelect(document.getElementById('dm-marker-edit-obj-effect-select'));
   }
 });
 
