@@ -1764,6 +1764,10 @@
         target: { type: target.type, id: target.id },
         targetAC: targetAC,
         attackType: 'physical',
+        actionNature: activeEquippedPreset?.actionNature || 'damage',
+        healPool: (activeEquippedPreset?.consumesSpellSlot && chosenSpellLevel && activeEquippedPreset?.slotScaling?.[chosenSpellLevel]?.healPool) || activeEquippedPreset?.healPool || null,
+        healTarget: activeEquippedPreset?.healTarget || 'self',
+        lifestealPercent: activeEquippedPreset?.lifestealPercent || 0,
         advantage: advantageCheck?.checked || false,
         disadvantage: disadvantageCheck?.checked || false,
         attackCount: intVal(attackCountInput) || 1,
@@ -1810,52 +1814,80 @@
       const notesLabel = notes.length > 0 ? ` [${notes.join(', ')}]` : '';
 
       // Log başlığı: Saldıran → Hedef
-      const atkLabel = usedSpellLevel ? `✨ BÜYÜ (Lvl ${usedSpellLevel})` : '⚔️ SALDIRI';
+      const isHeal = result.actionNature === 'heal';
+      const isHybrid = result.actionNature === 'hybrid';
+      const atkLabel = isHeal 
+        ? (usedSpellLevel ? `✨ KUTSAL ŞİFA (Lvl ${usedSpellLevel})` : '💚 ŞİFA / CAN YENİLEME')
+        : (isHybrid 
+          ? (usedSpellLevel ? `🩸 HİBRİT BÜYÜ (Lvl ${usedSpellLevel})` : '🩸 HİBRİT (HASAR + ŞİFA)')
+          : (usedSpellLevel ? `✨ BÜYÜ (Lvl ${usedSpellLevel})` : '⚔️ SALDIRI'));
+
       const attackerName = escapeHtml(selectedAttacker?.name || '?');
       const targetName = escapeHtml(target.name || '?');
       addCombatLog(
-        `<span class="atk-log-header">--- ${atkLabel}: ${attackerName} → ${targetName} (${body.attackCount} Vuruş, AC:${body.targetAC})${notesLabel} ---</span>`,
-        'header'
+        `<span class="atk-log-header">--- ${atkLabel}: ${attackerName} → ${targetName} (${isHeal ? 'Şifa' : `${body.attackCount} Vuruş, AC:${body.targetAC}`})${notesLabel} ---</span>`,
+        isHeal ? 'apply' : 'header'
       );
 
-      result.attacks.forEach(atk => {
-        if (atk.hit) {
-          const critTag = atk.isCritical ? ' <span class="atk-crit">KRİTİK!</span>' : '';
-          const typeLabel = usedSpellLevel ? `Büyü (Lvl ${usedSpellLevel})` : 'Saldırı';
-          const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
-          let statusAppliedTag = '';
-          if (result.statusEffectsToApply && result.statusEffectsToApply.length > 0) {
-            statusAppliedTag = ` <span class="atk-log-status" style="color:#f1c40f; font-weight:bold;">[✨ ${result.statusEffectsToApply.map(e => e.name).join(', ')} uygulandı]</span>`;
-          }
-          addCombatLog(
-            `<span class="atk-log-hit">${atk.index}. ${typeLabel}: <strong>${atk.damage}</strong> Hasar${critTag}${statusAppliedTag}</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
-            atk.isCritical ? 'crit' : 'hit'
-          );
-        } else if (atk.halfDamageMiss) {
-          const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
-          addCombatLog(
-            `<span class="atk-log-miss" style="color:#e67e22;">🛡️ ${atk.index}. ISKA (Yarım Hasar): <strong>${atk.damage}</strong> Hasar</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
-            'miss'
-          );
-        } else {
-          const failTag = atk.isCritFail ? ' <span class="atk-critfail">KRİTİK BAŞARISIZLIK!</span>' : '';
-          addCombatLog(
-            `<span class="atk-log-miss">${atk.index}. Saldırı: ISKA${failTag}</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>`,
-            atk.isCritFail ? 'critfail' : 'miss'
-          );
+      if (isHeal) {
+        // Doğrudan Şifa logu
+        const atk = result.attacks?.[0] || {};
+        const critTag = atk.isCritical ? ' <span class="atk-crit">KRİTİK ŞİFA! (1.5x)</span>' : '';
+        const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">💚 ${escapeHtml(atk.breakdown)}</div>` : '';
+        let statusAppliedTag = '';
+        if (result.statusEffectsToApply && result.statusEffectsToApply.length > 0) {
+          statusAppliedTag = ` <span class="atk-log-status" style="color:#34d399; font-weight:bold;">[✨ ${result.statusEffectsToApply.map(e => e.name).join(', ')} uygulandı]</span>`;
         }
-      });
+        addCombatLog(
+          `<span class="atk-log-hit" style="color:#34d399;">💚 Şifa: <strong>+${result.totalHeal}</strong> Can Yenilendi${critTag}${statusAppliedTag}</span>${breakdownHtml}`,
+          'crit'
+        );
+        addCombatLog(`<span class="atk-log-total" style="color:#10b981; border-color:#10b981;">=== ${escapeHtml(target.name)}: TOPLAM ŞİFA: +${result.totalHeal} ===</span>`, 'total');
+      } else {
+        result.attacks.forEach(atk => {
+          if (atk.hit) {
+            const critTag = atk.isCritical ? ' <span class="atk-crit">KRİTİK!</span>' : '';
+            const typeLabel = usedSpellLevel ? `Büyü (Lvl ${usedSpellLevel})` : 'Saldırı';
+            const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
+            let statusAppliedTag = '';
+            if (result.statusEffectsToApply && result.statusEffectsToApply.length > 0) {
+              statusAppliedTag = ` <span class="atk-log-status" style="color:#f1c40f; font-weight:bold;">[✨ ${result.statusEffectsToApply.map(e => e.name).join(', ')} uygulandı]</span>`;
+            }
+            const healSnippet = (isHybrid && atk.heal > 0) ? ` <span style="color:#34d399; font-weight:700;">(+${atk.heal} Şifa)</span>` : '';
+            addCombatLog(
+              `<span class="atk-log-hit">${atk.index}. ${typeLabel}: <strong>${atk.damage}</strong> Hasar${healSnippet}${critTag}${statusAppliedTag}</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
+              atk.isCritical ? 'crit' : 'hit'
+            );
+          } else if (atk.halfDamageMiss) {
+            const breakdownHtml = atk.breakdown ? `<div class="atk-result-breakdown" style="margin-top:2px;">🎲 ${escapeHtml(atk.breakdown)}</div>` : '';
+            addCombatLog(
+              `<span class="atk-log-miss" style="color:#e67e22;">🛡️ ${atk.index}. ISKA (Yarım Hasar): <strong>${atk.damage}</strong> Hasar</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>${breakdownHtml}`,
+              'miss'
+            );
+          } else {
+            const failTag = atk.isCritFail ? ' <span class="atk-critfail">KRİTİK BAŞARISIZLIK!</span>' : '';
+            addCombatLog(
+              `<span class="atk-log-miss">${atk.index}. Saldırı: ISKA${failTag}</span> <span class="atk-log-roll">(Zar: ${atk.hitRoll} | Toplam: ${atk.modifiedRoll})</span>`,
+              atk.isCritFail ? 'critfail' : 'miss'
+            );
+          }
+        });
 
-      addCombatLog(`<span class="atk-log-total">=== ${escapeHtml(target.name)}: TOPLAM HASAR: ${result.totalDamage} ===</span>`, 'total');
+        const hybridSummary = (isHybrid && result.totalHeal > 0) ? ` | TOPLAM ŞİFA: +${result.totalHeal}` : '';
+        addCombatLog(`<span class="atk-log-total">=== ${escapeHtml(target.name)}: TOPLAM HASAR: ${result.totalDamage}${hybridSummary} ===</span>`, 'total');
+      }
 
       // Sonucu sakla (çoklu hasar uygulama için)
       const hasCritical = result.attacks ? result.attacks.some(a => a.isCritical) : false;
       const isSuccessfulHit = result.attacks ? result.attacks.some(a => a.hit) : false;
-      const isEffective = result.totalDamage > 0 || (result.statusEffectsToApply && result.statusEffectsToApply.length > 0);
+      const isEffective = result.totalDamage > 0 || result.totalHeal > 0 || (result.statusEffectsToApply && result.statusEffectsToApply.length > 0);
 
       if (isEffective) {
         lastAttackResults.push({
-          totalDamage: result.totalDamage,
+          totalDamage: result.totalDamage || 0,
+          totalHeal: result.totalHeal || 0,
+          healTarget: result.healTarget || (body.healTarget || 'self'),
+          actionNature: result.actionNature || 'damage',
           targetId: target.id,
           targetType: target.type,
           targetName: target.name,
@@ -1867,7 +1899,7 @@
         });
 
         // Alan Hasarı (AoE) kontrolü ve çevre hedeflere yayılım
-        if (activeEquippedPreset && activeEquippedPreset.isAoe && (isSuccessfulHit || (body.halfDamageOnMiss && result.totalDamage > 0))) {
+        if (activeEquippedPreset && activeEquippedPreset.isAoe && !isHeal && (isSuccessfulHit || (body.halfDamageOnMiss && result.totalDamage > 0))) {
           triggerAoEForTarget(target, result.totalDamage, body);
         }
       }
@@ -2009,11 +2041,24 @@
       const slotNote = pendingSpellSlotToConsume ? ` (✨ Lvl ${pendingSpellSlotToConsume.spellLevel} Slot)` : '';
       if (lastAttackResults.length === 1) {
         const r = lastAttackResults[0];
-        btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar Uygula${slotNote} → ${escapeHtml(r.targetName)}`;
+        if (r.totalDamage > 0 && r.totalHeal > 0) {
+          btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar | 💚 ${r.totalHeal} Şifa Uygula${slotNote}`;
+        } else if (r.totalHeal > 0) {
+          btnApplyDamage.textContent = `💚 +${r.totalHeal} Şifa Bas${slotNote} → ${escapeHtml(r.targetName)}`;
+        } else {
+          btnApplyDamage.textContent = `💀 ${r.totalDamage} Hasar Uygula${slotNote} → ${escapeHtml(r.targetName)}`;
+        }
       } else if (lastAttackResults.length > 1) {
         const totalAll = lastAttackResults.reduce((sum, r) => sum + r.totalDamage, 0);
+        const totalHealAll = lastAttackResults.reduce((sum, r) => sum + (r.totalHeal || 0), 0);
         const splashNote = splashCount > 0 ? ` (${splashCount} alan)` : '';
-        btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef${splashNote}, toplam ${totalAll})${slotNote}`;
+        if (totalAll > 0 && totalHealAll > 0) {
+          btnApplyDamage.textContent = `⚡ Tümünü Uygula (💀 ${totalAll} Hasar | 💚 ${totalHealAll} Şifa)${slotNote}`;
+        } else if (totalHealAll > 0) {
+          btnApplyDamage.textContent = `💚 Tüm Şifaları Uygula (${lastAttackResults.length} hedef, +${totalHealAll} can)${slotNote}`;
+        } else {
+          btnApplyDamage.textContent = `💀 Tüm Hasarları Uygula (${lastAttackResults.length} hedef${splashNote}, toplam ${totalAll})${slotNote}`;
+        }
       } else if (pendingSpellSlotToConsume) {
         btnApplyDamage.textContent = `✨ Büyüyü Uygula / Slot Harca${slotNote}`;
       }
@@ -2103,6 +2148,10 @@
               targetType: attackResult.targetType,
               targetId: attackResult.targetId,
               damage: attackResult.totalDamage,
+              heal: attackResult.totalHeal || 0,
+              healTarget: attackResult.healTarget || 'self',
+              attackerType: selectedAttacker?.type,
+              attackerId: selectedAttacker?.id,
               statusEffectsToApply: attackResult.statusEffectsToApply,
               isCritical: attackResult.isCritical,
               attackType: attackResult.attackType,
@@ -2115,10 +2164,19 @@
           const result = await res.json();
           if (!res.ok) throw new Error(result.error || 'Bilinmeyen hata');
 
-          addCombatLog(
-            `<span class="atk-log-apply">💀 ${attackResult.totalDamage} hasar uygulandı → ${escapeHtml(attackResult.targetName)}. Yeni HP: ${result.newHp}</span>`,
-            'apply'
-          );
+          if (attackResult.totalDamage > 0) {
+            addCombatLog(
+              `<span class="atk-log-apply">💀 ${attackResult.totalDamage} hasar uygulandı → ${escapeHtml(attackResult.targetName)}. Yeni HP: ${result.newHp}</span>`,
+              'apply'
+            );
+          }
+          if (result.healed && result.healed > 0) {
+            addCombatLog(
+              `<span class="atk-log-apply" style="color:#34d399;">💚 +${result.healed} can yenilendi → ${escapeHtml(result.healRecipientName || 'Hedef')}. Yeni HP: ${result.healRecipientNewHp}</span>`,
+              'apply'
+            );
+            playHealChimeSound();
+          }
         } catch (err) {
           addCombatLog(
             `<span class="atk-log-error">HATA (${escapeHtml(attackResult.targetName)}): ${escapeHtml(err.message)}</span>`,
@@ -2194,6 +2252,58 @@
     writeSteppers('phys', pools ? (pools.phys || pools.physical) : null);
     writeSteppers('elem1', pools ? pools.elem1 : null);
     writeSteppers('elem2', pools ? pools.elem2 : null);
+  }
+
+  function readBuilderHealPool() {
+    const dice = {};
+    [4, 6, 8, 10, 12, 20].forEach(sides => {
+      const val = parseInt(document.getElementById(`atk-bpool-heal-d${sides}`)?.value) || 0;
+      if (val > 0) dice[sides] = val;
+    });
+    const bonus = parseInt(document.getElementById('atk-bpool-heal-bonus')?.value) || 0;
+    return { dice, bonus };
+  }
+
+  function writeBuilderHealPool(healPool) {
+    const d = (healPool && healPool.dice) || {};
+    [4, 6, 8, 10, 12, 20].forEach(sides => {
+      const el = document.getElementById(`atk-bpool-heal-d${sides}`);
+      if (el) el.value = d[sides] || d[`d${sides}`] || 0;
+    });
+    const bonusEl = document.getElementById('atk-bpool-heal-bonus');
+    if (bonusEl) bonusEl.value = (healPool && healPool.bonus) || 0;
+  }
+
+  function updateBuilderNatureUI(nature) {
+    const healSection = document.getElementById('atk-builder-heal-section');
+    const lifestealWrap = document.getElementById('atk-builder-lifesteal-wrap');
+    if (nature === 'heal') {
+      if (healSection) healSection.style.display = 'block';
+      if (lifestealWrap) lifestealWrap.style.display = 'none';
+    } else if (nature === 'hybrid') {
+      if (healSection) healSection.style.display = 'block';
+      if (lifestealWrap) lifestealWrap.style.display = 'block';
+    } else {
+      if (healSection) healSection.style.display = 'none';
+    }
+  }
+
+  function playHealChimeSound() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + idx * 0.08);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime + idx * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + idx * 0.08 + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime + idx * 0.08);
+        osc.stop(audioCtx.currentTime + idx * 0.08 + 0.55);
+      });
+    } catch(e) {}
   }
 
   function updateBuilderLvlTabsUI(lvl) {
@@ -2341,6 +2451,16 @@
     const statusSelect = document.getElementById('atk-builder-status-effect');
     if (statusSelect) statusSelect.value = '';
 
+    // Şifa / Hibrit alanlarını sıfırla
+    const natureSelect = document.getElementById('atk-builder-action-nature');
+    if (natureSelect) natureSelect.value = 'damage';
+    updateBuilderNatureUI('damage');
+    writeBuilderHealPool(null);
+    const healTargetSelect = document.getElementById('atk-builder-heal-target');
+    if (healTargetSelect) healTargetSelect.value = 'self';
+    const lifestealInput = document.getElementById('atk-builder-lifesteal-percent');
+    if (lifestealInput) lifestealInput.value = '0';
+
     updateBuilderModeBanner(null);
   }
 
@@ -2407,6 +2527,30 @@
         }
       }
 
+      let natureBadge = '';
+      if (preset.actionNature === 'heal') {
+        natureBadge = `<span class="atk-preset-chip" style="background:rgba(16,185,129,0.25); border-color:#10b981; color:#6ee7b7; font-weight:700;">💚 Şifa</span>`;
+      } else if (preset.actionNature === 'hybrid') {
+        natureBadge = `<span class="atk-preset-chip" style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5; font-weight:700;">🩸 Hasar + Şifa</span>`;
+      }
+
+      let poolSummaryText = formatPoolSummary(preset.dicePools);
+      if (preset.healPool && (preset.actionNature === 'heal' || preset.actionNature === 'hybrid')) {
+        const healDiceParts = [];
+        const hd = preset.healPool.dice || {};
+        [4, 6, 8, 10, 12, 20].forEach(s => {
+          const c = hd[s] || hd[`d${s}`] || 0;
+          if (c > 0) healDiceParts.push(`${c}d${s}`);
+        });
+        if (preset.healPool.bonus) healDiceParts.push(`+${preset.healPool.bonus}`);
+        const healDiceStr = healDiceParts.length > 0 ? healDiceParts.join(' ') : (preset.lifestealPercent ? `%${preset.lifestealPercent} Can Çalma` : '0');
+        if (preset.actionNature === 'heal') {
+          poolSummaryText = `<span style="color:#34d399; font-weight:600;">💚 Şifa: ${healDiceStr}</span>`;
+        } else {
+          poolSummaryText += ` | <span style="color:#34d399; font-weight:600;">💚 Şifa: ${healDiceStr}</span>`;
+        }
+      }
+
       card.innerHTML = `
         <div>
           <div class="atk-preset-card-header">
@@ -2414,13 +2558,14 @@
             <span class="atk-preset-chip">${preset.stat}</span>
           </div>
           <div class="atk-preset-badge-row" style="margin: 4px 0;">
+            ${natureBadge}
             <span class="atk-preset-chip">${typeLabel}</span>
             ${scalingBadge}
             ${halfBadge}
             ${aoeBadge}
             ${statusBadge}
           </div>
-          <div class="atk-preset-card-pools">${formatPoolSummary(preset.dicePools)}</div>
+          <div class="atk-preset-card-pools">${poolSummaryText}</div>
           ${preset.description ? `<div class="atk-preset-card-desc" style="margin-top:4px;">${escapeHtml(preset.description)}</div>` : ''}
         </div>
         <div class="atk-preset-card-actions">
@@ -2514,6 +2659,18 @@
     if (aoeRadiusGroup) aoeRadiusGroup.style.display = preset.isAoe ? 'flex' : 'none';
 
     document.getElementById('atk-builder-desc').value = preset.description || '';
+
+    // Aksiyon Niteliği & Şifa Yapılandırması
+    const natureSelect = document.getElementById('atk-builder-action-nature');
+    if (natureSelect) {
+      natureSelect.value = preset.actionNature || 'damage';
+      updateBuilderNatureUI(natureSelect.value);
+    }
+    writeBuilderHealPool(preset.healPool);
+    const healTargetSelect = document.getElementById('atk-builder-heal-target');
+    if (healTargetSelect) healTargetSelect.value = preset.healTarget || 'self';
+    const lifestealInput = document.getElementById('atk-builder-lifesteal-percent');
+    if (lifestealInput) lifestealInput.value = preset.lifestealPercent || 0;
 
     // Büyü Slotu Yapılandırması
     const consumesCheck = document.getElementById('atk-builder-consumes-slot');
@@ -2628,12 +2785,22 @@
       if (foundEff) statusEffectsToApply.push(foundEff);
     }
 
+    // Aksiyon Niteliği & Şifa
+    const actionNature = document.getElementById('atk-builder-action-nature')?.value || 'damage';
+    const healPool = (actionNature === 'heal' || actionNature === 'hybrid') ? readBuilderHealPool() : null;
+    const healTarget = document.getElementById('atk-builder-heal-target')?.value || 'self';
+    const lifestealPercent = parseInt(document.getElementById('atk-builder-lifesteal-percent')?.value) || 0;
+
     return {
       id: id || ('atk_custom_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
       name,
       stat,
       attackType: consumesSpellSlot ? 'spell' : 'physical',
       physicalDamageType,
+      actionNature,
+      healPool,
+      healTarget,
+      lifestealPercent,
       consumesSpellSlot,
       baseSpellLevel,
       spellLevel: baseSpellLevel,
@@ -2719,6 +2886,11 @@
     if (spellSection) {
       spellSection.style.display = e.target.checked ? 'block' : 'none';
     }
+  });
+
+  // Aksiyon Niteliği (Hasar / Şifa / Hibrit) Değişimi
+  document.getElementById('atk-builder-action-nature')?.addEventListener('change', (e) => {
+    updateBuilderNatureUI(e.target.value);
   });
 
   // Builder Seviye Sekmeleri Tıklama

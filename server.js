@@ -403,7 +403,7 @@ function rollSpellDamage(spell, resWeakOptions) {
   return { damage: spellDmg, breakdown: parts.join(' + ') };
 }
 
-// ---- Saldırı Hesapla ----
+// ---- Saldırı / Aksiyon Hesapla (Hasar, Şifa & Hibrit / Can Çalma) ----
 app.post('/api/combat/attack', (req, res) => {
   try {
     const {
@@ -412,13 +412,17 @@ app.post('/api/combat/attack', (req, res) => {
       target,               // { type: 'marker' | 'character', id: '...' }
       targetAC,             // hedef AC değeri
       attackType,           // 'physical' | 'spell'
+      actionNature,         // 'damage' | 'heal' | 'hybrid'
+      healPool,             // { dice, bonus, min, max } — Can yenileme zar havuzu
+      healTarget,           // 'self' | 'target' — Şifanın gideceği taraf (saldıran veya hedef)
+      lifestealPercent,     // number (0-100) — Hasar üzerinden can çalma yüzdesi
       advantage,            // bool
       disadvantage,         // bool
-      attackCount,          // saldırı adedi
+      attackCount,          // saldırı / aksiyon adedi
       extraDamage,          // manuel ek hasar
       halfDamageOnMiss,     // bool — Iska durumunda yarım hasar vurulsun mu
       statusEffectsToApply, // array — İsabet durumunda hedefe uygulanacak durum efektleri
-      physicalDamageType,   // 'slashing' | 'bludgeoning' | 'piercing'
+      physicalDamageType,   // 'slashing' | 'bludgeoning' | 'piercing' | 'magic' | 'holy'
       // Fiziksel saldırı parametreleri
       physical,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
       element1,             // { dice, bonus, min, max, extraMin, extraMax, weakness, resistance }
@@ -432,6 +436,21 @@ app.post('/api/combat/attack', (req, res) => {
     const safeStat = clampNumber(attackerStats?.stat, 0, 30);
     const safeBonus = clampNumber(attackerStats?.bonus, 0, 30);
     const safeExtra = clampNumber(extraDamage, 0, 1000);
+    const safeLifesteal = clampNumber(parseInt(lifestealPercent) || 0, 0, 100);
+
+    // Aksiyon niteliğini tespit et (heal, hybrid veya damage)
+    let effectiveNature = actionNature;
+    if (!effectiveNature) {
+      const hasHealDice = healPool && (healPool.bonus || Object.values(healPool.dice || {}).some(v => parseInt(v) > 0));
+      const hasDmgDice = (physical && (physical.bonus || Object.values(physical.dice || {}).some(v => parseInt(v) > 0))) ||
+                         (element1 && (element1.bonus || Object.values(element1.dice || {}).some(v => parseInt(v) > 0))) ||
+                         (spell && (spell.bonus || Object.values(spell.dice || {}).some(v => parseInt(v) > 0)));
+      if (hasHealDice && !hasDmgDice && safeLifesteal === 0) effectiveNature = 'heal';
+      else if (hasHealDice && hasDmgDice) effectiveNature = 'hybrid';
+      else effectiveNature = 'damage';
+    }
+
+    const effectiveHealTarget = healTarget || (effectiveNature === 'heal' ? 'target' : 'self');
 
     // Durum Efektlerini Çözümle
     const attackerEffects = attacker ? getTokenActiveEffects(attacker.type, attacker.id) : [];
@@ -478,6 +497,7 @@ app.post('/api/combat/attack', (req, res) => {
 
     const attacks = [];
     let totalDamage = 0;
+    let totalHeal = 0;
 
     for (let i = 0; i < safeCount; i++) {
       // 1. Vuruş zarı (d20)
@@ -493,20 +513,57 @@ app.post('/api/combat/attack', (req, res) => {
       // 2. Bonuslu zar = hitRoll + floor((stat + bonus) / 2)
       const modifiedRoll = hitRoll + Math.floor((safeStat + safeBonus) / 2);
 
-      // 3. Vuruş kontrolü (Felç: Kesin Vuruş & Kesin Kritik)
+      // 3. Vuruş kontrolü
       let isCritical = hitRoll === 20;
       let isCritFail = hitRoll === 1;
       let isHit = false;
 
-      if (hasTargetParalyzed) {
+      // Saf şifa büyüleri doğrudan müttefike/kendine uygulandığından AC kontrolü yapmaz (kesin tutar)
+      if (effectiveNature === 'heal') {
+        isHit = true;
+        isCritFail = false;
+      } else if (hasTargetParalyzed) {
         isHit = true;
         isCritical = true; // Felçli hedefe yapılan tüm saldırılar kesin vuruş ve kritiktir
       } else {
         isHit = isCritical || (!isCritFail && modifiedRoll >= safeAC);
       }
 
+      // 4. Saf Şifa Aksiyonu (Heal only)
+      if (effectiveNature === 'heal') {
+        const healRes = rollChannelDamage(healPool || {});
+        let healAmount = healRes.damage + safeExtra;
+        const healParts = [];
+
+        if (healRes.breakdown) healParts.push(`Şifa Zarı: ${healRes.breakdown}`);
+        if (safeExtra > 0) healParts.push(`Ek Şifa: +${safeExtra}`);
+
+        if (isCritical) {
+          healAmount = Math.floor(healAmount * 1.5);
+          healParts.push('(✨ KRİTİK ŞİFA x1.5)');
+        }
+
+        totalHeal += healAmount;
+
+        attacks.push({
+          index: i + 1,
+          hit: true,
+          halfDamageMiss: false,
+          hitRoll,
+          modifiedRoll,
+          isCritical,
+          isCritFail: false,
+          damage: 0,
+          heal: healAmount,
+          breakdown: healParts.join(' | ') || `💚 +${healAmount} Can`
+        });
+        continue;
+      }
+
+      // 5. Iska Durumu (Hasar veya Hibrit için)
       if (!isHit) {
         let missDamage = 0;
+        let missHeal = 0;
         let missReason = 'ISKA';
 
         if (halfDamageOnMiss) {
@@ -514,7 +571,7 @@ app.post('/api/combat/attack', (req, res) => {
           let rawDmg = 0;
           const missParts = [];
 
-          if (attackType === 'physical') {
+          if (attackType === 'physical' || physical || element1 || element2) {
             const physRes = rollChannelDamage(physical, physResOptions);
             const elem1Res = rollChannelDamage(element1);
             const elem2Res = rollChannelDamage(element2);
@@ -534,7 +591,14 @@ app.post('/api/combat/attack', (req, res) => {
 
           missDamage = Math.max(1, Math.floor(rawDmg / 2));
           totalDamage += missDamage;
-          missReason = `ISKA (½ Hasar: ${missDamage}) [Ham: ${rawDmg}]`;
+
+          // Hibrit ise can çalma da orantılı uygulanır
+          if (effectiveNature === 'hybrid' && safeLifesteal > 0) {
+            missHeal = Math.max(0, Math.floor(missDamage * (safeLifesteal / 100)));
+            totalHeal += missHeal;
+          }
+
+          missReason = `ISKA (½ Hasar: ${missDamage}${missHeal > 0 ? `, 💚 Can Çalma: +${missHeal}` : ''}) [Ham: ${rawDmg}]`;
         } else {
           if (hasAttackerBlind) missReason = 'ISKA (Körlük)';
           else if (hasTargetPrepared) missReason = 'ISKA (Hazır)';
@@ -549,16 +613,17 @@ app.post('/api/combat/attack', (req, res) => {
           isCritical: false,
           isCritFail,
           damage: missDamage,
+          heal: missHeal,
           breakdown: missReason
         });
         continue;
       }
 
-      // 4. Hasar hesaplama
+      // 6. Başarılı Vuruş — Hasar ve Şifa / Can Çalma Hesaplama
       let damage = 0;
       const breakdownParts = [];
 
-      if (attackType === 'physical') {
+      if (attackType === 'physical' || physical || element1 || element2) {
         const physRes = rollChannelDamage(physical, physResOptions);
         const elem1Res = rollChannelDamage(element1);
         const elem2Res = rollChannelDamage(element2);
@@ -576,7 +641,7 @@ app.post('/api/combat/attack', (req, res) => {
         if (safeExtra > 0) breakdownParts.push(`Manuel Ek: +${safeExtra}`);
       }
 
-      // 5. Kritik vuruş çarpanı (Normal kritik: 1.5x, Felç kritik: 2x)
+      // Kritik vuruş çarpanı (Normal kritik: 1.5x, Felç kritik: 2x)
       if (isCritical) {
         if (hasTargetParalyzed) {
           damage = Math.floor(damage * 2);
@@ -589,6 +654,35 @@ app.post('/api/combat/attack', (req, res) => {
 
       totalDamage += damage;
 
+      // 7. Hibrit Aksiyon (Hem Hasar Vurur Hem Can Yeniler / Can Çalar)
+      let attackHeal = 0;
+      if (effectiveNature === 'hybrid') {
+        const healRes = rollChannelDamage(healPool || {});
+        let rolledHeal = healRes.damage;
+        const healDetail = [];
+
+        if (healRes.breakdown) healDetail.push(`${healRes.breakdown}`);
+
+        // Can çalma yüzdesi varsa hasardan ek can çek
+        if (safeLifesteal > 0) {
+          const lifestealVal = Math.max(0, Math.floor(damage * (safeLifesteal / 100)));
+          rolledHeal += lifestealVal;
+          healDetail.push(`%${safeLifesteal} Çalma: +${lifestealVal}`);
+        }
+
+        if (isCritical) {
+          rolledHeal = Math.floor(rolledHeal * 1.5);
+          healDetail.push('(KRİTİK x1.5)');
+        }
+
+        attackHeal = rolledHeal;
+        totalHeal += attackHeal;
+
+        if (attackHeal > 0) {
+          breakdownParts.push(`💚 Şifa: +${attackHeal} Can (${healDetail.join(' ') || attackHeal})`);
+        }
+      }
+
       attacks.push({
         index: i + 1,
         hit: true,
@@ -598,6 +692,7 @@ app.post('/api/combat/attack', (req, res) => {
         isCritical,
         isCritFail: false,
         damage,
+        heal: attackHeal,
         breakdown: breakdownParts.join(' | ') || `${damage}`
       });
     }
@@ -605,6 +700,10 @@ app.post('/api/combat/attack', (req, res) => {
     res.json({
       attacks,
       totalDamage,
+      totalHeal,
+      actionNature: effectiveNature,
+      healTarget: effectiveHealTarget,
+      lifestealPercent: safeLifesteal,
       attackType,
       statusEffectsToApply: Array.isArray(statusEffectsToApply) ? statusEffectsToApply : [],
       statusNotes: {
@@ -623,19 +722,37 @@ app.post('/api/combat/attack', (req, res) => {
   }
 });
 
-// ---- Hasar Uygula ----
+// ---- Hasar ve Şifa / Can Çalma Uygula ----
 app.post('/api/combat/apply-damage', async (req, res) => {
   try {
-    const { targetType, targetId, damage, statusEffectsToApply, isCritical, attackType, damageType, impactId, senderSocketId } = req.body;
-    const safeDamage = clampNumber(damage, 0, 99999);
+    const {
+      targetType,
+      targetId,
+      damage,
+      heal,
+      healTarget,
+      attackerType,
+      attackerId,
+      actionNature,
+      statusEffectsToApply,
+      isCritical,
+      attackType,
+      damageType,
+      impactId,
+      senderSocketId
+    } = req.body;
 
-    // Barınak (Shelter) kontrolü
+    const safeDamage = clampNumber(damage, 0, 99999);
+    const safeHeal = clampNumber(heal, 0, 99999);
+
+    // Barınak (Shelter) kontrolü (Yalnızca hasar için)
     const targetEffects = getTokenActiveEffects(targetType, targetId);
     const hasShelter = targetEffects.some(e => e.effects?.shelter);
 
+    let damageApplied = safeDamage;
     if (hasShelter && safeDamage > 0) {
+      damageApplied = 0;
       io.emit('logMessage', { message: '🛡️ Barınak: Hasar tamamen engellendi (Dokunulmaz)!', color: '#3498db' });
-      return res.json({ success: true, damageApplied: 0, shelterBlocked: true, message: 'Barınak: Hasar engellendi!' });
     }
 
     // Durum efektlerini hedefe uygula (varsa)
@@ -645,17 +762,26 @@ app.post('/api/combat/apply-damage', async (req, res) => {
       });
     }
 
+    let targetNewHp = null;
+
+    // 1. Hedefe Hasar Uygulama (Eğer hasar varsa veya hedef HP güncelleniyorsa)
     if (targetType === 'character') {
-      // Veritabanından mevcut HP'yi çek
       const { data: charData, error: fetchErr } = await supabase
         .from('characters')
-        .select('hp_current, hp_max')
+        .select('hp_current, hp_max, name')
         .eq('id', targetId)
         .single();
 
       if (fetchErr) throw fetchErr;
 
-      const newHp = Math.max(0, (charData.hp_current || 0) - safeDamage);
+      let newHp = Math.max(0, (charData.hp_current || 0) - damageApplied);
+
+      // Eğer şifa doğrudan hedefe uygulanıyorsa
+      if (safeHeal > 0 && healTarget === 'target') {
+        newHp = Math.min(charData.hp_max || 99999, newHp + safeHeal);
+      }
+
+      targetNewHp = newHp;
 
       const { error: updateErr } = await supabase
         .from('characters')
@@ -664,7 +790,6 @@ app.post('/api/combat/apply-damage', async (req, res) => {
 
       if (updateErr) throw updateErr;
 
-      // Socket üzerinden tüm istemcilere bildir
       const playerEntry = Object.entries(players).find(
         ([, p]) => p.character && p.character.id === targetId
       );
@@ -680,12 +805,11 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         syncCombatantHp(targetId, newHp, charData.hp_max);
       }
 
-      // Vuruş hissi ve darbe efektini tüm istemcilere yayınla (gönderen hariç veya duplicate kontrolü ile)
-      if (safeDamage > 0) {
+      if (damageApplied > 0) {
         io.emit('attackHitImpact', {
           targetType: 'character',
           targetId,
-          damage: safeDamage,
+          damage: damageApplied,
           isCritical: Boolean(isCritical),
           attackType: attackType || 'physical',
           damageType: damageType || 'slashing',
@@ -694,11 +818,37 @@ app.post('/api/combat/apply-damage', async (req, res) => {
         });
       }
 
-      res.json({ success: true, newHp, targetType: 'character' });
+      if (safeHeal > 0 && healTarget === 'target') {
+        io.emit('combatHealImpact', {
+          recipientType: 'character',
+          recipientId: targetId,
+          targetType: 'character',
+          targetId: targetId,
+          heal: safeHeal,
+          amount: safeHeal,
+          newHp,
+          maxHp: charData.hp_max,
+          recipientName: charData.name,
+          impactId,
+          senderSocketId
+        });
+        io.emit('logMessage', {
+          message: `💚 [ŞİFA] ${charData.name || 'Hedef'} +${safeHeal} Can Yeniledi! (${newHp}/${charData.hp_max})`,
+          color: '#10b981'
+        });
+      }
     } else if (targetType === 'marker') {
-      // Marker hasar (in-memory)
       if (markers[targetId] && markers[targetId].hp != null) {
-        markers[targetId].hp = Math.max(0, markers[targetId].hp - safeDamage);
+        let newHp = Math.max(0, markers[targetId].hp - damageApplied);
+
+        if (safeHeal > 0 && healTarget === 'target') {
+          const maxHp = markers[targetId].maxHp != null ? markers[targetId].maxHp : 99999;
+          newHp = Math.min(maxHp, newHp + safeHeal);
+        }
+
+        markers[targetId].hp = newHp;
+        targetNewHp = newHp;
+
         io.emit('updateMarkerData', markers[targetId]);
         syncCombatantHp(targetId, markers[targetId].hp, markers[targetId].maxHp);
 
@@ -707,12 +857,16 @@ app.post('/api/combat/apply-damage', async (req, res) => {
           handleExplosiveMarkerDeath(targetId, 'attack_damage');
         }
 
-        // Vuruş hissi ve darbe efektini tüm istemcilere yayınla (gönderen hariç veya duplicate kontrolü ile)
-        if (safeDamage > 0) {
+        // Cansız Çağırıcı / Yuva Obje kırıldı mı kontrol et
+        if (markers[targetId].hp <= 0 && markers[targetId].objectType === 'spawner' && !markers[targetId].isBroken) {
+          handleSpawnerMarkerBreak(targetId, 'attack_damage');
+        }
+
+        if (damageApplied > 0) {
           io.emit('attackHitImpact', {
             targetType: 'marker',
             targetId,
-            damage: safeDamage,
+            damage: damageApplied,
             isCritical: Boolean(isCritical),
             attackType: attackType || 'physical',
             damageType: damageType || 'slashing',
@@ -721,14 +875,124 @@ app.post('/api/combat/apply-damage', async (req, res) => {
           });
         }
 
-        res.json({ success: true, newHp: markers[targetId].hp, targetType: 'marker' });
+        if (safeHeal > 0 && healTarget === 'target') {
+          io.emit('combatHealImpact', {
+            recipientType: 'marker',
+            recipientId: targetId,
+            targetType: 'marker',
+            targetId: targetId,
+            heal: safeHeal,
+            amount: safeHeal,
+            newHp: markers[targetId].hp,
+            maxHp: markers[targetId].maxHp,
+            recipientName: markers[targetId].name,
+            impactId,
+            senderSocketId
+          });
+          io.emit('logMessage', {
+            message: `💚 [ŞİFA] "${markers[targetId].name}" +${safeHeal} Can Yeniledi! (${markers[targetId].hp}/${markers[targetId].maxHp || '?'})`,
+            color: '#10b981'
+          });
+        }
       }
-    } else {
-      res.status(400).json({ error: 'Geçersiz hedef tipi.' });
     }
+
+    // 2. Saldırana Şifa / Can Çalma Uygulama (healTarget === 'self')
+    if (safeHeal > 0 && healTarget === 'self' && attackerType && attackerId) {
+      if (attackerType === 'character') {
+        const { data: atkCharData } = await supabase
+          .from('characters')
+          .select('hp_current, hp_max, name')
+          .eq('id', attackerId)
+          .single();
+
+        if (atkCharData) {
+          const currentHp = (attackerId === targetId && targetType === 'character' && targetNewHp !== null)
+            ? targetNewHp
+            : (atkCharData.hp_current || 0);
+          const healedHp = Math.min(atkCharData.hp_max || 99999, currentHp + safeHeal);
+
+          await supabase.from('characters').update({ hp_current: healedHp }).eq('id', attackerId);
+
+          const playerEntry = Object.entries(players).find(
+            ([, p]) => p.character && p.character.id === attackerId
+          );
+          if (playerEntry) {
+            const [socketId, pData] = playerEntry;
+            pData.character.hp_current = healedHp;
+            io.emit('characterUpdated', {
+              id: socketId,
+              updates: { hp_current: healedHp, hp_max: atkCharData.hp_max }
+            });
+            syncCombatantHp(socketId, healedHp, atkCharData.hp_max);
+          } else {
+            syncCombatantHp(attackerId, healedHp, atkCharData.hp_max);
+          }
+
+          io.emit('combatHealImpact', {
+            recipientType: 'character',
+            recipientId: attackerId,
+            targetType: 'character',
+            targetId: attackerId,
+            heal: safeHeal,
+            amount: safeHeal,
+            newHp: healedHp,
+            maxHp: atkCharData.hp_max,
+            recipientName: atkCharData.name,
+            impactId,
+            senderSocketId
+          });
+
+          io.emit('logMessage', {
+            message: `💚 [CAN ÇALMA / ŞİFA] ${atkCharData.name || 'Saldıran'} +${safeHeal} Can Yeniledi! (${healedHp}/${atkCharData.hp_max})`,
+            color: '#10b981'
+          });
+        }
+      } else if (attackerType === 'marker') {
+        if (markers[attackerId] && markers[attackerId].hp != null) {
+          const mAttacker = markers[attackerId];
+          const maxHp = mAttacker.maxHp != null ? mAttacker.maxHp : 99999;
+          const currentHp = (attackerId === targetId && targetType === 'marker' && targetNewHp !== null)
+            ? targetNewHp
+            : (mAttacker.hp || 0);
+
+          mAttacker.hp = Math.min(maxHp, currentHp + safeHeal);
+          io.emit('updateMarkerData', mAttacker);
+          syncCombatantHp(attackerId, mAttacker.hp, mAttacker.maxHp);
+
+          io.emit('combatHealImpact', {
+            recipientType: 'marker',
+            recipientId: attackerId,
+            targetType: 'marker',
+            targetId: attackerId,
+            heal: safeHeal,
+            amount: safeHeal,
+            newHp: mAttacker.hp,
+            maxHp: mAttacker.maxHp,
+            recipientName: mAttacker.name,
+            impactId,
+            senderSocketId
+          });
+
+          io.emit('logMessage', {
+            message: `💚 [CAN ÇALMA / ŞİFA] "${mAttacker.name}" +${safeHeal} Can Yeniledi! (${mAttacker.hp}/${maxHp})`,
+            color: '#10b981'
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      newHp: targetNewHp,
+      targetType,
+      damageApplied,
+      healApplied: safeHeal,
+      shelterBlocked: Boolean(hasShelter && safeDamage > 0)
+    });
   } catch (err) {
-    console.error('Hasar uygulama hatası:', err);
-    res.status(500).json({ error: 'Hasar uygulanamadı.' });
+    console.error('Hasar/şifa uygulama hatası:', err);
+    res.status(500).json({ error: 'Hasar/şifa uygulanamadı.' });
   }
 });
 
@@ -1083,6 +1347,11 @@ async function processCombatantTurnEnd(combatant) {
             if (markers[combatant.id].hp <= 0 && markers[combatant.id].objectType === 'explosive' && !markers[combatant.id].hasExploded) {
               handleExplosiveMarkerDeath(combatant.id, 'dot_damage');
             }
+
+            // Cansız Çağırıcı Obje DoT hasarıyla kırıldıysa parçala
+            if (markers[combatant.id].hp <= 0 && markers[combatant.id].objectType === 'spawner' && !markers[combatant.id].isBroken) {
+              handleSpawnerMarkerBreak(combatant.id, 'dot_damage');
+            }
           } else if (!combatant.isMarker && combatant.characterId) {
             try {
               const { data: charData } = await supabase
@@ -1116,6 +1385,55 @@ async function processCombatantTurnEnd(combatant) {
             color: '#e74c3c'
           });
         }
+      }
+    }
+
+    // 1.5. HoT (Healing over Time / Rejenerasyon / Can Yenileme) Kontrolü
+    if (eff.effects?.hotHealing) {
+      const minHeal = clampNumber(parseInt(eff.effects.hotHealing.min) || 1, 0, 9999);
+      const maxHeal = clampNumber(parseInt(eff.effects.hotHealing.max) || minHeal, minHeal, 9999);
+      const hotHeal = rollDie(minHeal, maxHeal);
+
+      if (hotHeal > 0) {
+        if (combatant.isMarker && markers[combatant.id] && markers[combatant.id].hp != null) {
+          const maxHp = markers[combatant.id].maxHp != null ? markers[combatant.id].maxHp : 99999;
+          markers[combatant.id].hp = Math.min(maxHp, markers[combatant.id].hp + hotHeal);
+          combatant.hpCurrent = markers[combatant.id].hp;
+          io.emit('updateMarkerData', markers[combatant.id]);
+          syncCombatantHp(combatant.id, combatant.hpCurrent, combatant.hpMax);
+          io.emit('combatHealImpact', { targetType: 'marker', targetId: combatant.id, heal: hotHeal });
+        } else if (!combatant.isMarker && combatant.characterId) {
+          try {
+            const { data: charData } = await supabase
+              .from('characters')
+              .select('hp_current, hp_max')
+              .eq('id', combatant.characterId)
+              .single();
+            if (charData) {
+              const newHp = Math.min(charData.hp_max || 99999, (charData.hp_current || 0) + hotHeal);
+              await supabase.from('characters').update({ hp_current: newHp }).eq('id', combatant.characterId);
+              combatant.hpCurrent = newHp;
+
+              const playerEntry = Object.entries(players).find(
+                ([, p]) => p.character && p.character.id === combatant.characterId
+              );
+              if (playerEntry) {
+                const [socketId, p] = playerEntry;
+                p.character.hp_current = newHp;
+                io.emit('characterUpdated', { id: socketId, updates: { hp_current: newHp, hp_max: charData.hp_max } });
+              }
+              syncCombatantHp(combatant.id, newHp, charData.hp_max);
+              io.emit('combatHealImpact', { targetType: 'character', targetId: combatant.characterId, heal: hotHeal });
+            }
+          } catch (err) {
+            console.error('HoT character iyileşme hatası:', err);
+          }
+        }
+
+        io.emit('logMessage', {
+          message: `${eff.icon || '💚'} [${eff.name}]: ${combatant.name} +${hotHeal} can yeniledi! (Mevcut HP: ${combatant.hpCurrent || 0})`,
+          color: '#10b981'
+        });
       }
     }
   }
@@ -1602,6 +1920,186 @@ async function handleRoundStartAuras() {
   }
 }
 
+/**
+ * Çağırıcı / Yuva / Portal nesnesinin kırılıp yok olmasını işler (Kırılabilir Obje Mantığı).
+ */
+async function handleSpawnerMarkerBreak(markerId, reason = null) {
+  const marker = markers[markerId];
+  if (!marker || marker.objectType !== 'spawner' || marker.isBroken) return;
+
+  marker.isBroken = true;
+  marker.hp = 0;
+
+  io.emit('logMessage', {
+    message: `🌀💥 [ÇAĞIRICI PARÇALANDI] "${marker.name}" kırıldı ve yok edildi! Artık düşman doğuramaz!`,
+    color: '#ef4444'
+  });
+
+  io.emit('spawnerDestroyed', {
+    markerId,
+    name: marker.name,
+    x: marker.x,
+    y: marker.y
+  });
+
+  // Eğer kırılınca silinmesi ayarlandıysa haritadan kaldır
+  const destroyOnBreak = marker.objectConfig?.destroyOnBreak !== false;
+  if (destroyOnBreak) {
+    delete markers[markerId];
+    io.emit('removeMarker', markerId);
+    if (combatState.active) {
+      combatState.combatants = combatState.combatants.filter(c => c.id !== markerId);
+      if (combatState.currentTurnIndex >= combatState.combatants.length) {
+        combatState.currentTurnIndex = Math.max(0, combatState.combatants.length - 1);
+      }
+      io.emit('combatStateUpdated', combatState);
+    }
+  } else {
+    io.emit('updateMarkerData', marker);
+  }
+}
+
+/**
+ * Çağırıcı / Yuva nesnesi tetiklendiğinde sahnede önceden hazırlanmış düşmanı doğurur.
+ */
+async function handleSpawnerTrigger(spawnerId, manualTrigger = false) {
+  const spawner = markers[spawnerId];
+  if (!spawner || spawner.objectType !== 'spawner') return;
+  if (spawner.hp !== null && spawner.hp <= 0) return;
+  if (spawner.isBroken) return;
+
+  const config = spawner.objectConfig || {};
+  const presetId = config.spawnPresetId;
+
+  // Önceden hazır edilen düşman şablonunu bul
+  let preset = tokenPresets.find(p => p.id === presetId);
+  if (!preset) {
+    // ID bulunamadıysa ilk uygun yaratık şablonunu veya varsayılan düşmanı kullan
+    preset = tokenPresets.find(p => p.objectType === 'creature' || !p.objectType) || {
+      name: 'Yaratık',
+      hp: 15,
+      maxHp: 15,
+      ac: 11,
+      acBonus: 0,
+      color: '#e74c3c',
+      size: 50,
+      stats: { str: 10, str_bonus: 0, dex: 10, dex_bonus: 0, con: 10, con_bonus: 0, int: 10, int_bonus: 0, wis: 10, wis_bonus: 0, chr: 10, chr_bonus: 0 }
+    };
+  }
+
+  const spawnCount = clampNumber(parseInt(config.spawnCount) || 1, 1, 6);
+  const spawnRadius = clampNumber(parseInt(config.spawnRadius) || 80, 30, 600);
+  const spawnedList = [];
+
+  for (let i = 0; i < spawnCount; i++) {
+    config.totalSpawnedSoFar = (parseInt(config.totalSpawnedSoFar) || 0) + 1;
+    const waveNum = config.totalSpawnedSoFar;
+
+    // Yuvanın çevresinde radyal olarak boşluklu koordinat belirle
+    const angle = (i * (2 * Math.PI / spawnCount)) + (Math.random() * 0.5 - 0.25);
+    const dist = (spawner.size || 50) / 2 + spawnRadius * (0.6 + Math.random() * 0.4);
+    const spawnX = clampNumber(Math.round(spawner.x + Math.cos(angle) * dist), 30, 9900);
+    const spawnY = clampNumber(Math.round(spawner.y + Math.sin(angle) * dist), 30, 9900);
+
+    const newMarkerId = 'marker_' + Date.now() + '_' + Math.floor(Math.random() * 1000) + '_' + i;
+    const newMarker = {
+      id: newMarkerId,
+      x: spawnX,
+      y: spawnY,
+      name: `${preset.name} #${waveNum}`,
+      color: preset.color || '#e74c3c',
+      imgUrl: preset.imgUrl || null,
+      hp: preset.hp != null ? preset.hp : (preset.maxHp != null ? preset.maxHp : 15),
+      maxHp: preset.maxHp != null ? preset.maxHp : (preset.hp != null ? preset.hp : 15),
+      ac: preset.ac != null ? preset.ac : 10,
+      ac_bonus: preset.acBonus != null ? preset.acBonus : 0,
+      stats: preset.stats ? JSON.parse(JSON.stringify(preset.stats)) : null,
+      size: preset.size || 50,
+      hasDarkness: Boolean(preset.hasDarkness),
+      darkness: preset.darkness || 0,
+      maxDarkness: preset.maxDarkness || 100,
+      isMarker: true,
+      assignedAttacks: Array.isArray(preset.assignedAttacks) ? [...preset.assignedAttacks] : [],
+      objectType: preset.objectType || 'creature',
+      objectConfig: preset.objectConfig ? JSON.parse(JSON.stringify(preset.objectConfig)) : null,
+      hasExploded: false
+    };
+
+    markers[newMarkerId] = newMarker;
+    io.emit('newMarker', newMarker);
+    spawnedList.push(newMarker);
+
+    // Eğer savaş aktifse yeni doğan düşmanı savaşa ekle
+    if (combatState.active) {
+      const chrStat = newMarker.stats?.chr != null ? newMarker.stats.chr : 10;
+      const chrBonus = newMarker.stats?.chr_bonus != null ? newMarker.stats.chr_bonus : 0;
+      const chrMod = Math.floor((chrStat - 10) / 2) + chrBonus;
+      const roll = Math.floor(Math.random() * 20) + 1;
+      const total = roll + chrMod;
+      combatState.combatants.push({
+        id: newMarker.id,
+        name: newMarker.name,
+        color: newMarker.color,
+        imgUrl: newMarker.imgUrl,
+        isMarker: true,
+        role: 'marker',
+        hpCurrent: newMarker.hp,
+        hpMax: newMarker.maxHp,
+        ac: newMarker.ac,
+        ac_bonus: newMarker.ac_bonus,
+        stats: newMarker.stats,
+        hasDarkness: newMarker.hasDarkness,
+        darkness: newMarker.darkness,
+        maxDarkness: newMarker.maxDarkness,
+        chrStat,
+        chrBonus,
+        chrMod,
+        roll,
+        total,
+        isDead: false,
+        objectType: newMarker.objectType,
+        objectConfig: newMarker.objectConfig,
+        activeEffects: [],
+        assignedAttacks: newMarker.assignedAttacks
+      });
+    }
+  }
+
+  spawner.objectConfig = config;
+  io.emit('updateMarkerData', spawner);
+
+  if (combatState.active) {
+    io.emit('combatStateUpdated', combatState);
+  }
+
+  // Sahneye çağırma dalgasını ve görsel efektini yayınla
+  io.emit('spawnerSpawned', {
+    spawnerId: spawner.id,
+    spawnerName: spawner.name,
+    spawnerX: spawner.x,
+    spawnerY: spawner.y,
+    spawnerSize: spawner.size || 50,
+    spawnedMarkers: spawnedList.map(m => ({ id: m.id, name: m.name, x: m.x, y: m.y, color: m.color, size: m.size }))
+  });
+
+  const manualTag = manualTrigger ? ' (Manuel)' : '';
+  io.emit('logMessage', {
+    message: `🌀 [ÇAĞIRICI / YUVA] "${spawner.name}" sahneye ${spawnCount} adet "${preset.name}" doğurdu!${manualTag}`,
+    color: '#10b981'
+  });
+}
+
+/**
+ * Tur/Round başında 'round' zamanlamalı çağırıcı yuva nesnelerini tetikler.
+ */
+async function handleRoundStartSpawners() {
+  for (const [mid, m] of Object.entries(markers)) {
+    if (m.objectType === 'spawner' && m.hp !== null && m.hp > 0 && !m.isBroken && m.objectConfig?.triggerTiming === 'round') {
+      await handleSpawnerTrigger(mid);
+    }
+  }
+}
+
 // === SOCKET.IO EVENT YÖNETİMİ ===
 io.on('connection', (socket) => {
   console.log('Bir oyuncu bağlandı: ' + socket.id);
@@ -1708,6 +2206,8 @@ io.on('connection', (socket) => {
       }
     }
 
+    const playerSize = (cacheMatch && cacheMatch.size) || (charObj && (charObj.token_size || charObj.size)) || 50;
+
     players[socket.id] = {
       id: socket.id,
       sessionId: data.sessionId || socket.id,
@@ -1717,7 +2217,8 @@ io.on('connection', (socket) => {
       profile: data.profile,
       character: charObj,
       color: color,
-      imgUrl: imgUrl
+      imgUrl: imgUrl,
+      size: playerSize
     };
 
     // Yalnızca yeni bağlanan oyuncuya mevcut oyuncuları gönder
@@ -1782,17 +2283,23 @@ io.on('connection', (socket) => {
       maxDarkness: markerData.maxDarkness != null ? clampNumber(markerData.maxDarkness, 1, 99999) : 100,
       isMarker: true,
       assignedAttacks: Array.isArray(markerData.assignedAttacks) ? markerData.assignedAttacks : [],
-      objectType: (markerData.objectType === 'explosive' || markerData.objectType === 'aura') ? markerData.objectType : 'creature',
-      objectConfig: (markerData.objectType === 'explosive' || markerData.objectType === 'aura') && markerData.objectConfig && typeof markerData.objectConfig === 'object' ? {
-        radius: clampNumber(markerData.objectConfig.radius || (markerData.objectType === 'explosive' ? 120 : 150), 20, 2000),
+      objectType: (markerData.objectType === 'explosive' || markerData.objectType === 'aura' || markerData.objectType === 'spawner') ? markerData.objectType : 'creature',
+      objectConfig: (markerData.objectType === 'explosive' || markerData.objectType === 'aura' || markerData.objectType === 'spawner') && markerData.objectConfig && typeof markerData.objectConfig === 'object' ? {
+        radius: clampNumber(markerData.objectConfig.radius || (markerData.objectType === 'explosive' ? 120 : (markerData.objectType === 'spawner' ? 80 : 150)), 20, 2000),
         damage: clampNumber(markerData.objectConfig.damage || 0, 0, 99999),
         damageType: truncateStr(markerData.objectConfig.damageType || (markerData.objectType === 'explosive' ? 'fire' : 'necrotic'), 20),
         statusEffects: Array.isArray(markerData.objectConfig.statusEffects) ? markerData.objectConfig.statusEffects : [],
         targetFilter: markerData.objectConfig.targetFilter || 'all',
         destroyOnExplode: markerData.objectConfig.destroyOnExplode !== false,
-        triggerTiming: markerData.objectConfig.triggerTiming || 'turn'
+        destroyOnBreak: markerData.objectConfig.destroyOnBreak !== false,
+        triggerTiming: markerData.objectConfig.triggerTiming || 'turn',
+        spawnPresetId: truncateStr(markerData.objectConfig.spawnPresetId || '', 100),
+        spawnCount: clampNumber(parseInt(markerData.objectConfig.spawnCount) || 1, 1, 10),
+        spawnRadius: clampNumber(parseInt(markerData.objectConfig.spawnRadius) || 80, 20, 1000),
+        totalSpawnedSoFar: clampNumber(parseInt(markerData.objectConfig.totalSpawnedSoFar) || 0, 0, 9999)
       } : null,
-      hasExploded: false
+      hasExploded: false,
+      isBroken: false
     };
     markers[markerId] = newMarker;
     io.emit('newMarker', newMarker);
@@ -1894,18 +2401,23 @@ io.on('connection', (socket) => {
       };
     }
     if (data.objectType !== undefined) {
-      m.objectType = (data.objectType === 'explosive' || data.objectType === 'aura') ? data.objectType : 'creature';
+      m.objectType = (data.objectType === 'explosive' || data.objectType === 'aura' || data.objectType === 'spawner') ? data.objectType : 'creature';
     }
     if (data.objectConfig !== undefined) {
       if (data.objectConfig && typeof data.objectConfig === 'object') {
         m.objectConfig = {
-          radius: clampNumber(data.objectConfig.radius || (m.objectType === 'explosive' ? 120 : 150), 20, 2000),
+          radius: clampNumber(data.objectConfig.radius || (m.objectType === 'explosive' ? 120 : (m.objectType === 'spawner' ? 80 : 150)), 20, 2000),
           damage: clampNumber(data.objectConfig.damage || 0, 0, 99999),
           damageType: truncateStr(data.objectConfig.damageType || (m.objectType === 'explosive' ? 'fire' : 'necrotic'), 20),
           statusEffects: Array.isArray(data.objectConfig.statusEffects) ? data.objectConfig.statusEffects : [],
           targetFilter: data.objectConfig.targetFilter || 'all',
           destroyOnExplode: data.objectConfig.destroyOnExplode !== false,
-          triggerTiming: data.objectConfig.triggerTiming || 'turn'
+          destroyOnBreak: data.objectConfig.destroyOnBreak !== false,
+          triggerTiming: data.objectConfig.triggerTiming || 'turn',
+          spawnPresetId: truncateStr(data.objectConfig.spawnPresetId || '', 100),
+          spawnCount: clampNumber(parseInt(data.objectConfig.spawnCount) || 1, 1, 10),
+          spawnRadius: clampNumber(parseInt(data.objectConfig.spawnRadius) || 80, 20, 1000),
+          totalSpawnedSoFar: clampNumber(parseInt(data.objectConfig.totalSpawnedSoFar) || (m.objectConfig?.totalSpawnedSoFar || 0), 0, 9999)
         };
       } else {
         m.objectConfig = null;
@@ -1914,10 +2426,18 @@ io.on('connection', (socket) => {
     if (data.hasExploded !== undefined) {
       m.hasExploded = Boolean(data.hasExploded);
     }
+    if (data.isBroken !== undefined) {
+      m.isBroken = Boolean(data.isBroken);
+    }
 
     // Düzenleme sonucu can 0 olduysa ve patlayıcı ise patlat
     if (m.hp !== null && m.hp <= 0 && m.objectType === 'explosive' && !m.hasExploded) {
       handleExplosiveMarkerDeath(m.id, 'edit_hp_zero');
+    }
+
+    // Düzenleme sonucu can 0 olduysa ve çağırıcı ise kır
+    if (m.hp !== null && m.hp <= 0 && m.objectType === 'spawner' && !m.isBroken) {
+      handleSpawnerMarkerBreak(m.id, 'edit_hp_zero');
     }
 
     io.emit('updateMarkerData', m);
@@ -2178,6 +2698,12 @@ io.on('connection', (socket) => {
       };
     }
 
+    if (data.size !== undefined || data.token_size !== undefined) {
+      const safeSize = clampNumber(data.size || data.token_size, 20, 500);
+      updates.token_size = safeSize;
+      updates.size = safeSize;
+    }
+
     let { error } = await supabase
       .from('characters')
       .update(updates)
@@ -2188,13 +2714,14 @@ io.on('connection', (socket) => {
       if (safeUpdates.assignedAttacks !== undefined) delete safeUpdates.assignedAttacks;
       if (safeUpdates.darkness !== undefined) delete safeUpdates.darkness;
       if (safeUpdates.max_darkness !== undefined) delete safeUpdates.max_darkness;
+      if (safeUpdates.size !== undefined) delete safeUpdates.size;
+      if (safeUpdates.token_size !== undefined) delete safeUpdates.token_size;
       const retry = await supabase.from('characters').update(safeUpdates).eq('id', data.characterId);
       error = retry.error;
     }
 
     if (error) {
-      console.error("Supabase güncellerken hata:", error);
-      return;
+      console.error("Supabase güncellerken hata (hafıza güncelleniyor):", error.message);
     }
 
     // Başarılıysa sunucu durumunu güncelle ve herkese anons et
@@ -2205,10 +2732,20 @@ io.on('connection', (socket) => {
         if (!players[data.id].character.stats) players[data.id].character.stats = {};
         players[data.id].character.stats.assignedAttacks = updates.assignedAttacks;
       }
+      if (updates.size !== undefined || updates.token_size !== undefined) {
+        const tokenSize = updates.size || updates.token_size;
+        players[data.id].size = tokenSize;
+        if (players[data.id].sessionId && sessionCache[players[data.id].sessionId]) {
+          sessionCache[players[data.id].sessionId].size = tokenSize;
+        }
+      }
       if (players[data.id].sessionId && sessionCache[players[data.id].sessionId]) {
         sessionCache[players[data.id].sessionId].character = players[data.id].character;
       }
       io.emit('characterUpdated', { id: data.id, updates: updates });
+      if (updates.size !== undefined || updates.token_size !== undefined) {
+        io.emit('tokenSizeUpdated', { id: data.id, size: updates.size || updates.token_size });
+      }
       syncCombatantHp(data.id, updates.hp_current, updates.hp_max);
 
       if (combatState.active) {
@@ -2223,17 +2760,53 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ---- DM: Oyuncu Token Boyutu Hızlı Güncelle ----
+  socket.on('updatePlayerTokenSize', async ({ playerId, size }) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    if (!playerId || !players[playerId]) return;
+
+    const safeSize = clampNumber(size, 20, 500);
+    players[playerId].size = safeSize;
+    if (players[playerId].character) {
+      players[playerId].character.token_size = safeSize;
+      players[playerId].character.size = safeSize;
+    }
+    if (players[playerId].sessionId && sessionCache[players[playerId].sessionId]) {
+      sessionCache[players[playerId].sessionId].size = safeSize;
+    }
+
+    io.emit('tokenSizeUpdated', { id: playerId, size: safeSize });
+
+    const charName = players[playerId].character?.name || 'Oyuncu';
+    io.emit('logMessage', {
+      message: `📏 DM, ${charName} token boyutunu ${safeSize}px yaptı.`,
+      color: '#c5a059'
+    });
+
+    if (players[playerId].character?.id) {
+      try {
+        await supabase
+          .from('characters')
+          .update({ token_size: safeSize })
+          .eq('id', players[playerId].character.id);
+      } catch (_) {}
+    }
+  });
+
   // ---- Çizim Eventleri ----
   socket.on('drawLine', (data) => {
     if (!data || typeof data !== 'object') return;
 
     const line = {
       playerId: socket.id,
+      type: truncateStr(data.type || 'line', 20),
       x0: clampNumber(data.x0, -10000, 20000),
       y0: clampNumber(data.y0, -10000, 20000),
       x1: clampNumber(data.x1, -10000, 20000),
       y1: clampNumber(data.y1, -10000, 20000),
-      color: truncateStr(data.color || '#e74c3c', 9)
+      width: clampNumber(data.width || data.lineWidth || 3, 1, 100),
+      color: truncateStr(data.color || '#e74c3c', 35),
+      fill: Boolean(data.fill)
     };
 
     drawHistory.push(line);
@@ -2244,6 +2817,16 @@ io.on('connection', (socket) => {
     }
 
     socket.broadcast.emit('draw', line);
+  });
+
+  socket.on('undoDraw', () => {
+    for (let i = drawHistory.length - 1; i >= 0; i--) {
+      if (drawHistory[i].playerId === socket.id) {
+        drawHistory.splice(i, 1);
+        io.emit('drawHistory', drawHistory);
+        break;
+      }
+    }
   });
 
   socket.on('requestClearAllDrawings', () => {
@@ -2371,18 +2954,22 @@ io.on('connection', (socket) => {
     combatState.currentTurnIndex = nextIndex;
     io.emit('combatStateUpdated', combatState);
 
-    // 3. Sırası gelen combatant canlı bir Aura/Totem objesi ise aura dalgası yay
+    // 3. Sırası gelen combatant canlı bir Aura/Totem veya Çağırıcı objesi ise tetikle
     const nextCombatant = combatState.combatants[nextIndex];
     if (nextCombatant && nextCombatant.isMarker) {
       const m = markers[nextCombatant.id];
       if (m && m.objectType === 'aura' && m.hp !== null && m.hp > 0 && (m.objectConfig?.triggerTiming !== 'round')) {
         await handleAuraMarkerPulse(nextCombatant.id);
       }
+      if (m && m.objectType === 'spawner' && m.hp !== null && m.hp > 0 && !m.isBroken && (m.objectConfig?.triggerTiming !== 'round')) {
+        await handleSpawnerTrigger(nextCombatant.id);
+      }
     }
 
-    // 4. Yeni raund başladıysa 'round' tetiklemeli aura nesnelerini yay
+    // 4. Yeni raund başladıysa 'round' tetiklemeli aura ve çağırıcı nesnelerini tetikle
     if (roundAdvanced) {
       await handleRoundStartAuras();
+      await handleRoundStartSpawners();
     }
   });
 
@@ -2410,12 +2997,15 @@ io.on('connection', (socket) => {
     combatState.currentTurnIndex = safeIdx;
     io.emit('combatStateUpdated', combatState);
 
-    // Sırası verilen combatant canlı bir Aura/Totem objesi ise aura dalgası yay
+    // Sırası verilen combatant canlı bir Aura/Totem veya Çağırıcı objesi ise tetikle
     const targetCombatant = combatState.combatants[safeIdx];
     if (targetCombatant && targetCombatant.isMarker) {
       const m = markers[targetCombatant.id];
       if (m && m.objectType === 'aura' && m.hp !== null && m.hp > 0) {
         await handleAuraMarkerPulse(targetCombatant.id);
+      }
+      if (m && m.objectType === 'spawner' && m.hp !== null && m.hp > 0 && !m.isBroken) {
+        await handleSpawnerTrigger(targetCombatant.id);
       }
     }
   });
@@ -2428,17 +3018,27 @@ io.on('connection', (socket) => {
   });
 
   // ---- DM: Cansız Nesneler Manuel Tetikleme Eventleri ----
-  socket.on('detonateObject', async (markerId) => {
+  socket.on('detonateObject', async (data) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
-    if (markers[markerId] && markers[markerId].objectType === 'explosive') {
+    const markerId = typeof data === 'string' ? data : (data?.markerId || data?.id);
+    if (markerId && markers[markerId] && markers[markerId].objectType === 'explosive') {
       await handleExplosiveMarkerDeath(markerId, 'dm_manual');
     }
   });
 
-  socket.on('triggerObjectAura', async (markerId) => {
+  socket.on('triggerObjectAura', async (data) => {
     if (!players[socket.id] || players[socket.id].role !== 'dm') return;
-    if (markers[markerId] && markers[markerId].objectType === 'aura') {
+    const markerId = typeof data === 'string' ? data : (data?.markerId || data?.id);
+    if (markerId && markers[markerId] && markers[markerId].objectType === 'aura') {
       await handleAuraMarkerPulse(markerId);
+    }
+  });
+
+  socket.on('triggerObjectSpawner', async (data) => {
+    if (!players[socket.id] || players[socket.id].role !== 'dm') return;
+    const markerId = typeof data === 'string' ? data : (data?.spawnerId || data?.markerId || data?.id);
+    if (markerId && markers[markerId] && markers[markerId].objectType === 'spawner') {
+      await handleSpawnerTrigger(markerId, true);
     }
   });
 
@@ -2526,6 +3126,10 @@ io.on('connection', (socket) => {
       stat: preset.stat || 'STR',
       attackType: preset.attackType === 'spell' ? 'spell' : 'physical',
       physicalDamageType: preset.physicalDamageType || 'slashing',
+      actionNature: preset.actionNature || 'damage',
+      healPool: (preset.healPool && typeof preset.healPool === 'object') ? preset.healPool : null,
+      healTarget: preset.healTarget || (preset.actionNature === 'heal' ? 'target' : 'self'),
+      lifestealPercent: clampNumber(parseInt(preset.lifestealPercent) || 0, 0, 100),
       spellLevel: clampNumber(parseInt(preset.spellLevel) || 1, 1, 4),
       consumesSpellSlot: Boolean(preset.consumesSpellSlot),
       baseSpellLevel: clampNumber(parseInt(preset.baseSpellLevel) || 1, 1, 4),
@@ -2569,6 +3173,12 @@ io.on('connection', (socket) => {
             consumesSpellSlot: newPreset.consumesSpellSlot,
             baseSpellLevel: newPreset.baseSpellLevel,
             slotScaling: newPreset.slotScaling
+          },
+          _healConfig: {
+            actionNature: newPreset.actionNature,
+            healPool: newPreset.healPool,
+            healTarget: newPreset.healTarget,
+            lifestealPercent: newPreset.lifestealPercent
           }
         },
         status_effects_to_apply: newPreset.statusEffectsToApply,
@@ -2648,15 +3258,20 @@ io.on('connection', (socket) => {
       darkness: preset.darkness != null ? clampNumber(parseInt(preset.darkness) || 0, 0, 99999) : 0,
       maxDarkness: preset.maxDarkness != null ? clampNumber(parseInt(preset.maxDarkness) || 100, 1, 99999) : 100,
       assignedAttacks: Array.isArray(preset.assignedAttacks) ? preset.assignedAttacks : [],
-      objectType: (preset.objectType === 'explosive' || preset.objectType === 'aura') ? preset.objectType : 'creature',
-      objectConfig: (preset.objectType === 'explosive' || preset.objectType === 'aura') && preset.objectConfig && typeof preset.objectConfig === 'object' ? {
-        radius: clampNumber(parseInt(preset.objectConfig.radius) || (preset.objectType === 'explosive' ? 120 : 150), 20, 2000),
+      objectType: (preset.objectType === 'explosive' || preset.objectType === 'aura' || preset.objectType === 'spawner') ? preset.objectType : 'creature',
+      objectConfig: (preset.objectType === 'explosive' || preset.objectType === 'aura' || preset.objectType === 'spawner') && preset.objectConfig && typeof preset.objectConfig === 'object' ? {
+        radius: clampNumber(parseInt(preset.objectConfig.radius) || (preset.objectType === 'explosive' ? 120 : (preset.objectType === 'spawner' ? 80 : 150)), 20, 2000),
         damage: clampNumber(parseInt(preset.objectConfig.damage) || 0, 0, 99999),
         damageType: truncateStr(preset.objectConfig.damageType || (preset.objectType === 'explosive' ? 'fire' : 'necrotic'), 20),
         statusEffects: Array.isArray(preset.objectConfig.statusEffects) ? preset.objectConfig.statusEffects : [],
         targetFilter: preset.objectConfig.targetFilter || 'all',
         destroyOnExplode: preset.objectConfig.destroyOnExplode !== false,
-        triggerTiming: preset.objectConfig.triggerTiming || 'turn'
+        destroyOnBreak: preset.objectConfig.destroyOnBreak !== false,
+        triggerTiming: preset.objectConfig.triggerTiming || 'turn',
+        spawnPresetId: truncateStr(preset.objectConfig.spawnPresetId || '', 100),
+        spawnCount: clampNumber(parseInt(preset.objectConfig.spawnCount) || 1, 1, 10),
+        spawnRadius: clampNumber(parseInt(preset.objectConfig.spawnRadius) || 80, 20, 1000),
+        totalSpawnedSoFar: clampNumber(parseInt(preset.objectConfig.totalSpawnedSoFar) || 0, 0, 9999)
       } : null
     };
 
@@ -2734,6 +3349,7 @@ io.on('connection', (socket) => {
       sessionCache[p.sessionId] = {
         x: p.x,
         y: p.y,
+        size: p.size || 50,
         color: p.color,
         imgUrl: p.imgUrl,
         role: p.role,
@@ -2830,6 +3446,202 @@ async function restoreMapState() {
   }
 }
 
+// === VARSAYILAN ŞABLONLAR (STARTER PRESETS) ===
+const DEFAULT_STATUS_PRESETS = [
+  { id: 'preset_burn', name: 'Yanma', icon: '🔥', duration: 3, effects: { dotDamage: { min: 1, max: 6 } } },
+  { id: 'preset_bleed', name: 'Kanama', icon: '🩸', duration: 3, effects: { dotDamage: { min: 1, max: 4 } } },
+  { id: 'preset_blind', name: 'Körlük', icon: '👁️', duration: 2, effects: { blind: true } },
+  { id: 'preset_paralyzed', name: 'Felç', icon: '⚡', duration: 1, effects: { paralyzed: true } },
+  { id: 'preset_regen', name: 'Yenilenme (Rejenerasyon)', icon: '💚', duration: 3, effects: { hotHealing: { min: 2, max: 8 } } },
+  { id: 'preset_blessed', name: 'Kutsanmış', icon: '✨', duration: 3, effects: { acBonus: 2 } },
+  { id: 'preset_lifesteal', name: 'Yaşam Çalma', icon: '🩸', duration: 2, effects: { lifesteal: true } }
+];
+
+const DEFAULT_ATTACK_PRESETS = [
+  {
+    id: 'atk_preset_flame_sword',
+    name: 'Alev Kılıcı',
+    stat: 'STR',
+    attackType: 'physical',
+    physicalDamageType: 'slashing',
+    actionNature: 'damage',
+    healPool: null,
+    healTarget: 'self',
+    lifestealPercent: 0,
+    spellLevel: 1,
+    consumesSpellSlot: false,
+    baseSpellLevel: 1,
+    slotScaling: {},
+    dicePools: { phys: { dice: { d8: 1 }, bonus: 2 }, elem1: { dice: { d6: 1 }, bonus: 0 } },
+    statusEffectsToApply: [DEFAULT_STATUS_PRESETS[0]], // Yanma
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    isAoe: false,
+    aoeRadius: 1,
+    description: '1d8+2 Kesme + 1d6 Ateş Hasarı. Vuruş halinde Yanma uygular.'
+  },
+  {
+    id: 'atk_preset_cure_wounds',
+    name: 'Kutsal Şifa',
+    stat: 'WIS',
+    attackType: 'spell',
+    physicalDamageType: 'magic',
+    actionNature: 'heal',
+    healPool: { dice: { d8: 2 }, bonus: 3 },
+    healTarget: 'target',
+    lifestealPercent: 0,
+    spellLevel: 1,
+    consumesSpellSlot: true,
+    baseSpellLevel: 1,
+    slotScaling: {
+      2: { dicePools: { phys: {}, elem1: {}, elem2: {} }, healPool: { dice: { d8: 3 }, bonus: 4 } },
+      3: { dicePools: { phys: {}, elem1: {}, elem2: {} }, healPool: { dice: { d8: 4 }, bonus: 5 } }
+    },
+    dicePools: { phys: {}, elem1: {}, elem2: {} },
+    statusEffectsToApply: [DEFAULT_STATUS_PRESETS[5]], // Kutsanmış
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    isAoe: false,
+    aoeRadius: 1,
+    description: '2d8+3 Can Yeniler. Hedefe doğrudan şifa basar ve Kutsanmış (+2 AC) etkisi uygular.'
+  },
+  {
+    id: 'atk_preset_vampiric_touch',
+    name: 'Vampirik Dokunuş / Can Çalma',
+    stat: 'INT',
+    attackType: 'spell',
+    physicalDamageType: 'magic',
+    actionNature: 'hybrid',
+    healPool: { dice: { d4: 1 }, bonus: 2 },
+    healTarget: 'self',
+    lifestealPercent: 100,
+    spellLevel: 1,
+    consumesSpellSlot: true,
+    baseSpellLevel: 1,
+    slotScaling: {},
+    dicePools: { phys: { dice: { d6: 2 }, bonus: 2 } },
+    statusEffectsToApply: [DEFAULT_STATUS_PRESETS[6]], // Yaşam Çalma
+    halfDamageOnMiss: true,
+    extraDamage: 0,
+    attackCount: 1,
+    isAoe: false,
+    aoeRadius: 1,
+    description: '2d6+2 Nekrotik Hasar verir. Vurulan hasarın %100\'ü kadar can çalar + 1d4+2 can ile saldıranı yeniler.'
+  },
+  {
+    id: 'atk_preset_siphon_life',
+    name: 'Ruh Sömürüsü',
+    stat: 'CHR',
+    attackType: 'spell',
+    physicalDamageType: 'magic',
+    actionNature: 'hybrid',
+    healPool: { dice: { d6: 1 }, bonus: 2 },
+    healTarget: 'self',
+    lifestealPercent: 50,
+    spellLevel: 1,
+    consumesSpellSlot: false,
+    baseSpellLevel: 1,
+    slotScaling: {},
+    dicePools: { phys: { dice: { d8: 1 }, bonus: 2 } },
+    statusEffectsToApply: [],
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    isAoe: false,
+    aoeRadius: 1,
+    description: '1d8+2 Hasar vurur, hasarın %50\'si + 1d6+2 can saldıranın canına eklenir.'
+  },
+  {
+    id: 'atk_preset_regen_prayer',
+    name: 'Yenilenme Duası',
+    stat: 'WIS',
+    attackType: 'spell',
+    physicalDamageType: 'magic',
+    actionNature: 'heal',
+    healPool: { dice: { d4: 2 }, bonus: 2 },
+    healTarget: 'target',
+    lifestealPercent: 0,
+    spellLevel: 1,
+    consumesSpellSlot: true,
+    baseSpellLevel: 1,
+    slotScaling: {},
+    dicePools: { phys: {}, elem1: {}, elem2: {} },
+    statusEffectsToApply: [DEFAULT_STATUS_PRESETS[4]], // Yenilenme (Rejenerasyon HoT)
+    halfDamageOnMiss: false,
+    extraDamage: 0,
+    attackCount: 1,
+    isAoe: false,
+    aoeRadius: 1,
+    description: '2d4+2 Anlık can yeniler ve 3 tur boyunca her tur can basan Yenilenme (HoT) etkisi uygular.'
+  }
+];
+
+const DEFAULT_TOKEN_PRESETS = [
+  {
+    id: 'tp_goblin_raider',
+    name: 'Goblin Akıncı',
+    imgUrl: '',
+    color: '#22c55e',
+    hp: 14,
+    maxHp: 14,
+    size: 50,
+    ac: 13,
+    acBonus: 0,
+    stats: { str: 8, str_bonus: 0, dex: 14, dex_bonus: 2, con: 10, con_bonus: 0, int: 10, int_bonus: 0, wis: 8, wis_bonus: 0, chr: 8, chr_bonus: 0 },
+    hasDarkness: false,
+    darkness: 0,
+    maxDarkness: 100,
+    assignedAttacks: ['atk_preset_flame_sword'],
+    objectType: 'creature',
+    objectConfig: null
+  },
+  {
+    id: 'tp_skeleton_guard',
+    name: 'İskelet Muhafız',
+    imgUrl: '',
+    color: '#94a3b8',
+    hp: 18,
+    maxHp: 18,
+    size: 50,
+    ac: 12,
+    acBonus: 0,
+    stats: { str: 10, str_bonus: 0, dex: 14, dex_bonus: 2, con: 12, con_bonus: 1, int: 6, int_bonus: 0, wis: 8, wis_bonus: 0, chr: 5, chr_bonus: 0 },
+    hasDarkness: false,
+    darkness: 0,
+    maxDarkness: 100,
+    assignedAttacks: [],
+    objectType: 'creature',
+    objectConfig: null
+  },
+  {
+    id: 'tp_spawner_nest',
+    name: 'Karanlık Canavar Yuvası',
+    imgUrl: '',
+    color: '#10b981',
+    hp: 45,
+    maxHp: 45,
+    size: 75,
+    ac: 11,
+    acBonus: 0,
+    stats: { str: 10, str_bonus: 0, dex: 10, dex_bonus: 0, con: 10, con_bonus: 0, int: 10, int_bonus: 0, wis: 10, wis_bonus: 0, chr: 10, chr_bonus: 0 },
+    hasDarkness: false,
+    darkness: 0,
+    maxDarkness: 100,
+    assignedAttacks: [],
+    objectType: 'spawner',
+    objectConfig: {
+      spawnPresetId: 'tp_goblin_raider',
+      spawnCount: 1,
+      spawnRadius: 85,
+      spawnTiming: 'turn',
+      destroyOnBreak: true,
+      totalSpawnedSoFar: 0
+    }
+  }
+];
+
 // === ATTACK PRESETS RESTORE ===
 async function restoreAttackPresets() {
   try {
@@ -2845,18 +3657,24 @@ async function restoreAttackPresets() {
       } else if (error.code === 'PGRST205') {
         console.log('attack_presets tablosu henüz veritabanında oluşturulmamış.');
       }
+      attackPresets = [...DEFAULT_ATTACK_PRESETS];
       return;
     }
 
-    if (data) {
+    if (data && data.length > 0) {
       const dbPresets = data.map(row => {
         const slotConfig = row.dice_pools?._spellSlotConfig || {};
+        const healCfg = row.heal_config || row.dice_pools?._healConfig || {};
         return {
           id: row.id,
           name: row.name,
           stat: row.stat || 'STR',
           attackType: row.attack_type || row.attackType || 'physical',
           physicalDamageType: row.dice_pools?._meta?.physicalDamageType || row.physical_damage_type || 'slashing',
+          actionNature: row.action_nature || healCfg.actionNature || 'damage',
+          healPool: row.heal_pool || healCfg.healPool || null,
+          healTarget: row.heal_target || healCfg.healTarget || (healCfg.actionNature === 'heal' ? 'target' : 'self'),
+          lifestealPercent: clampNumber(parseInt(row.lifesteal_percent ?? healCfg.lifestealPercent) || 0, 0, 100),
           spellLevel: row.spell_level ?? row.spellLevel ?? 1,
           consumesSpellSlot: Boolean(row.consumes_spell_slot ?? row.consumesSpellSlot ?? slotConfig.consumesSpellSlot),
           baseSpellLevel: clampNumber(parseInt(row.base_spell_level ?? row.baseSpellLevel ?? slotConfig.baseSpellLevel) || (row.spell_level ?? 1), 1, 4),
@@ -2871,11 +3689,23 @@ async function restoreAttackPresets() {
           description: row.description || ''
         };
       });
+
+      // Eksik varsayılanları da ekle
+      DEFAULT_ATTACK_PRESETS.forEach(def => {
+        if (!dbPresets.some(p => p.id === def.id || p.name === def.name)) {
+          dbPresets.push(def);
+        }
+      });
+
       attackPresets = dbPresets;
       console.log(`Supabase'den ${attackPresets.length} adet saldırı preseti başarıyla yüklendi.`);
+    } else {
+      attackPresets = [...DEFAULT_ATTACK_PRESETS];
+      console.log(`Varsayılan ${attackPresets.length} adet hazır saldırı & şifa preseti başlatıldı.`);
     }
   } catch (err) {
     console.error('Attack presets geri yüklenirken beklenmeyen hata:', err.message);
+    if (attackPresets.length === 0) attackPresets = [...DEFAULT_ATTACK_PRESETS];
   }
 }
 
@@ -2893,21 +3723,34 @@ async function restoreStatusPresets() {
       } else if (error.code === 'PGRST205') {
         console.log('status_presets tablosu henüz veritabanında oluşturulmamış.');
       }
+      customStatusPresets = [...DEFAULT_STATUS_PRESETS];
       return;
     }
 
-    if (data) {
-      customStatusPresets = data.map(row => ({
+    if (data && data.length > 0) {
+      const dbPresets = data.map(row => ({
         id: row.id,
         name: row.name,
         icon: row.icon || '✨',
         duration: row.duration != null ? row.duration : null,
         effects: row.effects || {}
       }));
+
+      DEFAULT_STATUS_PRESETS.forEach(def => {
+        if (!dbPresets.some(p => p.id === def.id || p.name === def.name)) {
+          dbPresets.push(def);
+        }
+      });
+
+      customStatusPresets = dbPresets;
       console.log(`Supabase'den ${customStatusPresets.length} adet durum efekti preseti başarıyla yüklendi.`);
+    } else {
+      customStatusPresets = [...DEFAULT_STATUS_PRESETS];
+      console.log(`Varsayılan ${customStatusPresets.length} adet durum efekti başlatıldı.`);
     }
   } catch (err) {
     console.error('Status presets geri yüklenirken beklenmeyen hata:', err.message);
+    if (customStatusPresets.length === 0) customStatusPresets = [...DEFAULT_STATUS_PRESETS];
   }
 }
 
@@ -2926,11 +3769,12 @@ async function restoreTokenPresets() {
       } else if (error.code === 'PGRST205') {
         console.log('token_presets tablosu henüz veritabanında oluşturulmamış.');
       }
+      tokenPresets = [...DEFAULT_TOKEN_PRESETS];
       return;
     }
 
-    if (data) {
-      tokenPresets = data.map(row => ({
+    if (data && data.length > 0) {
+      const dbPresets = data.map(row => ({
         id: row.id,
         name: row.name,
         imgUrl: row.img_url || '',
@@ -2956,10 +3800,22 @@ async function restoreTokenPresets() {
         objectConfig: row.object_config || null,
         createdAt: row.created_at
       }));
+
+      DEFAULT_TOKEN_PRESETS.forEach(def => {
+        if (!dbPresets.some(p => p.id === def.id || p.name === def.name)) {
+          dbPresets.push(def);
+        }
+      });
+
+      tokenPresets = dbPresets;
       console.log(`Supabase'den ${tokenPresets.length} adet token şeması (preset) başarıyla yüklendi.`);
+    } else {
+      tokenPresets = [...DEFAULT_TOKEN_PRESETS];
+      console.log(`Varsayılan ${tokenPresets.length} adet token şeması (Yuva / Yaratık) başlatıldı.`);
     }
   } catch (err) {
     console.error('Token presets geri yüklenirken beklenmeyen hata:', err.message);
+    if (tokenPresets.length === 0) tokenPresets = [...DEFAULT_TOKEN_PRESETS];
   }
 }
 

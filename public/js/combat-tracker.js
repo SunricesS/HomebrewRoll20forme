@@ -88,15 +88,20 @@
     // Token pozisyonu
     const tokenLeft = parseFloat(tokenEl.style.left) || tokenEl.offsetLeft || 0;
     const tokenTop = parseFloat(tokenEl.style.top) || tokenEl.offsetTop || 0;
-    const mapWidth = gameMap.clientWidth;
-    const mapHeight = gameMap.clientHeight;
+    const tokenSize = parseFloat(tokenEl.dataset?.size) || tokenEl.offsetWidth || 50;
 
-    // Haritayı token ortalayacak şekilde scroll et
-    gameMap.scrollTo({
-      left: Math.max(0, tokenLeft - mapWidth / 2 + 30),
-      top: Math.max(0, tokenTop - mapHeight / 2 + 30),
-      behavior: 'smooth'
-    });
+    // Haritayı token ortalayacak şekilde kamera ile odakla veya scroll et
+    if (typeof window.__webdnd_centerMapOn === 'function') {
+      window.__webdnd_centerMapOn(tokenLeft + tokenSize / 2, tokenTop + tokenSize / 2, true);
+    } else {
+      const mapWidth = gameMap.clientWidth;
+      const mapHeight = gameMap.clientHeight;
+      gameMap.scrollTo({
+        left: Math.max(0, tokenLeft - mapWidth / 2 + 30),
+        top: Math.max(0, tokenTop - mapHeight / 2 + 30),
+        behavior: 'smooth'
+      });
+    }
 
     // Ping animasyonu
     tokenEl.classList.remove('combat-ping-pulse');
@@ -292,6 +297,8 @@
           card.classList.add('card-object-explosive');
         } else if (c.objectType === 'aura') {
           card.classList.add('card-object-aura');
+        } else if (c.objectType === 'spawner') {
+          card.classList.add('card-object-spawner');
         }
       } else if (c.role === 'dm') {
         card.classList.add('card-dm');
@@ -438,6 +445,8 @@
         nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-explosive">💣 PATLAYICI</span> ${escapeHtml(c.name || 'Nesne')}`;
       } else if (c.objectType === 'aura') {
         nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-aura">🔮 TOTEM</span> ${escapeHtml(c.name || 'Nesne')}`;
+      } else if (c.objectType === 'spawner') {
+        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-spawner">🌀 ÇAĞIRICI</span> ${escapeHtml(c.name || 'Yuva')}`;
       } else {
         nameLabel.textContent = c.name || 'Bilinmiyor';
       }
@@ -448,7 +457,7 @@
       if (isActive) {
         const activeBanner = document.createElement('div');
         activeBanner.className = 'bg3-active-name-banner';
-        const objBadge = c.objectType === 'explosive' ? '💣 ' : (c.objectType === 'aura' ? '🔮 ' : '');
+        const objBadge = c.objectType === 'explosive' ? '💣 ' : (c.objectType === 'aura' ? '🔮 ' : (c.objectType === 'spawner' ? '🌀 ' : ''));
         activeBanner.innerHTML = `<span class="bg3-active-name-text">${objBadge}${escapeHtml(c.name)}</span>`;
         card.appendChild(activeBanner);
       }

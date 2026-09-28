@@ -52,9 +52,10 @@
   function getMapCoordinates(e) {
     if (!gameMap) return { x: 0, y: 0 };
     const rect = gameMap.getBoundingClientRect();
+    const zoom = window.__webdnd_zoom || 1;
     return {
-      x: Math.round(e.clientX - rect.left),
-      y: Math.round(e.clientY - rect.top)
+      x: Math.round((e.clientX - rect.left) / zoom),
+      y: Math.round((e.clientY - rect.top) / zoom)
     };
   }
 
@@ -91,7 +92,7 @@
 
       const tokenLeft = parseFloat(tokenEl.style.left) || tokenEl.offsetLeft || 0;
       const tokenTop = parseFloat(tokenEl.style.top) || tokenEl.offsetTop || 0;
-      const tokenSize = tokenEl.offsetWidth || 50;
+      const tokenSize = parseFloat(tokenEl.dataset?.size) || tokenEl.offsetWidth || 50;
 
       // Token merkez noktası
       const tokenCx = tokenLeft + tokenSize / 2;

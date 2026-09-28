@@ -550,8 +550,34 @@ h1, h2, h3, h4, h5, h6 {
     flex: 1;
     background-color: #0d0907;
     position: relative;
-    overflow: auto;
-    touch-action: auto;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+}
+
+#game-map.map-space-held {
+    cursor: grab !important;
+}
+
+#game-map.map-is-panning {
+    cursor: grabbing !important;
+}
+
+#game-map.tool-mode-pan {
+    cursor: grab;
+}
+
+#game-map.tool-mode-draw {
+    cursor: crosshair;
+}
+
+#game-map.tool-mode-eraser {
+    cursor: crosshair;
+}
+
+#game-map.tool-mode-draw .token,
+#game-map.tool-mode-eraser .token {
+    pointer-events: none;
 }
 
 #map-content {
@@ -561,7 +587,8 @@ h1, h2, h3, h4, h5, h6 {
     background-repeat: no-repeat;
     background-position: top left;
     background-size: 100% 100%;
-    transform-origin: top left;
+    transform-origin: 0 0;
+    will-change: transform;
 }
 
 #drawing-layer {
@@ -569,7 +596,7 @@ h1, h2, h3, h4, h5, h6 {
     top: 0;
     left: 0;
     z-index: 1;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 /* ============================================================
@@ -1314,33 +1341,85 @@ h1, h2, h3, h4, h5, h6 {
     transform: scale(1.15);
 }
 
-/* HP Badge — Wax Seal Badge */
+/* ============================================================
+   TOKEN HP BAR & DYNAMIC ZOOM / SIZE SCALING
+   ============================================================ */
+
 .token-hp-badge {
     position: absolute;
-    bottom: -24px;
+    bottom: calc(-25px * var(--token-scale, 1));
     left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #2e7d32, #1b5e20);
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 800;
-    font-family: var(--font-title);
-    padding: 3px 9px;
-    min-width: 60px;
-    text-align: center;
-    border-radius: 5px;
-    border: 1px solid var(--border-gold);
-    white-space: nowrap;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.85);
-    z-index: 20;
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform-origin: center top;
+    transform: translateX(-50%) scale(calc(var(--zoom-ui-scale, 1) * var(--token-scale, 1)));
+    width: max-content;
+    min-width: 64px;
+    height: 18px;
+    background: rgba(14, 9, 6, 0.95);
+    border-radius: 4px;
+    border: 1.5px solid var(--border-gold, #c5a059);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 3px;
     cursor: default;
+    user-select: none;
+    pointer-events: auto;
+    overflow: hidden;
+    transition: transform 0.15s ease-out, box-shadow 0.2s ease;
 }
 
 .token-hp-badge:hover {
-    transform: translateX(-50%) scale(1.5);
-    z-index: 100;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8), 0 0 12px var(--success-glow);
+    transform: translateX(-50%) scale(calc(var(--zoom-ui-scale, 1) * var(--token-scale, 1) * 1.35));
+    z-index: 105;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.95), 0 0 14px var(--accent-glow, #c5a059);
+}
+
+.token-hp-bar-track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(28, 18, 12, 0.9);
+    border-radius: 2px;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.token-hp-bar-fill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.35s ease;
+    border-radius: 2px;
+}
+
+.token-hp-text {
+    position: relative;
+    z-index: 2;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+    font-family: var(--font-title, 'Cinzel', serif);
+    letter-spacing: 0.4px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 1), 0 0 5px rgba(0, 0, 0, 0.9), 0 0 8px #000;
+    white-space: nowrap;
+    line-height: 18px;
+    padding: 0 5px;
+    pointer-events: none;
+}
+
+/* Düşman / Canavar Can Barı Özel Vurgusu */
+.token-marker .token-hp-badge {
+    border-color: #d9534f;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.95), 0 0 8px rgba(217, 83, 79, 0.45);
+}
+
+.token-marker .token-hp-badge:hover {
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 1), 0 0 16px rgba(217, 83, 79, 0.85);
 }
 
 /* ============================================================
@@ -3120,15 +3199,18 @@ input[type="color"]::-webkit-color-swatch {
 
 .token-status-badges {
     position: absolute;
-    top: -10px;
-    right: -10px;
+    top: calc(-12px * var(--token-scale, 1));
+    right: calc(-10px * var(--token-scale, 1));
+    transform-origin: top right;
+    transform: scale(var(--zoom-ui-scale, 1));
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
     gap: 2px;
-    max-width: 54px;
-    z-index: 10;
+    max-width: 58px;
+    z-index: 28;
     pointer-events: none;
+    transition: transform 0.15s ease-out;
 }
 
 .token-status-badge {
@@ -5770,9 +5852,10 @@ body:not([data-game-mode="kenan"]) .kenan-only {
 /* Token Karanlık (Darkness) Barı — Kenan Modu */
 .token-darkness-bar {
     position: absolute;
-    top: -24px;
+    top: calc(-25px * var(--token-scale, 1));
     left: 50%;
-    transform: translateX(-50%);
+    transform-origin: center bottom;
+    transform: translateX(-50%) scale(calc(var(--zoom-ui-scale, 1) * var(--token-scale, 1)));
     width: max-content;
     min-width: 78px;
     height: 19px;
@@ -5780,20 +5863,20 @@ body:not([data-game-mode="kenan"]) .kenan-only {
     border: 1.5px solid #c084fc;
     border-radius: 12px;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.9), 0 0 10px rgba(168, 85, 247, 0.7);
-    z-index: 21;
+    z-index: 26;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
     pointer-events: auto;
     cursor: default;
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: transform 0.15s ease-out;
     padding: 0 4px;
 }
 
 .token-darkness-bar:hover {
-    transform: translateX(-50%) scale(1.3);
-    z-index: 101;
+    transform: translateX(-50%) scale(calc(var(--zoom-ui-scale, 1) * var(--token-scale, 1) * 1.35));
+    z-index: 106;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.95), 0 0 16px rgba(192, 132, 252, 0.95);
 }
 
@@ -6121,6 +6204,136 @@ body:not([data-game-mode="kenan"]) .kenan-only {
     opacity: 1;
 }
 
+/* 3. Tür: Çağırıcı / Yuva Nesnesi (Spawner Object - Düşman Doğuran Yuva) */
+.token.token-object.token-object-spawner {
+    border-radius: 20% !important;
+    border: 3px double #10b981 !important;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.9), inset 0 0 14px rgba(5, 150, 105, 0.6) !important;
+    animation: spawnerNestPulse 3s infinite ease-in-out;
+}
+
+.token.token-object.token-object-spawner:hover {
+    box-shadow: 0 0 28px rgba(16, 185, 129, 1), inset 0 0 18px rgba(5, 150, 105, 0.85) !important;
+}
+
+@keyframes spawnerNestPulse {
+    0%, 100% {
+        box-shadow: 0 0 16px rgba(16, 185, 129, 0.8), inset 0 0 10px rgba(52, 211, 153, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 28px rgba(16, 185, 129, 1), 0 0 10px rgba(110, 231, 183, 0.9), inset 0 0 18px rgba(16, 185, 129, 0.75);
+    }
+}
+
+.token-object-badge.badge-spawner {
+    background: linear-gradient(135deg, #10b981, #065f46);
+    animation: badgeRotatePulse 2.5s infinite ease-in-out;
+}
+
+@keyframes badgeRotatePulse {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.18) rotate(180deg); box-shadow: 0 0 10px #6ee7b7; }
+}
+
+/* Harita Üzerindeki Dinamik Spawner Çağırıcı Çemberi */
+.token-spawner-ring {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px dashed rgba(16, 185, 129, 0.85);
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0.05) 65%, transparent 100%);
+    z-index: 3;
+    animation: spawnerRingSpin 18s linear infinite;
+    transition: width 0.3s ease, height 0.3s ease, left 0.05s linear, top 0.05s linear;
+}
+
+@keyframes spawnerRingSpin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(-360deg); }
+}
+
+/* Doğma Anındaki Mistik Dalga / Burst Efekti */
+.spawner-summon-burst {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    border: 3px solid #34d399;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.6) 0%, rgba(5, 150, 105, 0.2) 50%, transparent 100%);
+    z-index: 45;
+    animation: summonBurstAnim 1.4s ease-out forwards;
+}
+
+@keyframes summonBurstAnim {
+    0% {
+        width: 10px;
+        height: 10px;
+        opacity: 1;
+        box-shadow: 0 0 25px #34d399, inset 0 0 15px #6ee7b7;
+    }
+    50% {
+        opacity: 0.85;
+    }
+    100% {
+        width: 130px;
+        height: 130px;
+        opacity: 0;
+        box-shadow: 0 0 40px rgba(52, 211, 153, 0);
+    }
+}
+
+/* Floating Combat Healing (+X Can) */
+.token-floating-heal {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    color: #34d399;
+    font-weight: 900;
+    font-size: 20px;
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.9), 0 2px 4px rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 999;
+    animation: floatHealAnim 1.8s ease-out forwards;
+}
+
+@keyframes floatHealAnim {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 0) scale(0.6);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -20px) scale(1.2);
+    }
+    40% {
+        transform: translate(-50%, -35px) scale(1);
+    }
+    80% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -60px) scale(0.9);
+    }
+}
+
+/* Combat tracker spawner kart ve tag stilleri */
+.card-object-spawner {
+    border-color: #10b981 !important;
+    background: linear-gradient(135deg, rgba(6, 78, 59, 0.75), rgba(15, 23, 42, 0.95)) !important;
+}
+
+.bg3-card-object-tag.tag-spawner {
+    background: linear-gradient(135deg, #10b981, #065f46);
+    color: #ffffff;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
 /* Anlık Aura Dalgası Animasyonu (Tetiklendiğinde Haritada Yayılan Şok Dalgası) */
 .aura-pulse-wave {
     position: absolute;
@@ -6433,4 +6646,664 @@ body:not([data-game-mode="kenan"]) .kenan-only {
 
 .bg3-combat-card.card-target-selected.card-status-burning {
     box-shadow: 0 0 0 2px #ef4444, 0 0 18px rgba(239, 68, 68, 0.95), 0 0 24px rgba(249, 115, 22, 0.8) !important;
+}
+
+/* ============================================================
+   MAP ZOOM & CAMERA CONTROLS WIDGET (HUD)
+   ============================================================ */
+
+.map-zoom-controls-widget {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(18, 12, 8, 0.92);
+    border: 1.5px solid var(--border-gold, #c5a059);
+    border-radius: 8px;
+    padding: 4px 7px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.85), 0 0 10px rgba(197, 160, 89, 0.2);
+    backdrop-filter: blur(8px);
+    user-select: none;
+    pointer-events: auto;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.map-zoom-controls-widget:hover {
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.95), 0 0 14px rgba(197, 160, 89, 0.35);
+}
+
+.map-tool-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.map-tool-btn {
+    width: 32px;
+    height: 32px;
+    background: rgba(30, 20, 14, 0.8);
+    border: 1px solid rgba(197, 160, 89, 0.35);
+    border-radius: 5px;
+    color: var(--text-main, #e8d8c3);
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.map-tool-btn:hover {
+    background: rgba(197, 160, 89, 0.2);
+    border-color: var(--accent-gold, #c5a059);
+    transform: translateY(-1px);
+}
+
+.map-tool-btn.active {
+    background: linear-gradient(135deg, #7c2d12, #9a3412);
+    border-color: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.5), inset 0 0 4px rgba(254, 215, 170, 0.4);
+    color: #fff;
+}
+
+.map-zoom-divider {
+    width: 1px;
+    height: 22px;
+    background: rgba(197, 160, 89, 0.3);
+    margin: 0 3px;
+}
+
+.map-zoom-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.map-zoom-btn {
+    width: 30px;
+    height: 30px;
+    background: rgba(30, 20, 14, 0.85);
+    border: 1px solid rgba(197, 160, 89, 0.35);
+    border-radius: 5px;
+    color: #f5efe6;
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.map-zoom-btn:hover {
+    background: rgba(197, 160, 89, 0.25);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.map-zoom-btn:active {
+    transform: translateY(1px);
+}
+
+.map-zoom-level-badge {
+    height: 30px;
+    min-width: 52px;
+    background: rgba(15, 10, 7, 0.9);
+    border: 1px solid rgba(197, 160, 89, 0.4);
+    border-radius: 5px;
+    color: var(--accent-gold, #c5a059);
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11.5px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0 6px;
+    letter-spacing: 0.5px;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.map-zoom-level-badge:hover {
+    background: rgba(197, 160, 89, 0.18);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+}
+
+.map-fit-btn {
+    font-size: 14px;
+}
+
+/* ============================================================
+   MAP DRAWING TOOLBAR & SHAPE / ERASER CONTROLS
+   ============================================================ */
+
+.map-draw-toolbar {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    z-index: 55;
+    background: rgba(18, 12, 8, 0.94);
+    border: 1.5px solid var(--border-gold, #c5a059);
+    border-radius: 8px;
+    padding: 6px 9px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9), 0 0 12px rgba(197, 160, 89, 0.25);
+    backdrop-filter: blur(8px);
+    user-select: none;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: calc(100% - 40px);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.map-draw-toolbar:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.95), 0 0 16px rgba(197, 160, 89, 0.35);
+}
+
+.draw-tools-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+
+.draw-tool-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(197, 160, 89, 0.35);
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+
+.draw-btn {
+    width: 34px;
+    height: 34px;
+    background: rgba(30, 20, 14, 0.85);
+    border: 1px solid rgba(197, 160, 89, 0.35);
+    border-radius: 6px;
+    color: var(--text-main, #e8d8c3);
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.draw-btn#tool-btn-pan {
+    width: auto;
+    padding: 0 8px;
+    gap: 5px;
+}
+
+.draw-btn#tool-btn-pan .draw-btn-text {
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.draw-btn:hover {
+    background: rgba(197, 160, 89, 0.22);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.draw-btn:active {
+    transform: translateY(1px);
+}
+
+.draw-btn.active {
+    background: linear-gradient(135deg, #7c2d12, #9a3412);
+    border-color: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5), inset 0 0 4px rgba(254, 215, 170, 0.4);
+    color: #fff;
+}
+
+.draw-btn.draw-btn-toggle-options {
+    margin-left: 2px;
+    font-size: 14px;
+    color: var(--accent-gold, #c5a059);
+}
+
+/* Alt Ayarlar Satırı */
+.draw-settings-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+    border-top: 1px solid rgba(197, 160, 89, 0.2);
+    font-family: var(--font-main, sans-serif);
+    font-size: 12px;
+    color: #d1c7bd;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.draw-settings-row.hidden {
+    display: none !important;
+}
+
+.draw-setting-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.draw-setting-label {
+    font-weight: 700;
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11px;
+    color: var(--accent-gold, #c5a059);
+    white-space: nowrap;
+}
+
+.draw-setting-divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(197, 160, 89, 0.25);
+    margin: 0 2px;
+}
+
+/* Kalınlık Hap Butonları (Pills) */
+.draw-size-pills {
+    display: flex;
+    gap: 3px;
+}
+
+.size-pill {
+    padding: 2px 7px;
+    background: rgba(26, 17, 12, 0.85);
+    border: 1px solid rgba(197, 160, 89, 0.3);
+    border-radius: 4px;
+    color: #d5c8bb;
+    font-size: 10.5px;
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.size-pill:hover {
+    background: rgba(197, 160, 89, 0.2);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+}
+
+.size-pill.active {
+    background: linear-gradient(135deg, #b45309, #78350f);
+    border-color: #f59e0b;
+    color: #fff;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.draw-size-range {
+    width: 65px;
+    height: 4px;
+    accent-color: #f59e0b;
+    cursor: pointer;
+}
+
+.draw-size-val {
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11px;
+    font-weight: 700;
+    color: #f5efe6;
+    min-width: 28px;
+    text-align: right;
+}
+
+/* Renk Seçimi */
+.draw-color-presets {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.color-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    padding: 0;
+}
+
+.color-dot:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.color-dot.active {
+    transform: scale(1.2);
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px #f59e0b, 0 0 8px rgba(245, 158, 11, 0.7);
+}
+
+.draw-custom-color-picker {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1.5px solid var(--border-gold, #c5a059);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* Dolgu Checkbox */
+.draw-fill-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11px;
+    font-weight: 700;
+    color: #e5d8cb;
+    user-select: none;
+}
+
+.draw-fill-toggle input[type="checkbox"] {
+    accent-color: #f59e0b;
+    cursor: pointer;
+}
+
+/* Geri Al & Temizle Aksiyon Butonları */
+.draw-action-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.draw-mini-action-btn {
+    padding: 3px 8px;
+    background: rgba(30, 20, 14, 0.85);
+    border: 1px solid rgba(197, 160, 89, 0.35);
+    border-radius: 5px;
+    color: #ebdcd0;
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.draw-mini-action-btn:hover {
+    background: rgba(197, 160, 89, 0.22);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+}
+
+.draw-mini-action-btn.draw-danger-btn:hover {
+    background: rgba(185, 28, 28, 0.35);
+    border-color: #ef4444;
+    color: #fee2e2;
+}
+
+/* ==================== SİLGİ DÜZ/DAİRESEL İMLEÇ ÖNİZLEMESİ ==================== */
+.eraser-cursor {
+    position: absolute;
+    border: 2px dashed rgba(255, 255, 255, 0.95);
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 52;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.8), inset 0 0 8px rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.12);
+    transition: width 0.05s ease, height 0.05s ease;
+}
+
+.eraser-cursor.hidden {
+    display: none !important;
+}
+
+/* ============================================================
+   DM OYUNCU TOKEN BOYUTU AYARLARI & HIZLI SAĞ TIK MENÜSÜ
+   ============================================================ */
+
+.dm-token-size-presets-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 10px;
+    flex-wrap: wrap;
+    padding: 4px 6px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    border: 1px solid rgba(197, 160, 89, 0.2);
+}
+
+.dm-size-presets-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-gold, #c5a059);
+    white-space: nowrap;
+}
+
+.dm-size-presets-group {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.dm-size-pill {
+    background: rgba(30, 20, 15, 0.7);
+    border: 1px solid rgba(197, 160, 89, 0.4);
+    color: #e2d9cc;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.dm-size-pill:hover {
+    background: rgba(197, 160, 89, 0.25);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.dm-size-pill.active {
+    background: linear-gradient(135deg, #c5a059, #997433);
+    color: #1c140e;
+    font-weight: 700;
+    border-color: #ffd88a;
+    box-shadow: 0 0 8px rgba(197, 160, 89, 0.5);
+}
+
+.dm-player-size-tag {
+    font-size: 10px;
+    font-weight: 700;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    padding: 1px 5px;
+    border-radius: 8px;
+    margin-left: 6px;
+    letter-spacing: 0.3px;
+}
+
+/* DM Oyuncu Token Sağ Tık Hızlı Menüsü */
+.player-token-context-menu {
+    position: absolute;
+    z-index: 9999;
+    background: linear-gradient(145deg, #1f1610 0%, #150e09 100%);
+    border: 1.5px solid var(--accent-gold, #c5a059);
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9), 0 0 15px rgba(197, 160, 89, 0.25);
+    min-width: 190px;
+    color: #f3ece4;
+    font-family: var(--font-body, sans-serif);
+    backdrop-filter: blur(6px);
+    animation: fadeInCtx 0.15s ease-out;
+}
+
+@keyframes fadeInCtx {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.player-token-context-menu.hidden {
+    display: none !important;
+}
+
+.token-context-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.token-context-title {
+    font-family: var(--font-title, 'Cinzel', serif);
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+}
+
+.token-context-current-size {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.18);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.token-context-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(197, 160, 89, 0.4), transparent);
+    margin: 6px 0;
+}
+
+.token-context-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #c5a059;
+    margin-bottom: 5px;
+    letter-spacing: 0.5px;
+}
+
+.token-context-size-pills {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.token-context-size-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(197, 160, 89, 0.25);
+    color: #e2d9cc;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.token-context-size-btn small {
+    font-size: 10px;
+    opacity: 0.75;
+    color: #c5a059;
+}
+
+.token-context-size-btn:hover {
+    background: rgba(197, 160, 89, 0.25);
+    border-color: var(--accent-gold, #c5a059);
+    color: #fff;
+    transform: translateX(2px);
+}
+
+.token-context-size-btn.active {
+    background: linear-gradient(135deg, rgba(197, 160, 89, 0.35), rgba(153, 116, 51, 0.35));
+    border-color: #ffd88a;
+    color: #fff;
+    font-weight: 700;
+}
+
+.token-context-custom-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    margin-bottom: 6px;
+}
+
+#token-context-custom-size-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(197, 160, 89, 0.4);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 6px;
+    outline: none;
+}
+
+#token-context-custom-size-input:focus {
+    border-color: var(--accent-gold, #c5a059);
+}
+
+.token-context-action-btn {
+    background: rgba(197, 160, 89, 0.2);
+    border: 1px solid var(--accent-gold, #c5a059);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.token-context-action-btn:hover {
+    background: var(--accent-gold, #c5a059);
+    color: #1c140e;
+}
+
+.token-context-edit-player-btn {
+    width: 100%;
+    background: rgba(52, 152, 219, 0.2);
+    border: 1px solid #3498db;
+    color: #93c5fd;
+    padding: 5px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-top: 2px;
+}
+
+.token-context-edit-player-btn:hover {
+    background: rgba(52, 152, 219, 0.4);
+    color: #fff;
 }

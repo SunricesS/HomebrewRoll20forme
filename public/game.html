@@ -110,6 +110,133 @@
                 <span class="aoe-btn-icon">💥</span>
                 <span class="aoe-btn-text">Alan Hasarı</span>
             </button>
+
+            <!-- ==================== HARİTA ÇİZİM ARAÇ ÇUBUĞU ==================== -->
+            <div id="map-draw-toolbar" class="map-draw-toolbar" title="Çizim & Şekil Araçları">
+                <!-- Üst Satır: Araçlar & Gizle/Göster Butonu -->
+                <div class="draw-tools-row">
+                    <button type="button" class="draw-btn active" data-tool="pan" id="tool-btn-pan" title="El Aracı / Kaydırma (H) — Haritada serbestçe gezinin">
+                        <span class="draw-btn-icon">✋</span>
+                        <span class="draw-btn-text">Gezin</span>
+                    </button>
+                    <div class="draw-tool-separator"></div>
+                    <button type="button" class="draw-btn" data-tool="pen" id="tool-btn-pen" title="Serbest Kalem (P)">
+                        <span class="draw-btn-icon">✏️</span>
+                    </button>
+                    <button type="button" class="draw-btn" data-tool="straightLine" id="tool-btn-line" title="Düz Çizgi (L)">
+                        <span class="draw-btn-icon">📏</span>
+                    </button>
+                    <button type="button" class="draw-btn" data-tool="arrow" id="tool-btn-arrow" title="Yön Oku (A) — Hareket/Hedef gösterme">
+                        <span class="draw-btn-icon">↗️</span>
+                    </button>
+                    <button type="button" class="draw-btn" data-tool="rect" id="tool-btn-rect" title="Dikdörtgen (R)">
+                        <span class="draw-btn-icon">▢</span>
+                    </button>
+                    <button type="button" class="draw-btn" data-tool="circle" id="tool-btn-circle" title="Daire (C)">
+                        <span class="draw-btn-icon">○</span>
+                    </button>
+                    <div class="draw-tool-separator"></div>
+                    <button type="button" class="draw-btn" data-tool="eraser" id="tool-btn-eraser" title="Silgi (E) — İstenilen kısmı sil">
+                        <span class="draw-btn-icon">🧹</span>
+                    </button>
+                    <button type="button" class="draw-btn draw-btn-toggle-options" id="btn-toggle-draw-options" title="Ayarları Aç / Kapat">
+                        <span class="draw-btn-icon">⚙️</span>
+                    </button>
+                </div>
+
+                <!-- Alt Satır: Kalınlık, Renk, Dolgu, Geri Al -->
+                <div class="draw-settings-row" id="draw-settings-row">
+                    <!-- Boyut / Kalınlık Seçimi -->
+                    <div class="draw-setting-item" id="draw-size-setting-item" title="Kalem / Silgi Kalınlığı">
+                        <span class="draw-setting-label" id="draw-size-label">Kalınlık:</span>
+                        <div class="draw-size-pills">
+                            <button type="button" class="size-pill" data-size="3" title="İnce (3px)">İnce</button>
+                            <button type="button" class="size-pill active" data-size="6" title="Orta (6px)">Orta</button>
+                            <button type="button" class="size-pill" data-size="14" title="Kalın (14px)">Kalın</button>
+                            <button type="button" class="size-pill" data-size="28" title="Çok Kalın (28px)">Çok Kalın</button>
+                        </div>
+                        <input type="range" id="draw-size-slider" min="2" max="60" value="6" class="draw-size-range" title="Hassas Boyut Ayarı">
+                        <span id="draw-size-preview" class="draw-size-val">6px</span>
+                    </div>
+
+                    <div class="draw-setting-divider"></div>
+
+                    <!-- Renk Paleti -->
+                    <div class="draw-setting-item" id="draw-color-setting-item" title="Çizim Rengi">
+                        <span class="draw-setting-label">Renk:</span>
+                        <div class="draw-color-presets">
+                            <button type="button" class="color-dot active" data-color="#e74c3c" style="background:#e74c3c;" title="Kırmızı"></button>
+                            <button type="button" class="color-dot" data-color="#3498db" style="background:#3498db;" title="Mavi"></button>
+                            <button type="button" class="color-dot" data-color="#2ecc71" style="background:#2ecc71;" title="Yeşil"></button>
+                            <button type="button" class="color-dot" data-color="#f1c40f" style="background:#f1c40f;" title="Sarı"></button>
+                            <button type="button" class="color-dot" data-color="#9b59b6" style="background:#9b59b6;" title="Mor"></button>
+                            <button type="button" class="color-dot" data-color="#ffffff" style="background:#ffffff;" title="Beyaz"></button>
+                            <button type="button" class="color-dot" data-color="#222222" style="background:#222222; border:1px solid #777;" title="Siyah"></button>
+                        </div>
+                        <input type="color" id="draw-custom-color" value="#e74c3c" class="draw-custom-color-picker" title="Özel Renk Seçimi">
+                    </div>
+
+                    <div class="draw-setting-divider"></div>
+
+                    <!-- Şekil Dolgu Seçeneği -->
+                    <label class="draw-fill-toggle" id="draw-fill-toggle-label" title="Şekillerin içini yarı saydam renkle doldur">
+                        <input type="checkbox" id="draw-fill-checkbox">
+                        <span class="draw-fill-text">Dolgu</span>
+                    </label>
+
+                    <div class="draw-setting-divider"></div>
+
+                    <!-- Geri Al & Temizle Butonları -->
+                    <div class="draw-action-btns">
+                        <button type="button" id="btn-draw-undo" class="draw-mini-action-btn" title="Geri Al (Ctrl+Z)">↩️ Geri Al</button>
+                        <button type="button" id="btn-draw-clear-mine" class="draw-mini-action-btn draw-danger-btn" title="Kendi Çizimlerimi Temizle">🗑️ Temizle</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Silgi Dairesel İmleç Önizlemesi -->
+            <div id="eraser-cursor" class="eraser-cursor hidden"></div>
+
+            <!-- DM Oyuncu Token Sağ Tık Hızlı Boyut Menüsü -->
+            <div id="player-token-context-menu" class="player-token-context-menu hidden">
+                <div class="token-context-header">
+                    <span class="token-context-title" id="token-context-player-name">Oyuncu</span>
+                    <span class="token-context-current-size" id="token-context-size-badge">50px</span>
+                </div>
+                <div class="token-context-divider"></div>
+                <div class="token-context-section-label">Token Boyutu:</div>
+                <div class="token-context-size-pills">
+                    <button type="button" class="token-context-size-btn" data-size="35">35px <small>(Minik)</small></button>
+                    <button type="button" class="token-context-size-btn" data-size="50">50px <small>(Orta)</small></button>
+                    <button type="button" class="token-context-size-btn" data-size="80">80px <small>(Büyük)</small></button>
+                    <button type="button" class="token-context-size-btn" data-size="120">120px <small>(Devasa)</small></button>
+                    <button type="button" class="token-context-size-btn" data-size="160">160px <small>(Muazzam)</small></button>
+                </div>
+                <div class="token-context-custom-row">
+                    <input type="number" id="token-context-custom-size-input" min="20" max="400" step="5" placeholder="Özel px">
+                    <button type="button" id="token-context-custom-size-btn" class="token-context-action-btn">Uygula</button>
+                </div>
+                <div class="token-context-divider"></div>
+                <button type="button" id="token-context-open-editor-btn" class="token-context-edit-player-btn">⚙️ Karakteri Düzenle</button>
+            </div>
+
+            <!-- ==================== HARİTA YAKINLAŞTIRMA & KAMERA KONTROLLERİ ==================== -->
+            <div id="map-zoom-controls" class="map-zoom-controls-widget" title="Harita Yakınlaştırma & Kamera Kontrolleri">
+                <div class="map-tool-group">
+                    <button type="button" id="btn-toggle-pan-tool" class="map-tool-btn active" title="El Aracı / Kaydırma (H) — Haritayı sürükleyip gezinin">✋</button>
+                    <button type="button" id="btn-toggle-draw-tool" class="map-tool-btn" title="Çizim Aracı (P) — Haritaya çizim yapın">✏️</button>
+                    <button type="button" id="btn-toggle-eraser-tool" class="map-tool-btn" title="Silgi (E) — İstenilen kısmı silin">🧹</button>
+                </div>
+                <div class="map-zoom-divider"></div>
+                <div class="map-zoom-actions">
+                    <button type="button" id="btn-zoom-in" class="map-zoom-btn" title="Yakınlaştır (Tekerlek İleri / +)">+</button>
+                    <button type="button" id="btn-zoom-reset" class="map-zoom-level-badge" title="Varsayılan Boyut (%100) — Sıfırlamak için tıklayın">
+                        <span id="map-zoom-level">100%</span>
+                    </button>
+                    <button type="button" id="btn-zoom-out" class="map-zoom-btn" title="Uzaklaştır (Tekerlek Geri / -)">−</button>
+                    <button type="button" id="btn-zoom-fit" class="map-zoom-btn map-fit-btn" title="Haritayı Ekrana Sığdır (F)">⛶</button>
+                </div>
+            </div>
         </div>
 
         <!-- Sağ Taraf (%25): Kontrol Paneli -->
@@ -201,6 +328,7 @@
                                 <option value="creature">👤 Canlı Yaratık / NPC</option>
                                 <option value="explosive">💣 Patlayıcı Nesne (Ölümde Patlar)</option>
                                 <option value="aura">🔮 Aura / Totem (Her Tur Etki Yayar)</option>
+                                <option value="spawner">🌀 Çağırıcı / Yuva (Her Tur Düşman Doğurur)</option>
                             </select>
                         </div>
 
@@ -271,6 +399,37 @@
                                     <option value="turn">⚡ Sırası Geldiğinde (Her Tur)</option>
                                     <option value="round">🔄 Raund Başlangıcında</option>
                                 </select>
+                            </div>
+
+                            <!-- Çağırıcı / Yuva Özel Ayarları -->
+                            <div id="dm-marker-obj-spawner-section" class="hidden" style="margin-top:6px; background:rgba(16, 185, 129, 0.12); border:1px solid rgba(16, 185, 129, 0.3); border-radius:6px; padding:8px;">
+                                <div class="form-group">
+                                    <label style="font-size:11px; color:#34d399; font-weight:700;">👾 Doğurulacak Düşman Şablonu:</label>
+                                    <select id="dm-marker-obj-spawner-preset" class="atk-select" style="font-size:11px;">
+                                        <option value="">— Hazır Düşman Seçin —</option>
+                                    </select>
+                                </div>
+                                <div class="stats-grid stats-grid-3col" style="margin-top:4px;">
+                                    <div class="form-group">
+                                        <label style="font-size:11px; color:#a7f3d0;">Dalga Başı Adet:</label>
+                                        <input type="number" id="dm-marker-obj-spawner-count" value="1" min="1" max="10">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size:11px; color:#a7f3d0;">Doğma Menzili (px):</label>
+                                        <input type="number" id="dm-marker-obj-spawner-radius" value="85" min="40" max="500">
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size:11px; color:#a7f3d0;">Zamanlama:</label>
+                                        <select id="dm-marker-obj-spawner-timing" class="atk-select" style="font-size:11px;">
+                                            <option value="turn">⚡ Sırası Geldiğinde (Tur)</option>
+                                            <option value="round">🔄 Raund Başlangıcında</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group form-group-checkbox" style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                                    <input type="checkbox" id="dm-marker-obj-spawner-destroy" checked style="width:15px; height:15px; cursor:pointer;">
+                                    <label for="dm-marker-obj-spawner-destroy" style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Kırılınca / Canı 0 Olunca Haritadan Silinsin</label>
+                                </div>
                             </div>
                         </div>
                         <div class="stats-grid stats-grid-3col">
@@ -351,9 +510,20 @@
                 <div id="dm-player-editor" class="hidden character-card dm-player-editor">
                     <h4 id="dm-edit-name" class="dm-edit-name">Seçilen Oyuncu</h4>
                     <form id="dm-edit-form">
-                        <div class="stats-grid stats-grid-2col">
+                        <div class="stats-grid stats-grid-3col">
                             <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-edit-hp"></div>
                             <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-edit-max-hp"></div>
+                            <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-edit-size" placeholder="50" min="20" max="400" step="5" value="50"></div>
+                        </div>
+                        <div class="dm-token-size-presets-row" id="dm-player-size-presets">
+                            <span class="dm-size-presets-label">📏 Token Boyutu:</span>
+                            <div class="dm-size-presets-group">
+                                <button type="button" class="dm-size-pill" data-size="35" title="Minik (Tiny) — 35px">35px</button>
+                                <button type="button" class="dm-size-pill active" data-size="50" title="Orta (Medium / Standart 1x1) — 50px">50px</button>
+                                <button type="button" class="dm-size-pill" data-size="80" title="Büyük (Large / 2x2) — 80px">80px</button>
+                                <button type="button" class="dm-size-pill" data-size="120" title="Devasa (Huge / 3x3) — 120px">120px</button>
+                                <button type="button" class="dm-size-pill" data-size="160" title="Muazzam (Gargantuan / 4x4) — 160px">160px</button>
+                            </div>
                         </div>
                         <div class="stats-grid stats-grid-3col">
                             <div class="form-group"><label>AC:</label><input type="number" id="dm-edit-ac"></div>
@@ -746,6 +916,7 @@
                     <option value="creature">👤 Canlı Yaratık / NPC</option>
                     <option value="explosive">💣 Patlayıcı Nesne (Ölümde Patlar)</option>
                     <option value="aura">🔮 Aura / Totem (Her Tur Etki Yayar)</option>
+                    <option value="spawner">🌀 Çağırıcı / Yuva (Her Tur Düşman Doğurur)</option>
                 </select>
             </div>
 
@@ -756,6 +927,7 @@
                     <div style="display:flex; gap:4px;">
                         <button type="button" id="dm-marker-btn-test-detonate" class="atk-mini-btn" style="background:#dc2626; color:#fff; border-color:#ef4444;" title="Şimdi Patlat">💥 Patlat</button>
                         <button type="button" id="dm-marker-btn-test-aura" class="atk-mini-btn" style="background:#7c3aed; color:#fff; border-color:#a855f7;" title="Aura Nabzı Gönder">🔮 Nabız Ver</button>
+                        <button type="button" id="dm-marker-btn-test-spawn" class="atk-mini-btn" style="background:#059669; color:#fff; border-color:#10b981; display:none;" title="Şimdi 1 Dalga Düşman Doğur">🌀 Doğur (Test)</button>
                     </div>
                 </div>
                 <div class="stats-grid stats-grid-2col">
@@ -819,6 +991,37 @@
                         <option value="turn">⚡ Sırası Geldiğinde (Her Tur)</option>
                         <option value="round">🔄 Raund Başlangıcında</option>
                     </select>
+                </div>
+
+                <!-- Çağırıcı / Yuva Özel Ayarları (Düzenleme) -->
+                <div id="dm-marker-edit-obj-spawner-section" class="hidden" style="margin-top:6px; background:rgba(16, 185, 129, 0.12); border:1px solid rgba(16, 185, 129, 0.3); border-radius:6px; padding:8px;">
+                    <div class="form-group">
+                        <label style="font-size:11px; color:#34d399; font-weight:700;">👾 Doğurulacak Düşman Şablonu:</label>
+                        <select id="dm-marker-edit-obj-spawner-preset" class="atk-select" style="font-size:11px;">
+                            <option value="">— Hazır Düşman Seçin —</option>
+                        </select>
+                    </div>
+                    <div class="stats-grid stats-grid-3col" style="margin-top:4px;">
+                        <div class="form-group">
+                            <label style="font-size:11px; color:#a7f3d0;">Dalga Başı Adet:</label>
+                            <input type="number" id="dm-marker-edit-obj-spawner-count" value="1" min="1" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px; color:#a7f3d0;">Doğma Menzili (px):</label>
+                            <input type="number" id="dm-marker-edit-obj-spawner-radius" value="85" min="40" max="500">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-size:11px; color:#a7f3d0;">Zamanlama:</label>
+                            <select id="dm-marker-edit-obj-spawner-timing" class="atk-select" style="font-size:11px;">
+                                <option value="turn">⚡ Sırası Geldiğinde (Tur)</option>
+                                <option value="round">🔄 Raund Başlangıcında</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group form-group-checkbox" style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+                        <input type="checkbox" id="dm-marker-edit-obj-spawner-destroy" checked style="width:15px; height:15px; cursor:pointer;">
+                        <label for="dm-marker-edit-obj-spawner-destroy" style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Kırılınca / Canı 0 Olunca Haritadan Silinsin</label>
+                    </div>
                 </div>
             </div>
             <div class="stats-grid stats-grid-3col">
@@ -1112,8 +1315,8 @@
                     
                     <div class="stats-grid stats-grid-3col">
                         <div class="form-group">
-                            <label>Saldırı Adı:</label>
-                            <input type="text" id="atk-builder-name" placeholder="Örn: Kutsal Darbe, Alev Oku" class="input-light">
+                            <label>Saldırı / Aksiyon Adı:</label>
+                            <input type="text" id="atk-builder-name" placeholder="Örn: Kutsal Şifa, Vampirik Darbe" class="input-light">
                         </div>
                         <div class="form-group">
                             <label>ZarStat (Bonus):</label>
@@ -1134,6 +1337,57 @@
                                 <option value="piercing">🏹 Delme</option>
                                 <option value="magic">✨ Büyü</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <!-- Aksiyon Niteliği Seçimi: Hasar / Şifa / Hibrit -->
+                    <div class="form-group" style="margin-top:6px;">
+                        <label style="font-weight:700; color:#38bdf8;">Aksiyon Niteliği / Rolü:</label>
+                        <select id="atk-builder-action-nature" class="atk-select" style="font-weight:700; background:rgba(15, 23, 42, 0.85); border-color:#38bdf8;">
+                            <option value="damage" selected>⚔️ Hasar Saldırısı (Doğrudan Zar/Hasar)</option>
+                            <option value="heal">💚 Can Yenileme / Şifa (Doğrudan İyileştirme)</option>
+                            <option value="hybrid">🩸 Hibrit (Hasar Vururken Can Yenileme / Çalma)</option>
+                        </select>
+                    </div>
+
+                    <!-- Şifa / Can Yenileme Yapılandırması (Şifa veya Hibrit seçilince görünür) -->
+                    <div id="atk-builder-heal-section" class="atk-builder-heal-section" style="display:none; margin-top:8px; background:rgba(16, 185, 129, 0.09); border:1px solid rgba(16, 185, 129, 0.35); border-radius:8px; padding:10px 12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <strong style="color:#34d399; font-size:12px; display:flex; align-items:center; gap:6px;">
+                                <span>💚</span> Şifa / Can Yenileme Ayarları
+                            </strong>
+                            <span style="font-size:11px; color:#a7f3d0;">Can basma ve vampirik sömürü</span>
+                        </div>
+
+                        <!-- Şifa Zar Havuzu -->
+                        <div class="atk-builder-pool-row" id="atk-builder-heal-row" style="background:rgba(6, 78, 59, 0.35); border-radius:6px; padding:6px 8px; margin-bottom:8px;">
+                            <span class="pool-row-label" style="color:#6ee7b7; font-weight:700;">Şifa Zarları:</span>
+                            <div class="pool-dice-steppers">
+                                <span class="stepper-item">d4:<input type="number" id="atk-bpool-heal-d4" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d6:<input type="number" id="atk-bpool-heal-d6" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d8:<input type="number" id="atk-bpool-heal-d8" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d10:<input type="number" id="atk-bpool-heal-d10" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d12:<input type="number" id="atk-bpool-heal-d12" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">d20:<input type="number" id="atk-bpool-heal-d20" min="0" max="20" value="0" class="mini-num"></span>
+                                <span class="stepper-item">+Bonus:<input type="number" id="atk-bpool-heal-bonus" value="0" class="mini-num"></span>
+                            </div>
+                        </div>
+
+                        <div class="stats-grid stats-grid-2col">
+                            <div class="form-group">
+                                <label style="color:#6ee7b7; font-size:11px; font-weight:600;">Şifa Kime Uygulanacak?</label>
+                                <select id="atk-builder-heal-target" class="atk-select" style="font-size:12px;">
+                                    <option value="self">👤 Kullanan / Saldıran (Self / Can Çalma)</option>
+                                    <option value="target">🎯 Hedeflenen Kişi (Müttefik / Dost)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="atk-builder-lifesteal-wrap">
+                                <label style="color:#f87171; font-size:11px; font-weight:600;">🩸 Can Çalma Oranı (%):</label>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <input type="number" id="atk-builder-lifesteal-percent" min="0" max="100" value="0" class="input-light" style="width:70px; text-align:center;">
+                                    <span style="font-size:11px; color:#cbd5e1;">Hasarın %'si kadar can çalar</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

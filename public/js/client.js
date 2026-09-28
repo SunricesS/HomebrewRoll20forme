@@ -90,7 +90,7 @@ function getHpColor(current, max) {
 }
 
 /**
- * Token üzerindeki HP badge'ini oluşturur veya günceller.
+ * Token üzerindeki HP barını / badge'ini oluşturur veya günceller.
  */
 function updateHpBadge(tokenEl, hpCurrent, hpMax) {
   if (hpCurrent == null || hpMax == null || isNaN(hpCurrent)) return;
@@ -99,10 +99,38 @@ function updateHpBadge(tokenEl, hpCurrent, hpMax) {
   if (!hpBadge) {
     hpBadge = document.createElement('div');
     hpBadge.className = 'token-hp-badge';
+    hpBadge.innerHTML = `
+      <div class="token-hp-bar-track">
+        <div class="token-hp-bar-fill"></div>
+      </div>
+      <span class="token-hp-text"></span>
+    `;
     tokenEl.appendChild(hpBadge);
   }
-  hpBadge.textContent = `${hpCurrent} / ${hpMax}`;
-  hpBadge.style.backgroundColor = getHpColor(hpCurrent, hpMax);
+
+  let fillEl = hpBadge.querySelector('.token-hp-bar-fill');
+  let textEl = hpBadge.querySelector('.token-hp-text');
+  if (!fillEl || !textEl) {
+    hpBadge.innerHTML = `
+      <div class="token-hp-bar-track">
+        <div class="token-hp-bar-fill"></div>
+      </div>
+      <span class="token-hp-text"></span>
+    `;
+    fillEl = hpBadge.querySelector('.token-hp-bar-fill');
+    textEl = hpBadge.querySelector('.token-hp-text');
+  }
+
+  const pct = hpMax > 0 ? Math.min(100, Math.max(0, (hpCurrent / hpMax) * 100)) : 0;
+  const color = getHpColor(hpCurrent, hpMax);
+
+  if (fillEl) {
+    fillEl.style.width = pct + '%';
+    fillEl.style.background = color;
+  }
+  if (textEl) {
+    textEl.textContent = `${hpCurrent} / ${hpMax}`;
+  }
 }
 
 /**
@@ -559,6 +587,26 @@ socket.on('characterUpdated', (data) => {
   if (!allPlayers[data.id] || !allPlayers[data.id].character) return;
 
   Object.assign(allPlayers[data.id].character, data.updates);
+
+  // Token boyutu güncellemesi varsa
+  if (data.updates.size !== undefined || data.updates.token_size !== undefined) {
+    const newSize = data.updates.size || data.updates.token_size;
+    allPlayers[data.id].size = newSize;
+    if (allPlayers[data.id].character) {
+      allPlayers[data.id].character.token_size = newSize;
+      allPlayers[data.id].character.size = newSize;
+    }
+    const t = tokens[data.id];
+    if (t) {
+      applyTokenStyles(t, allPlayers[data.id], false);
+    }
+    if (typeof editingPlayerId !== 'undefined' && editingPlayerId === data.id) {
+      const sizeInput = document.getElementById('dm-edit-size');
+      if (sizeInput && document.activeElement !== sizeInput) sizeInput.value = newSize;
+      if (typeof updateDmSizePillActive === 'function') updateDmSizePillActive(newSize);
+    }
+  }
+
   renderPlayerInfo();
 
   // HP Badge güncelle
@@ -601,6 +649,30 @@ socket.on('characterUpdated', (data) => {
   }
 });
 
+// DM Oyuncu Token Boyutu Anlık Soket Güncellemesi
+socket.on('tokenSizeUpdated', ({ id, size }) => {
+  if (allPlayers[id]) {
+    allPlayers[id].size = size;
+    if (allPlayers[id].character) {
+      allPlayers[id].character.token_size = size;
+      allPlayers[id].character.size = size;
+    }
+  }
+  const t = tokens[id];
+  if (t) {
+    applyTokenStyles(t, allPlayers[id] || { size }, false);
+    const hpData = extractHp(allPlayers[id] || {});
+    if (hpData.hpCurrent != null) updateHpBadge(t, hpData.hpCurrent, hpData.hpMax);
+    if (allPlayers[id]) updateTokenDarknessBar(t, allPlayers[id]);
+  }
+  renderPlayerInfo();
+  if (typeof editingPlayerId !== 'undefined' && editingPlayerId === id) {
+    const sizeInput = document.getElementById('dm-edit-size');
+    if (sizeInput && document.activeElement !== sizeInput) sizeInput.value = size;
+    if (typeof updateDmSizePillActive === 'function') updateDmSizePillActive(size);
+  }
+});
+
 socket.on('updateTokenPosition', (position) => {
   if (tokens[position.id]) {
     tokens[position.id].style.left = position.x + 'px';
@@ -614,7 +686,7 @@ socket.on('updateTokenPosition', (position) => {
     const m = window.__webdnd_markers[position.id];
     m.x = position.x;
     m.y = position.y;
-    if (m.objectType === 'explosive' || m.objectType === 'aura') {
+    if (m.objectType === 'explosive' || m.objectType === 'aura' || m.objectType === 'spawner') {
       updateObjectMapRings(position.id, position.x, position.y, m.size || 50, m.objectType, m.objectConfig);
     }
   }
@@ -675,9 +747,11 @@ function addToken(playerData) {
   const initial = getTokenInitial(playerData);
 
   if (playerData.isMarker) {
-    const objPrefix = playerData.objectType === 'explosive' ? '💣 Patlayıcı: ' : (playerData.objectType === 'aura' ? '🔮 Totem: ' : 'İşaret: ');
+    t.classList.add('token-marker');
+    const objPrefix = playerData.objectType === 'explosive' ? '💣 Patlayıcı: ' : (playerData.objectType === 'aura' ? '🔮 Totem: ' : (playerData.objectType === 'spawner' ? '🌀 Yuva: ' : 'İşaret: '));
     t.title = objPrefix + escapeHtml(playerData.name);
     if (!playerData.objectType || playerData.objectType === 'creature') {
+      t.classList.add('token-creature');
       t.style.borderRadius = '10%';
     }
 
@@ -690,6 +764,13 @@ function addToken(playerData) {
     }
   } else {
     t.title = escapeHtml(getPlayerDisplayName(playerData));
+    if (role === 'dm') {
+      t.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openPlayerTokenContextMenu(e.clientX, e.clientY, playerData.id);
+      });
+    }
   }
 
   // Cansız Obje Görsellerini ve Rozetlerini Güncelle
@@ -813,7 +894,7 @@ function updateToken(playerData) {
 
   // Başlık / İsim güncelle
   if (playerData.isMarker) {
-    const objPrefix = playerData.objectType === 'explosive' ? '💣 Patlayıcı: ' : (playerData.objectType === 'aura' ? '🔮 Totem: ' : 'İşaret: ');
+    const objPrefix = playerData.objectType === 'explosive' ? '💣 Patlayıcı: ' : (playerData.objectType === 'aura' ? '🔮 Totem: ' : (playerData.objectType === 'spawner' ? '🌀 Yuva: ' : 'İşaret: '));
     t.title = objPrefix + escapeHtml(playerData.name || '');
   } else {
     t.title = escapeHtml(getPlayerDisplayName(playerData));
@@ -948,9 +1029,16 @@ function applyTokenStyles(t, data, updatePosition = true) {
   }
   t.style.borderColor = data.color || '#e74c3c';
 
-  const size = data.size || 50;
+  const size = data.size || (data.character && (data.character.token_size || data.character.size)) || 50;
+  data.size = size;
   t.style.width = size + 'px';
   t.style.height = size + 'px';
+  t.dataset.size = size;
+
+  // Token büyüklüğüne göre barların ve rozetlerin dinamik ölçek faktörü
+  const tokenScale = Math.max(0.8, Math.min(2.8, Math.sqrt(size / 50)));
+  t.style.setProperty('--token-scale', tokenScale.toFixed(3));
+  t.style.setProperty('--token-size-px', size + 'px');
 
   if (data.objectType === 'explosive') {
     t.style.borderRadius = '8px';
@@ -997,24 +1085,28 @@ function extractHp(playerData) {
 function setupDragHandlers(tokenEl, tokenId) {
   tokenEl.addEventListener('mousedown', (e) => {
     // Ctrl+Click hedef seçimi sırasında sürüklemeyi engelle
-    if (e.ctrlKey || e.metaKey) return;
+    if (e.ctrlKey || e.metaKey || e.button !== 0) return;
+    e.stopPropagation();
     isDragging = true;
     draggedToken = tokenEl;
     draggedToken.dataset.id = tokenId;
     const rect = tokenEl.getBoundingClientRect();
-    offsetX = e.clientX - rect.left;
-    offsetY = e.clientY - rect.top;
+    const currentZoom = window.__webdnd_zoom || 1;
+    offsetX = (e.clientX - rect.left) / currentZoom;
+    offsetY = (e.clientY - rect.top) / currentZoom;
   });
 
   tokenEl.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1) return;
+    e.stopPropagation();
     isDragging = true;
     draggedToken = tokenEl;
     draggedToken.dataset.id = tokenId;
     const rect = tokenEl.getBoundingClientRect();
     const touch = e.touches[0];
-    offsetX = touch.clientX - rect.left;
-    offsetY = touch.clientY - rect.top;
+    const currentZoom = window.__webdnd_zoom || 1;
+    offsetX = (touch.clientX - rect.left) / currentZoom;
+    offsetY = (touch.clientY - rect.top) / currentZoom;
   }, { passive: true });
 }
 
@@ -1027,8 +1119,9 @@ document.addEventListener('mousemove', (e) => {
   if (!isDragging || !draggedToken) return;
 
   const mapRect = gameMap.getBoundingClientRect();
-  const newX = e.clientX - mapRect.left - offsetX;
-  const newY = e.clientY - mapRect.top - offsetY;
+  const currentZoom = window.__webdnd_zoom || 1;
+  const newX = (e.clientX - mapRect.left) / currentZoom - offsetX;
+  const newY = (e.clientY - mapRect.top) / currentZoom - offsetY;
 
   draggedToken.style.left = newX + 'px';
   draggedToken.style.top = newY + 'px';
@@ -1043,7 +1136,7 @@ document.addEventListener('mousemove', (e) => {
       const m = window.__webdnd_markers[id];
       m.x = newX;
       m.y = newY;
-      if (m.objectType === 'explosive' || m.objectType === 'aura') {
+      if (m.objectType === 'explosive' || m.objectType === 'aura' || m.objectType === 'spawner') {
         updateObjectMapRings(id, newX, newY, m.size || 50, m.objectType, m.objectConfig);
       }
     }
@@ -1057,8 +1150,9 @@ document.addEventListener('touchmove', (e) => {
 
   const touch = e.touches[0];
   const mapRect = gameMap.getBoundingClientRect();
-  const newX = touch.clientX - mapRect.left - offsetX;
-  const newY = touch.clientY - mapRect.top - offsetY;
+  const currentZoom = window.__webdnd_zoom || 1;
+  const newX = (touch.clientX - mapRect.left) / currentZoom - offsetX;
+  const newY = (touch.clientY - mapRect.top) / currentZoom - offsetY;
 
   draggedToken.style.left = newX + 'px';
   draggedToken.style.top = newY + 'px';
@@ -1073,7 +1167,7 @@ document.addEventListener('touchmove', (e) => {
       const m = window.__webdnd_markers[id];
       m.x = newX;
       m.y = newY;
-      if (m.objectType === 'explosive' || m.objectType === 'aura') {
+      if (m.objectType === 'explosive' || m.objectType === 'aura' || m.objectType === 'spawner') {
         updateObjectMapRings(id, newX, newY, m.size || 50, m.objectType, m.objectConfig);
       }
     }
@@ -1188,15 +1282,26 @@ if (btnAddMarker) {
     let objectConfig = null;
     if (objectType !== 'creature') {
       const getObjNum = (id, def) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : def; };
-      objectConfig = {
-        radius: getObjNum('dm-marker-obj-radius', objectType === 'explosive' ? 120 : 150),
-        damage: getObjNum('dm-marker-obj-damage', 0),
-        damageType: document.getElementById('dm-marker-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
-        targetFilter: document.getElementById('dm-marker-obj-target-filter')?.value || 'all',
-        destroyOnExplode: Boolean(document.getElementById('dm-marker-obj-destroy')?.checked),
-        triggerTiming: document.getElementById('dm-marker-obj-timing')?.value || 'turn',
-        statusEffects: Array.isArray(createObjSelectedEffects) ? [...createObjSelectedEffects] : []
-      };
+      if (objectType === 'spawner') {
+        objectConfig = {
+          spawnPresetId: document.getElementById('dm-marker-obj-spawner-preset')?.value || '',
+          spawnCount: Math.max(1, Math.min(10, getObjNum('dm-marker-obj-spawner-count', 1))),
+          spawnRadius: Math.max(40, Math.min(500, getObjNum('dm-marker-obj-spawner-radius', 85))),
+          spawnTiming: document.getElementById('dm-marker-obj-spawner-timing')?.value || 'turn',
+          destroyOnBreak: Boolean(document.getElementById('dm-marker-obj-spawner-destroy')?.checked),
+          totalSpawnedSoFar: 0
+        };
+      } else {
+        objectConfig = {
+          radius: getObjNum('dm-marker-obj-radius', objectType === 'explosive' ? 120 : 150),
+          damage: getObjNum('dm-marker-obj-damage', 0),
+          damageType: document.getElementById('dm-marker-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
+          targetFilter: document.getElementById('dm-marker-obj-target-filter')?.value || 'all',
+          destroyOnExplode: Boolean(document.getElementById('dm-marker-obj-destroy')?.checked),
+          triggerTiming: document.getElementById('dm-marker-obj-timing')?.value || 'turn',
+          statusEffects: Array.isArray(createObjSelectedEffects) ? [...createObjSelectedEffects] : []
+        };
+      }
     }
 
     socket.emit('createMarker', {
@@ -1254,6 +1359,30 @@ function renderTokenPresetsDropdown(presets) {
     opt.textContent = `${preset.name}${meta ? ` [${meta}]` : ''}`;
     select.appendChild(opt);
   });
+
+  // Çağırıcı / Yuva için düşman şablonu dropdownlarını doldur
+  const populateSpawnerDropdown = (elId) => {
+    const spSelect = document.getElementById(elId);
+    if (!spSelect) return;
+    const oldVal = spSelect.value;
+    spSelect.innerHTML = '<option value="">— Doğurulacak Düşman Seçin —</option>';
+    currentTokenPresets
+      .filter(p => p.objectType === 'creature' || !p.objectType)
+      .forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        const hpStr = p.hp != null ? `HP: ${p.hp}` : '';
+        const acStr = p.ac != null ? `AC: ${p.ac}` : '';
+        const meta = [hpStr, acStr].filter(Boolean).join(', ');
+        opt.textContent = `👾 ${p.name}${meta ? ` [${meta}]` : ''}`;
+        spSelect.appendChild(opt);
+      });
+    if (oldVal && currentTokenPresets.some(p => p.id === oldVal)) {
+      spSelect.value = oldVal;
+    }
+  };
+  populateSpawnerDropdown('dm-marker-obj-spawner-preset');
+  populateSpawnerDropdown('dm-marker-edit-obj-spawner-preset');
 
   if (currentVal && currentTokenPresets.some(p => p.id === currentVal)) {
     select.value = currentVal;
@@ -1343,6 +1472,18 @@ function applyTokenPresetToForm(preset) {
     if (desEl) desEl.checked = cfg.destroyOnExplode !== false;
     const tmEl = document.getElementById('dm-marker-obj-timing');
     if (tmEl && cfg.triggerTiming) tmEl.value = cfg.triggerTiming;
+
+    // Spawner alanları
+    const spPreset = document.getElementById('dm-marker-obj-spawner-preset');
+    if (spPreset && cfg.spawnPresetId) spPreset.value = cfg.spawnPresetId;
+    const spCount = document.getElementById('dm-marker-obj-spawner-count');
+    if (spCount && cfg.spawnCount != null) spCount.value = cfg.spawnCount;
+    const spRadius = document.getElementById('dm-marker-obj-spawner-radius');
+    if (spRadius && cfg.spawnRadius != null) spRadius.value = cfg.spawnRadius;
+    const spTiming = document.getElementById('dm-marker-obj-spawner-timing');
+    if (spTiming && cfg.spawnTiming) spTiming.value = cfg.spawnTiming;
+    const spDes = document.getElementById('dm-marker-obj-spawner-destroy');
+    if (spDes) spDes.checked = cfg.destroyOnBreak !== false;
 
     if (Array.isArray(cfg.statusEffects) && typeof createObjSelectedEffects !== 'undefined') {
       createObjSelectedEffects = [...cfg.statusEffects];
@@ -1467,15 +1608,26 @@ function setupTokenPresetControls() {
       let objectConfig = null;
       if (objectType !== 'creature') {
         const getObjNum = (id, def) => { const el = document.getElementById(id); return el && el.value !== '' ? parseInt(el.value) : def; };
-        objectConfig = {
-          radius: getObjNum('dm-marker-obj-radius', objectType === 'explosive' ? 120 : 150),
-          damage: getObjNum('dm-marker-obj-damage', 0),
-          damageType: document.getElementById('dm-marker-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
-          targetFilter: document.getElementById('dm-marker-obj-target-filter')?.value || 'all',
-          destroyOnExplode: Boolean(document.getElementById('dm-marker-obj-destroy')?.checked),
-          triggerTiming: document.getElementById('dm-marker-obj-timing')?.value || 'turn',
-          statusEffects: Array.isArray(createObjSelectedEffects) ? [...createObjSelectedEffects] : []
-        };
+        if (objectType === 'spawner') {
+          objectConfig = {
+            spawnPresetId: document.getElementById('dm-marker-obj-spawner-preset')?.value || '',
+            spawnCount: Math.max(1, Math.min(10, getObjNum('dm-marker-obj-spawner-count', 1))),
+            spawnRadius: Math.max(40, Math.min(500, getObjNum('dm-marker-obj-spawner-radius', 85))),
+            spawnTiming: document.getElementById('dm-marker-obj-spawner-timing')?.value || 'turn',
+            destroyOnBreak: Boolean(document.getElementById('dm-marker-obj-spawner-destroy')?.checked),
+            totalSpawnedSoFar: 0
+          };
+        } else {
+          objectConfig = {
+            radius: getObjNum('dm-marker-obj-radius', objectType === 'explosive' ? 120 : 150),
+            damage: getObjNum('dm-marker-obj-damage', 0),
+            damageType: document.getElementById('dm-marker-obj-damage-type')?.value || (objectType === 'explosive' ? 'fire' : 'necrotic'),
+            targetFilter: document.getElementById('dm-marker-obj-target-filter')?.value || 'all',
+            destroyOnExplode: Boolean(document.getElementById('dm-marker-obj-destroy')?.checked),
+            triggerTiming: document.getElementById('dm-marker-obj-timing')?.value || 'turn',
+            statusEffects: Array.isArray(createObjSelectedEffects) ? [...createObjSelectedEffects] : []
+          };
+        }
       }
 
       const presetData = {
@@ -1607,6 +1759,14 @@ function openMarkerEditor(markerInput) {
   setElVal('dm-marker-edit-obj-damage-type', cfg.damageType || (objType === 'explosive' ? 'fire' : 'necrotic'));
   setElVal('dm-marker-edit-obj-target-filter', cfg.targetFilter || 'all');
   setElVal('dm-marker-edit-obj-timing', cfg.triggerTiming || 'turn');
+
+  // Spawner alanları
+  setElVal('dm-marker-edit-obj-spawner-preset', cfg.spawnPresetId || '');
+  setElVal('dm-marker-edit-obj-spawner-count', cfg.spawnCount != null ? cfg.spawnCount : 1);
+  setElVal('dm-marker-edit-obj-spawner-radius', cfg.spawnRadius != null ? cfg.spawnRadius : 85);
+  setElVal('dm-marker-edit-obj-spawner-timing', cfg.spawnTiming || 'turn');
+  const editSpawnerDestroyCb = document.getElementById('dm-marker-edit-obj-spawner-destroy');
+  if (editSpawnerDestroyCb) editSpawnerDestroyCb.checked = cfg.destroyOnBreak !== false;
 
   const destroyCb = document.getElementById('dm-marker-edit-obj-destroy');
   if (destroyCb) destroyCb.checked = cfg.destroyOnExplode !== false;
@@ -2000,11 +2160,11 @@ function updateObjectMapRings(tokenId, x, y, size, objectType, objectConfig) {
 
   let ringData = objectMapRings[tokenId];
   if (!ringData) {
-    ringData = { auraRingEl: null, hazardRingEl: null };
+    ringData = { auraRingEl: null, hazardRingEl: null, spawnerRingEl: null };
     objectMapRings[tokenId] = ringData;
   }
 
-  const radius = objectConfig?.radius || (objectType === 'explosive' ? 120 : 150);
+  const radius = objectConfig?.radius || (objectType === 'explosive' ? 120 : (objectType === 'spawner' ? (objectConfig?.spawnRadius || 85) : 150));
   const diameter = radius * 2;
 
   // 1. Aura Totem Halkası (Sürekli görünür, mistik dönen daire)
@@ -2040,6 +2200,23 @@ function updateObjectMapRings(tokenId, x, y, size, objectType, objectConfig) {
     ringData.hazardRingEl.remove();
     ringData.hazardRingEl = null;
   }
+
+  // 3. Spawner Çağırıcı Halkası (Sürekli görünür, zümrüt mistik rünik daire)
+  if (objectType === 'spawner') {
+    if (!ringData.spawnerRingEl) {
+      ringData.spawnerRingEl = document.createElement('div');
+      ringData.spawnerRingEl.className = 'token-spawner-ring';
+      ringData.spawnerRingEl.dataset.forToken = tokenId;
+      gameMap.appendChild(ringData.spawnerRingEl);
+    }
+    ringData.spawnerRingEl.style.width = diameter + 'px';
+    ringData.spawnerRingEl.style.height = diameter + 'px';
+    ringData.spawnerRingEl.style.left = currentCenter.x + 'px';
+    ringData.spawnerRingEl.style.top = currentCenter.y + 'px';
+  } else if (ringData.spawnerRingEl) {
+    ringData.spawnerRingEl.remove();
+    ringData.spawnerRingEl = null;
+  }
 }
 
 /**
@@ -2052,6 +2229,9 @@ function removeObjectMapRings(tokenId) {
     }
     if (objectMapRings[tokenId].hazardRingEl) {
       objectMapRings[tokenId].hazardRingEl.remove();
+    }
+    if (objectMapRings[tokenId].spawnerRingEl) {
+      objectMapRings[tokenId].spawnerRingEl.remove();
     }
     delete objectMapRings[tokenId];
   }
@@ -2067,7 +2247,7 @@ function updateTokenObjectVisuals(t, data) {
 
   if (data.isMarker && data.objectType === 'explosive') {
     t.classList.add('token-object', 'token-object-explosive');
-    t.classList.remove('token-object-aura');
+    t.classList.remove('token-object-aura', 'token-object-spawner');
     if (!badgeEl) {
       badgeEl = document.createElement('span');
       badgeEl.className = 'token-object-badge badge-explosive';
@@ -2078,7 +2258,7 @@ function updateTokenObjectVisuals(t, data) {
     badgeEl.title = 'Patlayıcı Nesne';
   } else if (data.isMarker && data.objectType === 'aura') {
     t.classList.add('token-object', 'token-object-aura');
-    t.classList.remove('token-object-explosive');
+    t.classList.remove('token-object-explosive', 'token-object-spawner');
     if (!badgeEl) {
       badgeEl = document.createElement('span');
       badgeEl.className = 'token-object-badge badge-aura';
@@ -2087,8 +2267,19 @@ function updateTokenObjectVisuals(t, data) {
     badgeEl.className = 'token-object-badge badge-aura';
     badgeEl.textContent = '🔮';
     badgeEl.title = 'Aura / Totem Nesnesi';
+  } else if (data.isMarker && data.objectType === 'spawner') {
+    t.classList.add('token-object', 'token-object-spawner');
+    t.classList.remove('token-object-explosive', 'token-object-aura');
+    if (!badgeEl) {
+      badgeEl = document.createElement('span');
+      badgeEl.className = 'token-object-badge badge-spawner';
+      t.appendChild(badgeEl);
+    }
+    badgeEl.className = 'token-object-badge badge-spawner';
+    badgeEl.textContent = '🌀';
+    badgeEl.title = 'Çağırıcı / Yuva';
   } else {
-    t.classList.remove('token-object', 'token-object-explosive', 'token-object-aura');
+    t.classList.remove('token-object', 'token-object-explosive', 'token-object-aura', 'token-object-spawner');
     if (badgeEl) badgeEl.remove();
   }
 
@@ -2096,7 +2287,7 @@ function updateTokenObjectVisuals(t, data) {
   const x = parseFloat(t.style.left) || data.x || 0;
   const y = parseFloat(t.style.top) || data.y || 0;
   const size = data.size || 50;
-  if (data.isMarker && (data.objectType === 'explosive' || data.objectType === 'aura')) {
+  if (data.isMarker && (data.objectType === 'explosive' || data.objectType === 'aura' || data.objectType === 'spawner')) {
     updateObjectMapRings(data.id, x, y, size, data.objectType, data.objectConfig);
   } else {
     removeObjectMapRings(data.id);
@@ -2112,29 +2303,44 @@ function setupObjectTypeControls() {
   const createDestroyRow = document.getElementById('dm-marker-obj-destroy-row');
   const createTimingRow = document.getElementById('dm-marker-obj-timing-row');
   const createBadgeTitle = document.getElementById('dm-marker-object-badge-title');
+  const createSpawnerSection = document.getElementById('dm-marker-obj-spawner-section');
+
+  const updateCreateUI = (val) => {
+    if (!createObjConfigWrap) return;
+    const regularGrids = createObjConfigWrap.querySelectorAll('.stats-grid-2col, #dm-marker-obj-destroy-row, #dm-marker-obj-timing-row, .form-group:not(#dm-marker-obj-spawner-section *)');
+    if (val === 'explosive') {
+      createObjConfigWrap.classList.remove('hidden');
+      if (createDestroyRow) createDestroyRow.classList.remove('hidden');
+      if (createTimingRow) createTimingRow.classList.add('hidden');
+      if (createSpawnerSection) createSpawnerSection.classList.add('hidden');
+      if (createBadgeTitle) createBadgeTitle.textContent = '💣 Patlayıcı Nesne Ayarları';
+      const dmgType = document.getElementById('dm-marker-obj-damage-type');
+      if (dmgType && (!dmgType.value || dmgType.value === 'necrotic')) dmgType.value = 'fire';
+      createObjConfigWrap.querySelectorAll('.stats-grid-2col').forEach(el => el.classList.remove('hidden'));
+    } else if (val === 'aura') {
+      createObjConfigWrap.classList.remove('hidden');
+      if (createDestroyRow) createDestroyRow.classList.add('hidden');
+      if (createTimingRow) createTimingRow.classList.remove('hidden');
+      if (createSpawnerSection) createSpawnerSection.classList.add('hidden');
+      if (createBadgeTitle) createBadgeTitle.textContent = '🔮 Aura / Totem Ayarları';
+      const dmgType = document.getElementById('dm-marker-obj-damage-type');
+      if (dmgType && (!dmgType.value || dmgType.value === 'fire')) dmgType.value = 'necrotic';
+      createObjConfigWrap.querySelectorAll('.stats-grid-2col').forEach(el => el.classList.remove('hidden'));
+    } else if (val === 'spawner') {
+      createObjConfigWrap.classList.remove('hidden');
+      if (createDestroyRow) createDestroyRow.classList.add('hidden');
+      if (createTimingRow) createTimingRow.classList.add('hidden');
+      if (createSpawnerSection) createSpawnerSection.classList.remove('hidden');
+      if (createBadgeTitle) createBadgeTitle.textContent = '🌀 Çağırıcı / Yuva Ayarları';
+      createObjConfigWrap.querySelectorAll('.stats-grid-2col').forEach(el => el.classList.add('hidden'));
+    } else {
+      createObjConfigWrap.classList.add('hidden');
+    }
+  };
 
   if (createTypeSelect && createObjConfigWrap && !createTypeSelect._bound) {
     createTypeSelect._bound = true;
-    createTypeSelect.addEventListener('change', () => {
-      const val = createTypeSelect.value;
-      if (val === 'explosive') {
-        createObjConfigWrap.classList.remove('hidden');
-        if (createDestroyRow) createDestroyRow.classList.remove('hidden');
-        if (createTimingRow) createTimingRow.classList.add('hidden');
-        if (createBadgeTitle) createBadgeTitle.textContent = '💣 Patlayıcı Nesne Ayarları';
-        const dmgType = document.getElementById('dm-marker-obj-damage-type');
-        if (dmgType && (!dmgType.value || dmgType.value === 'necrotic')) dmgType.value = 'fire';
-      } else if (val === 'aura') {
-        createObjConfigWrap.classList.remove('hidden');
-        if (createDestroyRow) createDestroyRow.classList.add('hidden');
-        if (createTimingRow) createTimingRow.classList.remove('hidden');
-        if (createBadgeTitle) createBadgeTitle.textContent = '🔮 Aura / Totem Ayarları';
-        const dmgType = document.getElementById('dm-marker-obj-damage-type');
-        if (dmgType && (!dmgType.value || dmgType.value === 'fire')) dmgType.value = 'necrotic';
-      } else {
-        createObjConfigWrap.classList.add('hidden');
-      }
-    });
+    createTypeSelect.addEventListener('change', () => updateCreateUI(createTypeSelect.value));
   }
 
   const editTypeSelect = document.getElementById('dm-marker-edit-type');
@@ -2142,32 +2348,63 @@ function setupObjectTypeControls() {
   const editDestroyRow = document.getElementById('dm-marker-edit-obj-destroy-row');
   const editTimingRow = document.getElementById('dm-marker-edit-obj-timing-row');
   const editBadgeTitle = document.getElementById('dm-marker-edit-object-badge-title');
+  const editSpawnerSection = document.getElementById('dm-marker-edit-obj-spawner-section');
   const btnDetonate = document.getElementById('dm-marker-btn-test-detonate');
   const btnAura = document.getElementById('dm-marker-btn-test-aura');
+  const btnTestSpawn = document.getElementById('dm-marker-btn-test-spawn');
+
+  const updateEditUI = (val) => {
+    if (!editObjConfigWrap) return;
+    if (val === 'explosive') {
+      editObjConfigWrap.classList.remove('hidden');
+      if (editDestroyRow) editDestroyRow.classList.remove('hidden');
+      if (editTimingRow) editTimingRow.classList.add('hidden');
+      if (editSpawnerSection) editSpawnerSection.classList.add('hidden');
+      if (btnDetonate) btnDetonate.style.display = 'inline-block';
+      if (btnAura) btnAura.style.display = 'none';
+      if (btnTestSpawn) btnTestSpawn.style.display = 'none';
+      if (editBadgeTitle) editBadgeTitle.textContent = '💣 Patlayıcı Nesne Ayarları';
+      editObjConfigWrap.querySelectorAll('.stats-grid-2col').forEach(el => el.classList.remove('hidden'));
+    } else if (val === 'aura') {
+      editObjConfigWrap.classList.remove('hidden');
+      if (editDestroyRow) editDestroyRow.classList.add('hidden');
+      if (editTimingRow) editTimingRow.classList.remove('hidden');
+      if (editSpawnerSection) editSpawnerSection.classList.add('hidden');
+      if (btnDetonate) btnDetonate.style.display = 'none';
+      if (btnAura) btnAura.style.display = 'inline-block';
+      if (btnTestSpawn) btnTestSpawn.style.display = 'none';
+      if (editBadgeTitle) editBadgeTitle.textContent = '🔮 Aura / Totem Ayarları';
+      editObjConfigWrap.querySelectorAll('.stats-grid-2col').forEach(el => el.classList.remove('hidden'));
+    } else if (val === 'spawner') {
+      editObjConfigWrap.classList.remove('hidden');
+      if (editDestroyRow) editDestroyRow.classList.add('hidden');
+      if (editTimingRow) editTimingRow.classList.add('hidden');
+      if (editSpawnerSection) editSpawnerSection.classList.remove('hidden');
+      if (btnDetonate) btnDetonate.style.display = 'none';
+      if (btnAura) btnAura.style.display = 'none';
+      if (btnTestSpawn) btnTestSpawn.style.display = 'inline-block';
+      if (editBadgeTitle) editBadgeTitle.textContent = '🌀 Çağırıcı / Yuva Ayarları';
+      editObjConfigWrap.querySelectorAll('.stats-grid-2col').forEach(el => el.classList.add('hidden'));
+    } else {
+      editObjConfigWrap.classList.add('hidden');
+      if (btnDetonate) btnDetonate.style.display = 'none';
+      if (btnAura) btnAura.style.display = 'none';
+      if (btnTestSpawn) btnTestSpawn.style.display = 'none';
+    }
+  };
 
   if (editTypeSelect && editObjConfigWrap && !editTypeSelect._bound) {
     editTypeSelect._bound = true;
-    editTypeSelect.addEventListener('change', () => {
-      const val = editTypeSelect.value;
-      if (val === 'explosive') {
-        editObjConfigWrap.classList.remove('hidden');
-        if (editDestroyRow) editDestroyRow.classList.remove('hidden');
-        if (editTimingRow) editTimingRow.classList.add('hidden');
-        if (btnDetonate) btnDetonate.style.display = 'inline-block';
-        if (btnAura) btnAura.style.display = 'none';
-        if (editBadgeTitle) editBadgeTitle.textContent = '💣 Patlayıcı Nesne Ayarları';
-      } else if (val === 'aura') {
-        editObjConfigWrap.classList.remove('hidden');
-        if (editDestroyRow) editDestroyRow.classList.add('hidden');
-        if (editTimingRow) editTimingRow.classList.remove('hidden');
-        if (btnDetonate) btnDetonate.style.display = 'none';
-        if (btnAura) btnAura.style.display = 'inline-block';
-        if (editBadgeTitle) editBadgeTitle.textContent = '🔮 Aura / Totem Ayarları';
-      } else {
-        editObjConfigWrap.classList.add('hidden');
-        if (btnDetonate) btnDetonate.style.display = 'none';
-        if (btnAura) btnAura.style.display = 'none';
-      }
+    editTypeSelect.addEventListener('change', () => updateEditUI(editTypeSelect.value));
+  }
+
+  if (btnTestSpawn && !btnTestSpawn._bound) {
+    btnTestSpawn._bound = true;
+    btnTestSpawn.addEventListener('click', () => {
+      if (!editingMarkerId) return;
+      socket.emit('triggerObjectSpawner', { spawnerId: editingMarkerId });
+      btnTestSpawn.textContent = '✨ Doğuruldu!';
+      setTimeout(() => { if (btnTestSpawn) btnTestSpawn.textContent = '🌀 Doğur (Test)'; }, 1400);
     });
   }
 
@@ -2385,6 +2622,13 @@ function renderPlayerInfo() {
       strong.textContent = c.name;
       nameSpan.appendChild(strong);
 
+      const curSize = p.size || c.token_size || c.size || 50;
+      const sizeSpan = document.createElement('span');
+      sizeSpan.className = 'dm-player-size-tag';
+      sizeSpan.textContent = `${curSize}px`;
+      sizeSpan.title = 'Token Boyutu';
+      nameSpan.appendChild(sizeSpan);
+
       const hpSpan = document.createElement('span');
       hpSpan.className = 'dm-player-hp-tag';
       hpSpan.textContent = `HP: ${c.hp_current}/${c.hp_max}`;
@@ -2521,6 +2765,12 @@ function showDmEditor(playerInput) {
   document.getElementById('dm-edit-name').textContent = c.name + " Düzenleniyor";
   document.getElementById('dm-edit-hp').value = c.hp_current;
   document.getElementById('dm-edit-max-hp').value = c.hp_max;
+
+  // Token Boyutu (px)
+  const sizeEl = document.getElementById('dm-edit-size');
+  const playerSize = playerData.size || c.token_size || c.size || 50;
+  if (sizeEl) sizeEl.value = playerSize;
+  updateDmSizePillActive(playerSize);
 
   // AC & Corruption
   const acEl = document.getElementById('dm-edit-ac');
@@ -2816,6 +3066,8 @@ function saveDmEditorState(playerId) {
     characterId: allPlayers[playerId].character.id,
     hp_current: parseInt(document.getElementById('dm-edit-hp').value),
     hp_max: parseInt(document.getElementById('dm-edit-max-hp').value),
+    size: parseInt(document.getElementById('dm-edit-size')?.value) || 50,
+    token_size: parseInt(document.getElementById('dm-edit-size')?.value) || 50,
     stats: {
       str: parseInt(document.getElementById('dm-edit-str').value),
       str_bonus: parseInt(document.getElementById('dm-edit-str-bonus')?.value) || 0,
@@ -2894,15 +3146,190 @@ if (formDmEdit) {
 }
 
 // ============================================================
+// DM OYUNCU TOKEN BOYUTU AYARLARI & SAĞ TIK HIZLI MENÜSÜ
+// ============================================================
+
+function updateDmSizePillActive(val) {
+  const pills = document.querySelectorAll('#dm-player-size-presets .dm-size-pill');
+  pills.forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.size) === parseInt(val));
+  });
+}
+
+function setPlayerTokenSize(playerId, newSize) {
+  if (!playerId || !allPlayers[playerId]) return;
+  const safeSize = Math.max(20, Math.min(500, parseInt(newSize) || 50));
+
+  allPlayers[playerId].size = safeSize;
+  if (allPlayers[playerId].character) {
+    allPlayers[playerId].character.token_size = safeSize;
+    allPlayers[playerId].character.size = safeSize;
+  }
+
+  // Editör açıksa input ve pill güncelle
+  if (editingPlayerId === playerId) {
+    const sizeInput = document.getElementById('dm-edit-size');
+    if (sizeInput && document.activeElement !== sizeInput) {
+      sizeInput.value = safeSize;
+    }
+    updateDmSizePillActive(safeSize);
+  }
+
+  // Token DOM güncelle
+  const t = tokens[playerId];
+  if (t) {
+    applyTokenStyles(t, allPlayers[playerId], false);
+    const hpData = extractHp(allPlayers[playerId]);
+    if (hpData.hpCurrent != null) updateHpBadge(t, hpData.hpCurrent, hpData.hpMax);
+    updateTokenDarknessBar(t, allPlayers[playerId]);
+  }
+
+  // Sunucuya bildir
+  socket.emit('updatePlayerTokenSize', { playerId, size: safeSize });
+  renderPlayerInfo();
+}
+
+// Editördeki hızlı boyut hapları (Presets)
+document.querySelectorAll('#dm-player-size-presets .dm-size-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    if (!editingPlayerId) return;
+    const targetSize = parseInt(pill.dataset.size);
+    setPlayerTokenSize(editingPlayerId, targetSize);
+  });
+});
+
+// Editördeki boyut inputu
+const dmEditSizeInput = document.getElementById('dm-edit-size');
+if (dmEditSizeInput) {
+  dmEditSizeInput.addEventListener('input', (e) => {
+    if (!editingPlayerId) return;
+    const targetSize = parseInt(e.target.value);
+    if (!isNaN(targetSize) && targetSize >= 20) {
+      setPlayerTokenSize(editingPlayerId, targetSize);
+    }
+  });
+}
+
+// ---- DM Oyuncu Token Sağ Tık Hızlı Menüsü ----
+let activeContextMenuPlayerId = null;
+const playerContextMenu = document.getElementById('player-token-context-menu');
+
+function openPlayerTokenContextMenu(clientX, clientY, playerId) {
+  if (!playerContextMenu || !allPlayers[playerId]) return;
+  activeContextMenuPlayerId = playerId;
+
+  const player = allPlayers[playerId];
+  const charName = player.character?.name || 'Oyuncu';
+  const currentSize = player.size || player.character?.token_size || player.character?.size || 50;
+
+  const titleEl = document.getElementById('token-context-player-name');
+  const badgeEl = document.getElementById('token-context-size-badge');
+  const customInput = document.getElementById('token-context-custom-size-input');
+
+  if (titleEl) titleEl.textContent = charName;
+  if (badgeEl) badgeEl.textContent = `${currentSize}px`;
+  if (customInput) customInput.value = currentSize;
+
+  const sizeBtns = playerContextMenu.querySelectorAll('.token-context-size-btn');
+  sizeBtns.forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.size) === parseInt(currentSize));
+  });
+
+  // Harita koordinatlarına göre menüyü konumlandır
+  const mapRect = gameMapContainer ? gameMapContainer.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  let posX = clientX - mapRect.left;
+  let posY = clientY - mapRect.top;
+
+  if (posX + 210 > mapRect.width) posX = mapRect.width - 215;
+  if (posY + 260 > mapRect.height) posY = mapRect.height - 265;
+  if (posX < 10) posX = 10;
+  if (posY < 10) posY = 10;
+
+  playerContextMenu.style.left = `${posX}px`;
+  playerContextMenu.style.top = `${posY}px`;
+  playerContextMenu.classList.remove('hidden');
+}
+
+function closePlayerTokenContextMenu() {
+  if (playerContextMenu) {
+    playerContextMenu.classList.add('hidden');
+  }
+  activeContextMenuPlayerId = null;
+}
+
+if (playerContextMenu) {
+  // Hızlı boyut butonları
+  playerContextMenu.querySelectorAll('.token-context-size-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!activeContextMenuPlayerId) return;
+      const targetSize = parseInt(btn.dataset.size);
+      setPlayerTokenSize(activeContextMenuPlayerId, targetSize);
+      closePlayerTokenContextMenu();
+    });
+  });
+
+  // Özel boyut uygula butonu
+  const customSizeBtn = document.getElementById('token-context-custom-size-btn');
+  const customSizeInput = document.getElementById('token-context-custom-size-input');
+  if (customSizeBtn && customSizeInput) {
+    customSizeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!activeContextMenuPlayerId) return;
+      const val = parseInt(customSizeInput.value);
+      if (!isNaN(val) && val >= 20) {
+        setPlayerTokenSize(activeContextMenuPlayerId, val);
+      }
+      closePlayerTokenContextMenu();
+    });
+  }
+
+  // Karakteri Düzenle butonu
+  const openEditorBtn = document.getElementById('token-context-open-editor-btn');
+  if (openEditorBtn) {
+    openEditorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const pId = activeContextMenuPlayerId;
+      closePlayerTokenContextMenu();
+      if (pId) showDmEditor(pId);
+    });
+  }
+
+  // Menü içine tıklamaların haritaya taşmasını engelle
+  playerContextMenu.addEventListener('mousedown', (e) => e.stopPropagation());
+  playerContextMenu.addEventListener('click', (e) => e.stopPropagation());
+}
+
+// Dışarı tıklandığında menüyü kapat
+document.addEventListener('mousedown', (e) => {
+  if (playerContextMenu && !playerContextMenu.classList.contains('hidden')) {
+    if (!e.target.closest('#player-token-context-menu')) {
+      closePlayerTokenContextMenu();
+    }
+  }
+});
+
+// ============================================================
 // ÇİZİM KATMANI (DRAWING LAYER)
 // ============================================================
 
 const canvas = document.getElementById('drawing-layer');
 const ctx = canvas ? canvas.getContext('2d') : null;
+let localDrawHistory = [];
+
+// Çizim Araçları State
+let currentDrawTool = 'pan'; // 'pan', 'pen', 'straightLine', 'arrow', 'rect', 'circle', 'eraser'
+let currentDrawColor = '#e74c3c';
+let currentDrawWidth = 6;
+let currentEraserWidth = 20;
+let currentFillEnabled = false;
+
 let isDrawing = false;
+let isDrawingShape = false;
+let shapeStartX = 0;
+let shapeStartY = 0;
 let lastX = 0;
 let lastY = 0;
-let localDrawHistory = [];
 
 if (canvas && ctx) {
   function resizeCanvas() {
@@ -2914,89 +3341,383 @@ if (canvas && ctx) {
   window.addEventListener('resize', resizeCanvas);
   setTimeout(resizeCanvas, 100);
 
+  // Hex to RGBA yardımcı fonksiyonu
+  function hexToRgba(hex, alpha = 0.25) {
+    if (!hex || typeof hex !== 'string') return `rgba(231, 76, 60, ${alpha})`;
+    let c = hex.replace('#', '');
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    const num = parseInt(c, 16);
+    if (isNaN(num)) return `rgba(231, 76, 60, ${alpha})`;
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  // Bireysel Çizim Nesnesini Çizme (Çizgi, Şekil veya Silgi)
+  function renderDrawItem(item) {
+    if (!item) return;
+    const type = item.type || 'line';
+    const color = item.color || '#e74c3c';
+    const width = item.width || 3;
+    const x0 = item.x0;
+    const y0 = item.y0;
+    const x1 = item.x1;
+    const y1 = item.y1;
+
+    ctx.save();
+
+    if (type === 'erase') {
+      // Piksel / Fırça Silgisi: İstenilen kısmı saydamlaştırır
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      ctx.closePath();
+    } else if (type === 'rect') {
+      const rx = Math.min(x0, x1);
+      const ry = Math.min(y0, y1);
+      const rw = Math.abs(x1 - x0);
+      const rh = Math.abs(y1 - y0);
+      if (item.fill) {
+        ctx.fillStyle = hexToRgba(color, 0.28);
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.strokeRect(rx, ry, rw, rh);
+    } else if (type === 'circle') {
+      const radius = Math.hypot(x1 - x0, y1 - y0);
+      ctx.beginPath();
+      ctx.arc(x0, y0, radius, 0, Math.PI * 2);
+      if (item.fill) {
+        ctx.fillStyle = hexToRgba(color, 0.28);
+        ctx.fill();
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.stroke();
+      ctx.closePath();
+    } else if (type === 'arrow') {
+      const headLen = Math.max(14, width * 3);
+      const angle = Math.atan2(y1 - y0, x1 - x0);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+
+      // Gövde çizgisi
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+
+      // Ok ucu üçgeni
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - headLen * Math.cos(angle - Math.PI / 6), y1 - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(x1 - headLen * Math.cos(angle + Math.PI / 6), y1 - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === 'straightLine') {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.closePath();
+    } else {
+      // Serbest çizim parçası ('line')
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      ctx.closePath();
+    }
+
+    ctx.restore();
+  }
+
   function redrawHistory() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    localDrawHistory.forEach(line => {
-      drawLineOnCanvas(line.x0, line.y0, line.x1, line.y1, line.color);
+    localDrawHistory.forEach(item => {
+      renderDrawItem(item);
     });
   }
 
-  function drawLineOnCanvas(x0, y0, x1, y1, color) {
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-    ctx.closePath();
-  }
-
   // Throttled çizim emit
-  const throttledDrawEmit = throttle((lineData) => {
-    socket.emit('drawLine', lineData);
+  const throttledDrawEmit = throttle((drawItem) => {
+    socket.emit('drawLine', drawItem);
   }, 16);
 
-  canvas.addEventListener('mousedown', (e) => {
-    isDrawing = true;
-    const rect = canvas.getBoundingClientRect();
-    lastX = e.clientX - rect.left;
-    lastY = e.clientY - rect.top;
-  });
-
-  canvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length > 1) { isDrawing = false; return; }
-    isDrawing = true;
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    lastX = touch.clientX - rect.left;
-    lastY = touch.clientY - rect.top;
-  }, { passive: true });
-
-  function handleDrawMove(currentX, currentY) {
-    if (!isDrawing) return;
-
-    let myColor = '#e74c3c';
-    if (allPlayers[myId] && allPlayers[myId].color) {
-      myColor = allPlayers[myId].color;
+  // Silgi İmleç Göstergesi
+  const eraserCursor = document.getElementById('eraser-cursor');
+  function updateEraserCursorPos(clientX, clientY) {
+    if (!eraserCursor) return;
+    if (currentDrawTool !== 'eraser') {
+      eraserCursor.classList.add('hidden');
+      return;
     }
+    const containerRect = gameMapContainer.getBoundingClientRect();
+    const x = clientX - containerRect.left;
+    const y = clientY - containerRect.top;
+    const currentZoom = window.__webdnd_zoom || 1;
+    const visualSize = Math.max(12, currentEraserWidth * currentZoom);
 
-    const lineData = { playerId: myId, x0: lastX, y0: lastY, x1: currentX, y1: currentY, color: myColor };
-
-    drawLineOnCanvas(lastX, lastY, currentX, currentY, myColor);
-    localDrawHistory.push(lineData);
-    throttledDrawEmit(lineData);
-
-    lastX = currentX;
-    lastY = currentY;
+    eraserCursor.style.left = `${x}px`;
+    eraserCursor.style.top = `${y}px`;
+    eraserCursor.style.width = `${visualSize}px`;
+    eraserCursor.style.height = `${visualSize}px`;
+    eraserCursor.classList.remove('hidden');
   }
 
-  canvas.addEventListener('mousemove', (e) => {
-    if (!isDrawing) return;
+  if (gameMapContainer) {
+    gameMapContainer.addEventListener('mousemove', (e) => {
+      if (currentDrawTool === 'eraser') {
+        updateEraserCursorPos(e.clientX, e.clientY);
+      }
+    });
+    gameMapContainer.addEventListener('mouseleave', () => {
+      if (eraserCursor) eraserCursor.classList.add('hidden');
+    });
+  }
+
+  // Mousedown
+  canvas.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || window.__webdnd_isPanning || window.__webdnd_isSpacePressed || currentDrawTool === 'pan') return;
+
     const rect = canvas.getBoundingClientRect();
-    handleDrawMove(e.clientX - rect.left, e.clientY - rect.top);
+    const currentZoom = window.__webdnd_zoom || 1;
+    const clickX = (e.clientX - rect.left) / currentZoom;
+    const clickY = (e.clientY - rect.top) / currentZoom;
+
+    if (currentDrawTool === 'rect' || currentDrawTool === 'circle' || currentDrawTool === 'straightLine' || currentDrawTool === 'arrow') {
+      isDrawingShape = true;
+      shapeStartX = clickX;
+      shapeStartY = clickY;
+    } else {
+      isDrawing = true;
+      lastX = clickX;
+      lastY = clickY;
+
+      // Silgi veya serbest çizim başlangıç noktası
+      const activeWidth = currentDrawTool === 'eraser' ? currentEraserWidth : currentDrawWidth;
+      const initialItem = {
+        playerId: myId,
+        type: currentDrawTool === 'eraser' ? 'erase' : 'line',
+        x0: lastX,
+        y0: lastY,
+        x1: lastX + 0.1,
+        y1: lastY + 0.1,
+        color: currentDrawColor,
+        width: activeWidth
+      };
+      renderDrawItem(initialItem);
+      localDrawHistory.push(initialItem);
+      throttledDrawEmit(initialItem);
+    }
   });
 
-  canvas.addEventListener('touchmove', (e) => {
-    if (!isDrawing || e.touches.length > 1) return;
-    e.preventDefault();
+  // Touchstart
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1 || currentDrawTool === 'pan') { isDrawing = false; isDrawingShape = false; return; }
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
-    handleDrawMove(touch.clientX - rect.left, touch.clientY - rect.top);
+    const currentZoom = window.__webdnd_zoom || 1;
+    const touchX = (touch.clientX - rect.left) / currentZoom;
+    const touchY = (touch.clientY - rect.top) / currentZoom;
+
+    if (currentDrawTool === 'rect' || currentDrawTool === 'circle' || currentDrawTool === 'straightLine' || currentDrawTool === 'arrow') {
+      isDrawingShape = true;
+      shapeStartX = touchX;
+      shapeStartY = touchY;
+    } else {
+      isDrawing = true;
+      lastX = touchX;
+      lastY = touchY;
+      const activeWidth = currentDrawTool === 'eraser' ? currentEraserWidth : currentDrawWidth;
+      const initialItem = {
+        playerId: myId,
+        type: currentDrawTool === 'eraser' ? 'erase' : 'line',
+        x0: lastX,
+        y0: lastY,
+        x1: lastX + 0.1,
+        y1: lastY + 0.1,
+        color: currentDrawColor,
+        width: activeWidth
+      };
+      renderDrawItem(initialItem);
+      localDrawHistory.push(initialItem);
+      throttledDrawEmit(initialItem);
+    }
+  }, { passive: true });
+
+  // Mousemove
+  canvas.addEventListener('mousemove', (e) => {
+    updateEraserCursorPos(e.clientX, e.clientY);
+
+    const rect = canvas.getBoundingClientRect();
+    const currentZoom = window.__webdnd_zoom || 1;
+    const curX = (e.clientX - rect.left) / currentZoom;
+    const curY = (e.clientY - rect.top) / currentZoom;
+
+    if (isDrawingShape) {
+      // Şekil önizlemesi (canlı olarak çizileni göster)
+      redrawHistory();
+      renderDrawItem({
+        type: currentDrawTool,
+        x0: shapeStartX,
+        y0: shapeStartY,
+        x1: curX,
+        y1: curY,
+        color: currentDrawColor,
+        width: currentDrawWidth,
+        fill: currentFillEnabled
+      });
+      return;
+    }
+
+    if (!isDrawing) return;
+
+    const isErase = currentDrawTool === 'eraser';
+    const activeWidth = isErase ? currentEraserWidth : currentDrawWidth;
+    const drawItem = {
+      playerId: myId,
+      type: isErase ? 'erase' : 'line',
+      x0: lastX,
+      y0: lastY,
+      x1: curX,
+      y1: curY,
+      color: currentDrawColor,
+      width: activeWidth
+    };
+
+    renderDrawItem(drawItem);
+    localDrawHistory.push(drawItem);
+    throttledDrawEmit(drawItem);
+
+    lastX = curX;
+    lastY = curY;
+  });
+
+  // Touchmove
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.touches.length > 1) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const currentZoom = window.__webdnd_zoom || 1;
+    const curX = (touch.clientX - rect.left) / currentZoom;
+    const curY = (touch.clientY - rect.top) / currentZoom;
+
+    if (isDrawingShape) {
+      e.preventDefault();
+      redrawHistory();
+      renderDrawItem({
+        type: currentDrawTool,
+        x0: shapeStartX,
+        y0: shapeStartY,
+        x1: curX,
+        y1: curY,
+        color: currentDrawColor,
+        width: currentDrawWidth,
+        fill: currentFillEnabled
+      });
+      return;
+    }
+
+    if (!isDrawing) return;
+    e.preventDefault();
+
+    const isErase = currentDrawTool === 'eraser';
+    const activeWidth = isErase ? currentEraserWidth : currentDrawWidth;
+    const drawItem = {
+      playerId: myId,
+      type: isErase ? 'erase' : 'line',
+      x0: lastX,
+      y0: lastY,
+      x1: curX,
+      y1: curY,
+      color: currentDrawColor,
+      width: activeWidth
+    };
+
+    renderDrawItem(drawItem);
+    localDrawHistory.push(drawItem);
+    throttledDrawEmit(drawItem);
+
+    lastX = curX;
+    lastY = curY;
   }, { passive: false });
 
-  canvas.addEventListener('mouseup', () => isDrawing = false);
-  canvas.addEventListener('mouseout', () => isDrawing = false);
-  canvas.addEventListener('touchend', () => isDrawing = false);
-  canvas.addEventListener('touchcancel', () => isDrawing = false);
+  // Mouseup / Touchend
+  function handleDrawEnd(clientX, clientY) {
+    if (isDrawingShape) {
+      isDrawingShape = false;
+      const rect = canvas.getBoundingClientRect();
+      const currentZoom = window.__webdnd_zoom || 1;
+      const finalX = clientX != null ? (clientX - rect.left) / currentZoom : shapeStartX;
+      const finalY = clientY != null ? (clientY - rect.top) / currentZoom : shapeStartY;
 
+      if (Math.hypot(finalX - shapeStartX, finalY - shapeStartY) > 3) {
+        const shapeItem = {
+          playerId: myId,
+          type: currentDrawTool,
+          x0: shapeStartX,
+          y0: shapeStartY,
+          x1: finalX,
+          y1: finalY,
+          color: currentDrawColor,
+          width: currentDrawWidth,
+          fill: currentFillEnabled
+        };
+        localDrawHistory.push(shapeItem);
+        redrawHistory();
+        socket.emit('drawLine', shapeItem);
+      } else {
+        redrawHistory();
+      }
+    }
+    isDrawing = false;
+  }
+
+  canvas.addEventListener('mouseup', (e) => handleDrawEnd(e.clientX, e.clientY));
+  canvas.addEventListener('touchend', (e) => {
+    const touch = e.changedTouches?.[0];
+    handleDrawEnd(touch?.clientX, touch?.clientY);
+  });
+  canvas.addEventListener('mouseleave', () => {
+    isDrawing = false;
+    if (isDrawingShape) {
+      isDrawingShape = false;
+      redrawHistory();
+    }
+    if (eraserCursor) eraserCursor.classList.add('hidden');
+  });
+  canvas.addEventListener('touchcancel', () => {
+    isDrawing = false;
+    isDrawingShape = false;
+  });
+
+  // Socket Alımı
   socket.on('draw', (data) => {
     localDrawHistory.push(data);
-    drawLineOnCanvas(data.x0, data.y0, data.x1, data.y1, data.color);
+    renderDrawItem(data);
   });
 
   socket.on('drawHistory', (history) => {
-    localDrawHistory = history;
+    localDrawHistory = Array.isArray(history) ? history : [];
     redrawHistory();
   });
 
@@ -3005,10 +3726,190 @@ if (canvas && ctx) {
     redrawHistory();
   });
 
+  // Geri Al (Undo)
+  function undoLastDrawing() {
+    socket.emit('undoDraw');
+    for (let i = localDrawHistory.length - 1; i >= 0; i--) {
+      if (localDrawHistory[i].playerId === myId) {
+        localDrawHistory.splice(i, 1);
+        redrawHistory();
+        break;
+      }
+    }
+  }
+
+  // ============================================================
+  // ÇİZİM PANELİ KONTROLLERİ & ETKİLEŞİMLERİ (UI BINDINGS)
+  // ============================================================
+
+  const toolbar = document.getElementById('map-draw-toolbar');
+  const toolBtns = document.querySelectorAll('.draw-btn[data-tool]');
+  const sizePills = document.querySelectorAll('.size-pill');
+  const sizeSlider = document.getElementById('draw-size-slider');
+  const sizePreview = document.getElementById('draw-size-preview');
+  const sizeLabel = document.getElementById('draw-size-label');
+  const colorDots = document.querySelectorAll('.color-dot');
+  const customColorInput = document.getElementById('draw-custom-color');
+  const fillCheckbox = document.getElementById('draw-fill-checkbox');
+  const fillToggleLabel = document.getElementById('draw-fill-toggle-label');
+  const colorSettingItem = document.getElementById('draw-color-setting-item');
+  const btnUndo = document.getElementById('btn-draw-undo');
+  const btnClearMine = document.getElementById('btn-draw-clear-mine');
+  const btnToggleOptions = document.getElementById('btn-toggle-draw-options');
+  const settingsRow = document.getElementById('draw-settings-row');
+
+  // Araç Değiştirme Fonksiyonu
+  function setDrawTool(toolName) {
+    currentDrawTool = toolName;
+    window.__webdnd_currentDrawTool = toolName;
+    window.__webdnd_toolMode = toolName;
+
+    // Tool butonlarının aktif durumunu güncelle
+    toolBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tool === toolName);
+    });
+
+    // Alt/zoom çubuğundaki butonları da güncelle
+    const bPan = document.getElementById('btn-toggle-pan-tool');
+    const bDraw = document.getElementById('btn-toggle-draw-tool');
+    const bEraser = document.getElementById('btn-toggle-eraser-tool');
+    if (bPan) bPan.classList.toggle('active', toolName === 'pan');
+    if (bDraw) bDraw.classList.toggle('active', toolName === 'pen' || toolName === 'straightLine' || toolName === 'arrow' || toolName === 'rect' || toolName === 'circle');
+    if (bEraser) bEraser.classList.toggle('active', toolName === 'eraser');
+
+    // Canvas etkileşimi: El aracında pointer-events kapatılır (harita sürüklenir), çizimde açılır
+    if (canvas) {
+      canvas.style.pointerEvents = toolName === 'pan' ? 'none' : 'auto';
+    }
+
+    // Harita imleç sınıfını güncelle
+    gameMapContainer.classList.toggle('tool-mode-pan', toolName === 'pan');
+    gameMapContainer.classList.toggle('tool-mode-draw', toolName !== 'pan' && toolName !== 'eraser');
+    gameMapContainer.classList.toggle('tool-mode-eraser', toolName === 'eraser');
+
+    // Pan modunda alt ayar satırını gizle, çizim/silgi modunda göster
+    if (settingsRow) {
+      if (toolName === 'pan') {
+        settingsRow.classList.add('hidden');
+      } else {
+        settingsRow.classList.remove('hidden');
+      }
+    }
+
+    // Silgi modunda renk seçici ve dolgu gizlenir, kalınlık etiketi "Silgi:" olur
+    const isEraser = toolName === 'eraser';
+    if (colorSettingItem) colorSettingItem.style.display = isEraser ? 'none' : 'flex';
+    if (fillToggleLabel) fillToggleLabel.style.display = (toolName === 'rect' || toolName === 'circle') ? 'inline-flex' : 'none';
+    if (sizeLabel) sizeLabel.textContent = isEraser ? 'Silgi:' : 'Kalınlık:';
+
+    // Slider ve pill değerini silgi / kalem boyutuna göre ayarla
+    const currentSize = isEraser ? currentEraserWidth : currentDrawWidth;
+    if (sizeSlider) sizeSlider.value = currentSize;
+    if (sizePreview) sizePreview.textContent = `${currentSize}px`;
+    updateSizePillActive(currentSize);
+
+    if (!isEraser && eraserCursor) {
+      eraserCursor.classList.add('hidden');
+    }
+  }
+  window.__webdnd_setToolMode = setDrawTool;
+
+  // Kalınlık Pill Aktiflik Güncelleme
+  function updateSizePillActive(val) {
+    sizePills.forEach(pill => {
+      pill.classList.toggle('active', parseInt(pill.dataset.size) === val);
+    });
+  }
+
+  function setDrawSize(sizeVal) {
+    const val = Math.max(2, Math.min(60, parseInt(sizeVal) || 6));
+    if (currentDrawTool === 'eraser') {
+      currentEraserWidth = val;
+    } else {
+      currentDrawWidth = val;
+    }
+    if (sizeSlider) sizeSlider.value = val;
+    if (sizePreview) sizePreview.textContent = `${val}px`;
+    updateSizePillActive(val);
+  }
+
+  function setDrawColor(colorVal) {
+    currentDrawColor = colorVal;
+    if (customColorInput) customColorInput.value = colorVal;
+    colorDots.forEach(dot => {
+      dot.classList.toggle('active', dot.dataset.color?.toLowerCase() === colorVal?.toLowerCase());
+    });
+  }
+
+  // Araç Buton Tıklamaları
+  toolBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setDrawTool(btn.dataset.tool);
+    });
+  });
+
+  // Kalınlık Butonları
+  sizePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      setDrawSize(parseInt(pill.dataset.size));
+    });
+  });
+
+  // Slider
+  if (sizeSlider) {
+    sizeSlider.addEventListener('input', (e) => {
+      setDrawSize(parseInt(e.target.value));
+    });
+  }
+
+  // Renk Noktaları
+  colorDots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      setDrawColor(dot.dataset.color);
+    });
+  });
+
+  // Özel Renk Seçici
+  if (customColorInput) {
+    customColorInput.addEventListener('input', (e) => {
+      setDrawColor(e.target.value);
+    });
+  }
+
+  // Dolgu Checkbox
+  if (fillCheckbox) {
+    fillCheckbox.addEventListener('change', (e) => {
+      currentFillEnabled = Boolean(e.target.checked);
+    });
+  }
+
+  // Ayarları Aç / Kapat Butonu
+  if (btnToggleOptions && settingsRow) {
+    btnToggleOptions.addEventListener('click', () => {
+      settingsRow.classList.toggle('hidden');
+    });
+  }
+
+  // Geri Al Butonu
+  if (btnUndo) {
+    btnUndo.addEventListener('click', undoLastDrawing);
+  }
+
+  // Temizle Butonları
+  if (btnClearMine) {
+    btnClearMine.addEventListener('click', () => {
+      if (confirm('Kendi çizimlerinizi temizlemek istiyor musunuz?')) {
+        socket.emit('requestClearMyDrawings');
+      }
+    });
+  }
+
   const btnClearAllDrawings = document.getElementById('btn-clear-all-drawings');
   if (btnClearAllDrawings) {
     btnClearAllDrawings.addEventListener('click', () => {
-      socket.emit('requestClearAllDrawings');
+      if (confirm('TÜM çizimleri temizlemek istiyor musunuz?')) {
+        socket.emit('requestClearAllDrawings');
+      }
     });
   }
 
@@ -3018,6 +3919,43 @@ if (canvas && ctx) {
       socket.emit('requestClearMyDrawings');
     });
   }
+
+  // Klavye Kısayolları (Çizim Araçları)
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+
+    // Ctrl+Z (Undo)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+      e.preventDefault();
+      undoLastDrawing();
+      return;
+    }
+
+    if (e.key === 'h' || e.key === 'H') {
+      setDrawTool('pan');
+    } else if (e.key === 'p' || e.key === 'P') {
+      setDrawTool('pen');
+    } else if (e.key === 'l' || e.key === 'L') {
+      setDrawTool('straightLine');
+    } else if (e.key === 'a' || e.key === 'A') {
+      setDrawTool('arrow');
+    } else if (e.key === 'r' || e.key === 'R') {
+      setDrawTool('rect');
+    } else if (e.key === 'c' || e.key === 'C') {
+      setDrawTool('circle');
+    } else if (e.key === 'e' || e.key === 'E') {
+      setDrawTool('eraser');
+    } else if (e.key === '[') {
+      const cur = currentDrawTool === 'eraser' ? currentEraserWidth : currentDrawWidth;
+      setDrawSize(Math.max(2, cur - 3));
+    } else if (e.key === ']') {
+      const cur = currentDrawTool === 'eraser' ? currentEraserWidth : currentDrawWidth;
+      setDrawSize(Math.min(60, cur + 3));
+    }
+  });
+
+  // Başlangıçta Pan modunu ayarla
+  setDrawTool('pan');
 }
 
 // ============================================================
@@ -4012,6 +4950,412 @@ socket.on('batchAssignAttacksResult', (res) => {
     }
   }
 });
+
+// Spawner düşman doğurma görsel ve ses animasyonu
+socket.on('spawnerSpawned', (data) => {
+  const mapContent = document.getElementById('map-content');
+  if (mapContent && data && data.x != null && data.y != null) {
+    const burst = document.createElement('div');
+    burst.className = 'spawner-summon-burst';
+    burst.style.left = `${data.x + 25}px`;
+    burst.style.top = `${data.y + 25}px`;
+    mapContent.appendChild(burst);
+    setTimeout(() => { if (burst.parentNode) burst.parentNode.removeChild(burst); }, 1500);
+  }
+  // Mistik çağırma sesi
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(580, audioCtx.currentTime + 0.35);
+    gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.45);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.5);
+  } catch(e) {}
+});
+
+// Şifa etki göstergesi (Floating Combat Healing)
+socket.on('combatHealImpact', (data) => {
+  if (!data) return;
+  const amount = data.amount || data.heal;
+  const targetId = data.targetId || data.recipientId;
+  if (!amount || !targetId) return;
+
+  const targetEl = document.querySelector(`.token[data-id="${targetId}"]`);
+  const mapContent = document.getElementById('map-content');
+  if (targetEl && mapContent) {
+    const tLeft = parseFloat(targetEl.style.left) || targetEl.offsetLeft || 0;
+    const tTop = parseFloat(targetEl.style.top) || targetEl.offsetTop || 0;
+    const tSize = targetEl.offsetWidth || 50;
+
+    const floatHeal = document.createElement('div');
+    floatHeal.className = 'token-floating-heal';
+    floatHeal.textContent = `💚 +${amount}`;
+    floatHeal.style.left = `${tLeft + tSize / 2}px`;
+    floatHeal.style.top = `${tTop}px`;
+    mapContent.appendChild(floatHeal);
+    setTimeout(() => { if (floatHeal.parentNode) floatHeal.parentNode.removeChild(floatHeal); }, 1800);
+  }
+});
+
+// ============================================================
+// HARİTA KAMERASI: YAKINLAŞTIRMA & KAYDIRMA (ZOOM & PAN CONTROLLER)
+// ============================================================
+
+(function initMapCamera() {
+  const container = document.getElementById('game-map');
+  const content = document.getElementById('map-content');
+  if (!container || !content) return;
+
+  // State
+  let zoom = 1.0;
+  let panX = 0;
+  let panY = 0;
+  const minZoom = 0.2;
+  const maxZoom = 3.5;
+
+  let toolMode = 'pan'; // 'pan' (El Aracı) veya 'draw' (Çizim Aracı)
+  window.__webdnd_toolMode = toolMode;
+
+  let isPanning = false;
+  let panStartX = 0;
+  let panStartY = 0;
+  let initialPanX = 0;
+  let initialPanY = 0;
+  let hasMovedPan = false;
+  let isSpacePressed = false;
+
+  // DOM Elements
+  const drawingLayer = document.getElementById('drawing-layer');
+  const btnZoomIn = document.getElementById('btn-zoom-in');
+  const btnZoomOut = document.getElementById('btn-zoom-out');
+  const btnZoomReset = document.getElementById('btn-zoom-reset');
+  const btnZoomFit = document.getElementById('btn-zoom-fit');
+  const zoomLevelBadge = document.getElementById('map-zoom-level');
+  const btnTogglePan = document.getElementById('btn-toggle-pan-tool');
+  const btnToggleDraw = document.getElementById('btn-toggle-draw-tool');
+  const btnToggleEraser = document.getElementById('btn-toggle-eraser-tool');
+
+  // Başlangıçta pan modunu ve drawing-layer etkileşimini ayarla
+  function updateToolModeUI() {
+    window.__webdnd_toolMode = toolMode;
+    container.classList.toggle('tool-mode-pan', toolMode === 'pan');
+    container.classList.toggle('tool-mode-draw', toolMode !== 'pan' && toolMode !== 'eraser');
+    container.classList.toggle('tool-mode-eraser', toolMode === 'eraser');
+
+    if (btnTogglePan) btnTogglePan.classList.toggle('active', toolMode === 'pan');
+    if (btnToggleDraw) btnToggleDraw.classList.toggle('active', toolMode === 'draw' || toolMode === 'pen');
+    if (btnToggleEraser) btnToggleEraser.classList.toggle('active', toolMode === 'eraser');
+
+    if (drawingLayer) {
+      drawingLayer.style.pointerEvents = toolMode === 'pan' ? 'none' : 'auto';
+    }
+  }
+  updateToolModeUI();
+
+  // Kameranın pozisyon ve ölçeğini map-content'e uygular
+  function applyCamera(smooth = false) {
+    if (smooth) {
+      content.style.transition = 'transform 0.28s cubic-bezier(0.2, 0.9, 0.4, 1)';
+      setTimeout(() => { content.style.transition = ''; }, 280);
+    } else {
+      content.style.transition = '';
+    }
+
+    content.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    content.style.transformOrigin = '0 0';
+
+    window.__webdnd_zoom = zoom;
+    window.__webdnd_panX = panX;
+    window.__webdnd_panY = panY;
+
+    // Geniş açıdan bakıldığında (zoom < 1.0) can barları, karanlık barları ve efektlerin okunabilirliği için büyüme çarpanı
+    const wideScale = zoom < 1 ? Math.min(3.5, 1 / Math.pow(zoom, 0.85)) : 1.0;
+    content.style.setProperty('--zoom-ui-scale', wideScale.toFixed(3));
+    content.style.setProperty('--zoom-scale', zoom.toFixed(3));
+
+    if (zoomLevelBadge) {
+      zoomLevelBadge.textContent = `${Math.round(zoom * 100)}%`;
+    }
+  }
+
+  // Nokta odaklı yakınlaştırma
+  function zoomAtPoint(factor, clientX, clientY, smooth = false) {
+    const rect = container.getBoundingClientRect();
+    const mouseX = clientX != null ? clientX - rect.left : rect.width / 2;
+    const mouseY = clientY != null ? clientY - rect.top : rect.height / 2;
+
+    const newZoom = Math.min(maxZoom, Math.max(minZoom, zoom * factor));
+    if (Math.abs(newZoom - zoom) < 0.001) return;
+
+    // Fare noktasını sabit tutacak şekilde yeni pan pozisyonu
+    panX = mouseX - (mouseX - panX) * (newZoom / zoom);
+    panY = mouseY - (mouseY - panY) * (newZoom / zoom);
+    zoom = newZoom;
+
+    applyCamera(smooth);
+  }
+
+  // Haritayı ekrana sığdır / ortala
+  function fitMap(smooth = true) {
+    const viewW = container.clientWidth;
+    const viewH = container.clientHeight;
+    const mapW = content.clientWidth || 2000;
+    const mapH = content.clientHeight || 1500;
+    if (!mapW || !mapH) return;
+
+    const scaleX = (viewW - 40) / mapW;
+    const scaleY = (viewH - 40) / mapH;
+    zoom = Math.min(1.2, Math.max(minZoom, Math.min(scaleX, scaleY)));
+    panX = (viewW - mapW * zoom) / 2;
+    panY = (viewH - mapH * zoom) / 2;
+    applyCamera(smooth);
+  }
+
+  // %100 Orijinal boyuta sıfırla ve ortala
+  function resetZoom(smooth = true) {
+    zoom = 1.0;
+    const viewW = container.clientWidth;
+    const viewH = container.clientHeight;
+    const mapW = content.clientWidth || 2000;
+    const mapH = content.clientHeight || 1500;
+    panX = Math.max(0, (viewW - mapW) / 2);
+    panY = Math.max(0, (viewH - mapH) / 2);
+    applyCamera(smooth);
+  }
+
+  // Haritada belirli bir koordinatı merkezleme (Token odaklama için global helper)
+  function centerMapOn(mapX, mapY, smooth = true) {
+    const viewW = container.clientWidth;
+    const viewH = container.clientHeight;
+    panX = viewW / 2 - mapX * zoom;
+    panY = viewH / 2 - mapY * zoom;
+    applyCamera(smooth);
+  }
+  window.__webdnd_centerMapOn = centerMapOn;
+  window.__webdnd_zoom = zoom;
+  window.__webdnd_panX = panX;
+  window.__webdnd_panY = panY;
+
+  // Fare Tekerleği (Mouse Wheel) ile Zoom
+  container.addEventListener('wheel', (e) => {
+    // Scroll edilebilir HUD panellerinde (chat, combat track vs.) haritayı zoomlama
+    if (e.target.closest('#bg3-combat-bar-container, #bg3-bottom-hotbar, .bg3-cards-wrapper, .modal, .dm-modal-content, #logs, #kenan-turn-info-card, .dice-history-popup')) {
+      return;
+    }
+    e.preventDefault();
+
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    zoomAtPoint(factor, e.clientX, e.clientY, false);
+  }, { passive: false });
+
+  // Pan Başlatma
+  function startPan(clientX, clientY) {
+    isPanning = true;
+    window.__webdnd_isPanning = true;
+    panStartX = clientX;
+    panStartY = clientY;
+    initialPanX = panX;
+    initialPanY = panY;
+    hasMovedPan = false;
+    container.classList.add('map-is-panning');
+  }
+
+  function doPan(clientX, clientY) {
+    if (!isPanning) return;
+    const dx = clientX - panStartX;
+    const dy = clientY - panStartY;
+    if (Math.hypot(dx, dy) > 4) {
+      hasMovedPan = true;
+    }
+    panX = initialPanX + dx;
+    panY = initialPanY + dy;
+    applyCamera(false);
+  }
+
+  function stopPan() {
+    if (!isPanning) return;
+    isPanning = false;
+    window.__webdnd_isPanning = false;
+    container.classList.remove('map-is-panning');
+  }
+
+  // Mousedown ile pan başlatma
+  container.addEventListener('mousedown', (e) => {
+    // HUD, çizim araç çubuğu, context menu veya tokenlara tıklanıyorsa haritayı kaydırma
+    if (e.target.closest('#map-zoom-controls, #map-draw-toolbar, #player-token-context-menu, #bg3-combat-bar-container, #bg3-bottom-hotbar, #combat-mode-toggle-btn, #dm-aoe-damage-btn, .token, .modal')) {
+      return;
+    }
+
+    // Orta tuş (1) veya Spacebar basılıyken sol tık
+    if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
+      e.preventDefault();
+      startPan(e.clientX, e.clientY);
+      return;
+    }
+
+    // Sağ tık (2) ile haritayı kaydırma
+    if (e.button === 2) {
+      startPan(e.clientX, e.clientY);
+      return;
+    }
+
+    // Sol tık (0) El/Kaydırma aracındayken (ve AoE hedefleme aktif değilse)
+    const isAoeActive = document.getElementById('aoe-targeting-layer')?.classList.contains('active');
+    const isPanMode = (toolMode === 'pan' || window.__webdnd_toolMode === 'pan' || window.__webdnd_currentDrawTool === 'pan');
+    if (e.button === 0 && isPanMode && !isAoeActive) {
+      startPan(e.clientX, e.clientY);
+      return;
+    }
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (isPanning) {
+      doPan(e.clientX, e.clientY);
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isPanning) {
+      stopPan();
+    }
+  });
+
+  // Sağ tık sürükleme yapıldıysa sağ tık menüsünü engelle
+  container.addEventListener('contextmenu', (e) => {
+    if (hasMovedPan && !e.target.closest('.token, .token-status-badge')) {
+      e.preventDefault();
+      hasMovedPan = false;
+    }
+  });
+
+  // Space Tuşu ile Geçici El Aracı
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !e.repeat && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) {
+      isSpacePressed = true;
+      window.__webdnd_isSpacePressed = true;
+      container.classList.add('map-space-held');
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') {
+      isSpacePressed = false;
+      window.__webdnd_isSpacePressed = false;
+      container.classList.remove('map-space-held');
+    }
+  });
+
+  // Dokunmatik (Touch) Cihazlar: 2 Parmak Kaydırma & Pinch Zoom
+  let touchStartDist = null;
+  let touchStartZoom = 1.0;
+  let touchStartMidX = 0;
+  let touchStartMidY = 0;
+
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchStartZoom = zoom;
+      touchStartMidX = (t1.clientX + t2.clientX) / 2;
+      touchStartMidY = (t1.clientY + t2.clientY) / 2;
+      initialPanX = panX;
+      initialPanY = panY;
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && touchStartDist) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const currentDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const pinchFactor = currentDist / touchStartDist;
+      const currentMidX = (t1.clientX + t2.clientX) / 2;
+      const currentMidY = (t1.clientY + t2.clientY) / 2;
+
+      zoom = Math.min(maxZoom, Math.max(minZoom, touchStartZoom * pinchFactor));
+      panX = initialPanX + (currentMidX - touchStartMidX);
+      panY = initialPanY + (currentMidY - touchStartMidY);
+      applyCamera(false);
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+      touchStartDist = null;
+    }
+  });
+
+  // Buton Eventleri
+  if (btnZoomIn) {
+    btnZoomIn.addEventListener('click', () => zoomAtPoint(1.25, null, null, true));
+  }
+  if (btnZoomOut) {
+    btnZoomOut.addEventListener('click', () => zoomAtPoint(0.8, null, null, true));
+  }
+  if (btnZoomReset) {
+    btnZoomReset.addEventListener('click', () => resetZoom(true));
+  }
+  if (btnZoomFit) {
+    btnZoomFit.addEventListener('click', () => fitMap(true));
+  }
+
+  // Araç Butonları (El vs Kalem vs Silgi)
+  function switchTool(targetTool) {
+    toolMode = targetTool;
+    if (typeof window.__webdnd_setToolMode === 'function') {
+      window.__webdnd_setToolMode(targetTool);
+    } else {
+      updateToolModeUI();
+    }
+  }
+
+  if (btnTogglePan) {
+    btnTogglePan.addEventListener('click', () => switchTool('pan'));
+  }
+  if (btnToggleDraw) {
+    btnToggleDraw.addEventListener('click', () => switchTool('pen'));
+  }
+  if (btnToggleEraser) {
+    btnToggleEraser.addEventListener('click', () => switchTool('eraser'));
+  }
+
+  // Klavye Kısayolları (Girdi alanları dışında)
+  document.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+
+    if (e.key === '+' || e.key === '=') {
+      e.preventDefault();
+      zoomAtPoint(1.2, null, null, true);
+    } else if (e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      zoomAtPoint(0.83, null, null, true);
+    } else if (e.key === '0') {
+      e.preventDefault();
+      resetZoom(true);
+    } else if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      fitMap(true);
+    } else if (e.key === 'h' || e.key === 'H') {
+      switchTool('pan');
+    } else if (e.key === 'p' || e.key === 'P') {
+      switchTool('pen');
+    } else if (e.key === 'e' || e.key === 'E') {
+      switchTool('eraser');
+    }
+  });
+
+  // İlk açılışta kamera ölçek CSS değişkenlerini başlat
+  applyCamera(false);
+})();
 
 // ============================================================
 // KEEP-ALIVE PING (Render.com free plan için)
