@@ -3501,7 +3501,8 @@ if (canvas && ctx) {
 
   // Mousedown
   canvas.addEventListener('mousedown', (e) => {
-    if (e.button !== 0 || window.__webdnd_isPanning || window.__webdnd_isSpacePressed || currentDrawTool === 'pan') return;
+    if (e.button !== 0 || window.__webdnd_isSpacePressed || currentDrawTool === 'pan') return;
+    e.stopPropagation();
 
     const rect = canvas.getBoundingClientRect();
     const currentZoom = window.__webdnd_zoom || 1;
@@ -3538,6 +3539,7 @@ if (canvas && ctx) {
   // Touchstart
   canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length > 1 || currentDrawTool === 'pan') { isDrawing = false; isDrawingShape = false; return; }
+    e.stopPropagation();
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
     const currentZoom = window.__webdnd_zoom || 1;
@@ -3769,12 +3771,18 @@ if (canvas && ctx) {
     window.__webdnd_currentDrawTool = toolName;
     window.__webdnd_toolMode = toolName;
 
+    // Pan durumunu sıfırla (araç değiştiğinde takılı kalmayı önler)
+    window.__webdnd_isPanning = false;
+    if (typeof window.__webdnd_stopPan === 'function') {
+      window.__webdnd_stopPan();
+    }
+
     // Tool butonlarının aktif durumunu güncelle
     toolBtns.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tool === toolName);
     });
 
-    // Alt/zoom çubuğundaki butonları da güncelle
+    // Alt/zoom çubuğundaki butonlar varsa güncelle (null-safe)
     const bPan = document.getElementById('btn-toggle-pan-tool');
     const bDraw = document.getElementById('btn-toggle-draw-tool');
     const bEraser = document.getElementById('btn-toggle-eraser-tool');
@@ -3788,9 +3796,11 @@ if (canvas && ctx) {
     }
 
     // Harita imleç sınıfını güncelle
-    gameMapContainer.classList.toggle('tool-mode-pan', toolName === 'pan');
-    gameMapContainer.classList.toggle('tool-mode-draw', toolName !== 'pan' && toolName !== 'eraser');
-    gameMapContainer.classList.toggle('tool-mode-eraser', toolName === 'eraser');
+    if (gameMapContainer) {
+      gameMapContainer.classList.toggle('tool-mode-pan', toolName === 'pan');
+      gameMapContainer.classList.toggle('tool-mode-draw', toolName !== 'pan' && toolName !== 'eraser');
+      gameMapContainer.classList.toggle('tool-mode-eraser', toolName === 'eraser');
+    }
 
     // Pan modunda alt ayar satırını gizle, çizim/silgi modunda göster
     if (settingsRow) {
@@ -3818,6 +3828,7 @@ if (canvas && ctx) {
     }
   }
   window.__webdnd_setToolMode = setDrawTool;
+  window.__webdnd_getCurrentDrawTool = () => currentDrawTool;
 
   // Kalınlık Pill Aktiflik Güncelleme
   function updateSizePillActive(val) {
@@ -5024,9 +5035,6 @@ socket.on('combatHealImpact', (data) => {
   const minZoom = 0.2;
   const maxZoom = 3.5;
 
-  let toolMode = 'pan'; // 'pan' (El Aracı) veya 'draw' (Çizim Aracı)
-  window.__webdnd_toolMode = toolMode;
-
   let isPanning = false;
   let panStartX = 0;
   let panStartY = 0;
@@ -5036,32 +5044,11 @@ socket.on('combatHealImpact', (data) => {
   let isSpacePressed = false;
 
   // DOM Elements
-  const drawingLayer = document.getElementById('drawing-layer');
   const btnZoomIn = document.getElementById('btn-zoom-in');
   const btnZoomOut = document.getElementById('btn-zoom-out');
   const btnZoomReset = document.getElementById('btn-zoom-reset');
   const btnZoomFit = document.getElementById('btn-zoom-fit');
   const zoomLevelBadge = document.getElementById('map-zoom-level');
-  const btnTogglePan = document.getElementById('btn-toggle-pan-tool');
-  const btnToggleDraw = document.getElementById('btn-toggle-draw-tool');
-  const btnToggleEraser = document.getElementById('btn-toggle-eraser-tool');
-
-  // Başlangıçta pan modunu ve drawing-layer etkileşimini ayarla
-  function updateToolModeUI() {
-    window.__webdnd_toolMode = toolMode;
-    container.classList.toggle('tool-mode-pan', toolMode === 'pan');
-    container.classList.toggle('tool-mode-draw', toolMode !== 'pan' && toolMode !== 'eraser');
-    container.classList.toggle('tool-mode-eraser', toolMode === 'eraser');
-
-    if (btnTogglePan) btnTogglePan.classList.toggle('active', toolMode === 'pan');
-    if (btnToggleDraw) btnToggleDraw.classList.toggle('active', toolMode === 'draw' || toolMode === 'pen');
-    if (btnToggleEraser) btnToggleEraser.classList.toggle('active', toolMode === 'eraser');
-
-    if (drawingLayer) {
-      drawingLayer.style.pointerEvents = toolMode === 'pan' ? 'none' : 'auto';
-    }
-  }
-  updateToolModeUI();
 
   // Kameranın pozisyon ve ölçeğini map-content'e uygular
   function applyCamera(smooth = false) {
@@ -5189,6 +5176,7 @@ socket.on('combatHealImpact', (data) => {
     window.__webdnd_isPanning = false;
     container.classList.remove('map-is-panning');
   }
+  window.__webdnd_stopPan = stopPan;
 
   // Mousedown ile pan başlatma
   container.addEventListener('mousedown', (e) => {
@@ -5212,7 +5200,10 @@ socket.on('combatHealImpact', (data) => {
 
     // Sol tık (0) El/Kaydırma aracındayken (ve AoE hedefleme aktif değilse)
     const isAoeActive = document.getElementById('aoe-targeting-layer')?.classList.contains('active');
-    const isPanMode = (toolMode === 'pan' || window.__webdnd_toolMode === 'pan' || window.__webdnd_currentDrawTool === 'pan');
+    const activeTool = typeof window.__webdnd_getCurrentDrawTool === 'function'
+      ? window.__webdnd_getCurrentDrawTool()
+      : (window.__webdnd_currentDrawTool || 'pan');
+    const isPanMode = (activeTool === 'pan');
     if (e.button === 0 && isPanMode && !isAoeActive) {
       startPan(e.clientX, e.clientY);
       return;
@@ -5313,26 +5304,6 @@ socket.on('combatHealImpact', (data) => {
     btnZoomFit.addEventListener('click', () => fitMap(true));
   }
 
-  // Araç Butonları (El vs Kalem vs Silgi)
-  function switchTool(targetTool) {
-    toolMode = targetTool;
-    if (typeof window.__webdnd_setToolMode === 'function') {
-      window.__webdnd_setToolMode(targetTool);
-    } else {
-      updateToolModeUI();
-    }
-  }
-
-  if (btnTogglePan) {
-    btnTogglePan.addEventListener('click', () => switchTool('pan'));
-  }
-  if (btnToggleDraw) {
-    btnToggleDraw.addEventListener('click', () => switchTool('pen'));
-  }
-  if (btnToggleEraser) {
-    btnToggleEraser.addEventListener('click', () => switchTool('eraser'));
-  }
-
   // Klavye Kısayolları (Girdi alanları dışında)
   document.addEventListener('keydown', (e) => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
@@ -5349,12 +5320,6 @@ socket.on('combatHealImpact', (data) => {
     } else if (e.key === 'f' || e.key === 'F') {
       e.preventDefault();
       fitMap(true);
-    } else if (e.key === 'h' || e.key === 'H') {
-      switchTool('pan');
-    } else if (e.key === 'p' || e.key === 'P') {
-      switchTool('pen');
-    } else if (e.key === 'e' || e.key === 'E') {
-      switchTool('eraser');
     }
   });
 
