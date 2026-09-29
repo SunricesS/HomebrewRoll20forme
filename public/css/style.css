@@ -6948,7 +6948,7 @@ body:not([data-game-mode="kenan"]) .kenan-only {
 }
 
 .draw-size-range {
-    width: 65px;
+    width: 75px;
     height: 4px;
     accent-color: #f59e0b;
     cursor: pointer;
@@ -6959,7 +6959,7 @@ body:not([data-game-mode="kenan"]) .kenan-only {
     font-size: 11px;
     font-weight: 700;
     color: #f5efe6;
-    min-width: 28px;
+    min-width: 38px;
     text-align: right;
 }
 

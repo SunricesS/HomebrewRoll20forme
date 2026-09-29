@@ -135,20 +135,25 @@ function updateHpBadge(tokenEl, hpCurrent, hpMax) {
 
 /**
  * Token üzerindeki Karanlık (Darkness) barını oluşturur veya günceller.
- * Sadece Kenan oyun modunda VE savaş modu aktifken görünür.
+ * Kenan oyun modunda (hem normalde hem de savaş modunda) görünür.
  */
 function updateTokenDarknessBar(tokenEl, playerData) {
-  if (!tokenEl) return;
+  if (!tokenEl || !playerData) return;
   let darknessBar = tokenEl.querySelector('.token-darkness-bar');
 
-  const isCombatActive = window.__webdnd_combatActive === true;
-  if (currentGameMode !== 'kenan' || !isCombatActive) {
+  if (currentGameMode !== 'kenan') {
     if (darknessBar) darknessBar.remove();
     return;
   }
 
   // Eğer bir NPC / Marker ise ve karanlığa sahip değilse bar olmasın
   if (playerData.isMarker && !playerData.hasDarkness) {
+    if (darknessBar) darknessBar.remove();
+    return;
+  }
+
+  // Eğer bir oyuncu ise ve henüz karakter verisi atanmamışsa bar olmasın
+  if (!playerData.isMarker && !playerData.character) {
     if (darknessBar) darknessBar.remove();
     return;
   }
@@ -3822,7 +3827,7 @@ if (canvas && ctx) {
   }
 
   function setDrawSize(sizeVal) {
-    const val = Math.max(2, Math.min(60, parseInt(sizeVal) || 6));
+    const val = Math.max(2, Math.min(100, parseInt(sizeVal) || 6));
     if (currentDrawTool === 'eraser') {
       currentEraserWidth = val;
     } else {
@@ -3950,7 +3955,7 @@ if (canvas && ctx) {
       setDrawSize(Math.max(2, cur - 3));
     } else if (e.key === ']') {
       const cur = currentDrawTool === 'eraser' ? currentEraserWidth : currentDrawWidth;
-      setDrawSize(Math.min(60, cur + 3));
+      setDrawSize(Math.min(100, cur + 3));
     }
   });
 
