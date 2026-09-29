@@ -13,6 +13,9 @@
     combatants: []
   };
 
+  // === I18N HELPER ===
+  const t = (key, params, fallback) => (window.I18n ? window.I18n.t(key, params, fallback) : (fallback || key));
+
   // === DOM ELEMENTLERİ ===
   const container = document.getElementById('bg3-combat-bar-container');
   const cardsTrack = document.getElementById('bg3-cards-track');
@@ -231,7 +234,7 @@
     if (floatingBtn) floatingBtn.classList.add('active');
     if (floatingBtnBadge) {
       floatingBtnBadge.classList.remove('hidden');
-      floatingBtnBadge.textContent = `Tur ${combatState.round}`;
+      floatingBtnBadge.textContent = t('combat_round_display', { n: combatState.round }, `Round ${combatState.round}`);
     }
     if (dmCombatBtn) dmCombatBtn.classList.add('active');
     if (dmAoeBtn && typeof role !== 'undefined' && role === 'dm') {
@@ -240,7 +243,7 @@
 
     // Tur sayacı
     if (roundDisplay) {
-      roundDisplay.textContent = `Tur ${combatState.round}`;
+      roundDisplay.textContent = t('combat_round_display', { n: combatState.round }, `Round ${combatState.round}`);
     }
 
     // Kartları temizle
@@ -442,15 +445,15 @@
       const nameLabel = document.createElement('div');
       nameLabel.className = 'bg3-card-name-label';
       if (c.objectType === 'explosive') {
-        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-explosive">💣 PATLAYICI</span> ${escapeHtml(c.name || 'Nesne')}`;
+        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-explosive">💣 ${t('explosive_tag', {}, 'EXPLOSIVE')}</span> ${escapeHtml(c.name || t('object_fallback', {}, 'Object'))}`;
       } else if (c.objectType === 'aura') {
-        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-aura">🔮 TOTEM</span> ${escapeHtml(c.name || 'Nesne')}`;
+        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-aura">🔮 ${t('totem_tag', {}, 'TOTEM')}</span> ${escapeHtml(c.name || t('object_fallback', {}, 'Object'))}`;
       } else if (c.objectType === 'spawner') {
-        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-spawner">🌀 ÇAĞIRICI</span> ${escapeHtml(c.name || 'Yuva')}`;
+        nameLabel.innerHTML = `<span class="bg3-card-object-tag tag-spawner">🌀 ${t('spawner_tag', {}, 'SPAWNER')}</span> ${escapeHtml(c.name || t('nest_fallback', {}, 'Spawner'))}`;
       } else {
-        nameLabel.textContent = c.name || 'Bilinmiyor';
+        nameLabel.textContent = c.name || t('unknown', {}, 'Unknown');
       }
-      nameLabel.title = c.name || 'Bilinmiyor';
+      nameLabel.title = c.name || t('unknown', {}, 'Unknown');
       card.appendChild(nameLabel);
 
       // 6. Aktif Sıra Banner'ı (Görseldeki "Za'krug" gibi alt banner)
@@ -550,8 +553,8 @@
 
     // 1. Portre & İsim
     if (hotbarCharName) {
-      hotbarCharName.textContent = activeCombatant.name || 'Karakter';
-      hotbarCharName.title = activeCombatant.name || 'Karakter';
+      hotbarCharName.textContent = activeCombatant.name || t('character', {}, 'Character');
+      hotbarCharName.title = activeCombatant.name || t('character', {}, 'Character');
     }
 
     if (hotbarAvatarWrap) {
@@ -617,7 +620,7 @@
       if (!assignedIds || assignedIds.length === 0) {
         const notice = document.createElement('span');
         notice.className = 'bg3-hotbar-empty-notice';
-        notice.textContent = '⚠️ Bu karaktere özel saldırı atanmadı (Panelden seçin).';
+        notice.textContent = t('no_attacks_assigned_notice', {}, '⚠️ No attacks assigned to this character (Select from panel).');
         hotbarSlotsTrack.appendChild(notice);
       } else {
         assignedIds.forEach(presetId => {
@@ -734,7 +737,7 @@
         window.__webdnd_refreshDarknessBars();
       }
       if (typeof addLogHtml === 'function') {
-        addLogHtml('<span style="color:var(--gold, #fbbf24); font-weight:700;">⚔️ Savaş Modu Başladı! İnisiyatif zarları atıldı.</span>');
+        addLogHtml('<span style="color:var(--gold, #fbbf24); font-weight:700;">' + t('combat_started_log', {}, '⚔️ Combat Mode Started! Initiative rolls completed.') + '</span>');
       }
     });
 
@@ -757,7 +760,7 @@
         window.__webdnd_clearTargets();
       }
       if (typeof addLogHtml === 'function') {
-        addLogHtml('<span style="color:var(--text-muted, #94a3b8);">🏳️ Savaş Modu Sonlandırıldı.</span>');
+        addLogHtml('<span style="color:var(--text-muted, #94a3b8);">' + t('combat_ended_log', {}, '🏳️ Combat Mode Ended.') + '</span>');
       }
     });
   }
@@ -859,6 +862,16 @@
   if (typeof socket !== 'undefined') {
     socket.emit('getCombatState');
   }
+
+  // Dil değiştiğinde arayüzü güncelle
+  window.addEventListener('dnd:languageChange', () => {
+    if (combatState.active) {
+      renderCombatBar();
+      if (combatState.combatants && combatState.combatants[combatState.currentTurnIndex]) {
+        renderBottomHotbar(combatState.combatants[combatState.currentTurnIndex]);
+      }
+    }
+  });
 
   console.log('BG3 Combat Tracker modülü yüklendi.');
 })();

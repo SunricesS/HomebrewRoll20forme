@@ -43,6 +43,7 @@ let offsetY = 0;
 // ============================================================
 // YARDIMCI FONKSİYONLAR (DRY)
 // ============================================================
+const t = (key, params, fallback) => (window.I18n ? window.I18n.t(key, params, fallback) : (fallback || key));
 
 /**
  * XSS koruması — kullanıcı girdilerini güvenli hale getirir.
@@ -377,7 +378,7 @@ function getTokenInitial(playerData) {
 socket.on('connect', () => {
   console.log("Sunucuya bağlandım!");
   myId = socket.id;
-  document.getElementById('status').innerText = "Bağlandı!";
+  document.getElementById('status').innerText = t('connected', {}, 'Connected!');
 
   // Bağlantı koptuğunda haritada kalan eski klonları temizle
   Object.values(tokens).forEach(t => t.remove());
@@ -388,7 +389,7 @@ socket.on('connect', () => {
   socket.emit('playerJoin', { role, profile: profileData, character: characterData, sessionId });
 
   // Log
-  const logName = role === 'dm' ? "DM Olarak giriş yaptınız." : `${characterData?.name || 'Oyuncu'} olarak giriş yaptınız.`;
+  const logName = role === 'dm' ? t('logged_in_as_dm', {}, 'Logged in as DM.') : t('logged_in_as_player', { name: characterData?.name || t('player_fallback', {}, 'Player') }, `${characterData?.name || 'Player'} logged in.`);
   addLog(logName);
 
   // Supabase'deki güncel şablonları sunucudan talep et
@@ -437,7 +438,7 @@ socket.on('currentPlayers', (players) => {
 socket.on('newPlayer', (playerData) => {
   allPlayers[playerData.id] = playerData;
   addToken(playerData);
-  addLog(`${getPlayerDisplayName(playerData)} katıldı.`);
+  addLog(t('player_joined_log', { name: getPlayerDisplayName(playerData) }, `${getPlayerDisplayName(playerData)} joined.`));
   renderPlayerInfo();
 });
 
@@ -1966,14 +1967,14 @@ if (btnMarkerAddEffect && !btnMarkerAddEffect._bound) {
   btnMarkerAddEffect._bound = true;
   btnMarkerAddEffect.addEventListener('click', () => {
     if (!editingMarkerId || !window.__webdnd_markers || !window.__webdnd_markers[editingMarkerId]) {
-      alert('Düzenlenen token bulunamadı!');
+      alert(t('alert_token_not_found', {}, 'Edited token could not be found!'));
       return;
     }
     const select = document.getElementById('dm-marker-add-effect-select');
     const durInput = document.getElementById('dm-marker-add-effect-duration');
     const presetId = select?.value;
     if (!presetId) {
-      alert('Lütfen eklenecek durum efektini seçin!');
+      alert(t('alert_select_status', {}, 'Please select a status effect to add!'));
       return;
     }
     const preset = currentStatusPresets.find(p => p.id === presetId);
@@ -2578,10 +2579,10 @@ if (btnForceSave) {
 socket.on('saveComplete', () => {
   const btn = document.getElementById('btn-force-save');
   if (btn) {
-    btn.innerText = 'Harita Kaydet';
+    btn.innerText = t('save_map', {}, 'Save Map');
     btn.style.backgroundColor = '#e67e22';
   }
-  addLog('Harita manuel olarak kaydedildi.', '#27ae60');
+  addLog(t('map_manually_saved_log', {}, 'Map manually saved.'), '#27ae60');
 });
 
 // ---- Token Görünüm (Oyuncu) ----
@@ -2666,9 +2667,9 @@ function renderPlayerInfo() {
 
   if (!hasOthers) {
     if (role === 'dm' && dmPlayerList) {
-      dmPlayerList.innerHTML = '<p class="empty-state-text">Bağlı oyuncu yok.</p>';
+      dmPlayerList.innerHTML = `<p class="empty-state-text">${escapeHtml(t('no_connected_players', {}, 'No connected players.'))}</p>`;
     } else if (othersList) {
-      othersList.innerHTML = '<p class="empty-state-text">Odada başka oyuncu yok.</p>';
+      othersList.innerHTML = `<p class="empty-state-text">${escapeHtml(t('no_other_players', {}, 'No other players in room.'))}</p>`;
     }
   }
 
@@ -3016,14 +3017,14 @@ if (btnPlayerAddEffect && !btnPlayerAddEffect._bound) {
   btnPlayerAddEffect._bound = true;
   btnPlayerAddEffect.addEventListener('click', () => {
     if (!editingPlayerId || !allPlayers || !allPlayers[editingPlayerId]) {
-      alert('Düzenlenen oyuncu bulunamadı!');
+      alert(t('alert_player_not_found', {}, 'Edited player could not be found!'));
       return;
     }
     const select = document.getElementById('dm-player-add-effect-select');
     const durInput = document.getElementById('dm-player-add-effect-duration');
     const presetId = select?.value;
     if (!presetId) {
-      alert('Lütfen eklenecek durum efektini seçin!');
+      alert(t('alert_select_status', {}, 'Please select a status effect to add!'));
       return;
     }
     const preset = currentStatusPresets.find(p => p.id === presetId);
@@ -3914,7 +3915,7 @@ if (canvas && ctx) {
   // Temizle Butonları
   if (btnClearMine) {
     btnClearMine.addEventListener('click', () => {
-      if (confirm('Kendi çizimlerinizi temizlemek istiyor musunuz?')) {
+      if (confirm(t('confirm_clear_own_drawings', {}, 'Are you sure you want to clear your own drawings?'))) {
         socket.emit('requestClearMyDrawings');
       }
     });
@@ -3923,7 +3924,7 @@ if (canvas && ctx) {
   const btnClearAllDrawings = document.getElementById('btn-clear-all-drawings');
   if (btnClearAllDrawings) {
     btnClearAllDrawings.addEventListener('click', () => {
-      if (confirm('TÜM çizimleri temizlemek istiyor musunuz?')) {
+      if (confirm(t('confirm_clear_all_drawings', {}, 'Are you sure you want to clear ALL drawings?'))) {
         socket.emit('requestClearAllDrawings');
       }
     });
@@ -4003,13 +4004,13 @@ function setupImageDropZone(elementId) {
 
     const file = e.dataTransfer.files[0];
     if (!file.type.startsWith('image/')) {
-      alert('Lütfen sadece resim dosyası sürükleyin.');
+      alert(t('alert_images_only', {}, 'Please drag image files only.'));
       return;
     }
 
     const originalPlaceholder = el.placeholder;
     el.value = '';
-    el.placeholder = 'Resim yükleniyor...';
+    el.placeholder = t('loading', {}, 'Loading...');
     el.disabled = true;
 
     const reader = new FileReader();
@@ -4027,11 +4028,11 @@ function setupImageDropZone(elementId) {
         if (data.url) {
           el.value = data.url;
         } else {
-          alert('Resim yüklenemedi: ' + (data.error || 'Bilinmeyen hata'));
+          alert(t('alert_image_upload_fail', {}, 'Failed to upload image: ') + (data.error || t('unknown_error', {}, 'Unknown error')));
         }
       } catch (err) {
         console.error('Yükleme hatası:', err);
-        alert('Resim yüklenirken bir hata oluştu.');
+        alert(t('alert_image_upload_err', {}, 'An error occurred while uploading image.'));
       } finally {
         el.disabled = false;
         el.placeholder = originalPlaceholder;
@@ -4039,7 +4040,7 @@ function setupImageDropZone(elementId) {
     };
 
     reader.onerror = () => {
-      alert('Dosya okunamadı!');
+      alert(t('alert_file_read_err', {}, 'File could not be read!'));
       el.disabled = false;
       el.placeholder = originalPlaceholder;
     };
@@ -4073,14 +4074,14 @@ document.querySelectorAll('.dice-btn').forEach(btn => {
 socket.on('diceRolled', (data) => {
   const safeRollerName = escapeHtml(data.rollerName);
 
-  let resultText = `<span style="font-weight: bold;">${safeRollerName}</span> d${data.diceType} attı: <strong>${data.result}</strong>`;
+  let resultText = `<span style="font-weight: bold;">${safeRollerName}</span> ${t('rolled_dice', { type: data.diceType }, `rolled d${data.diceType}`)}: <strong>${data.result}</strong>`;
 
   // D20 Kritik Başarı/Başarısızlık renklendirmesi
   if (data.diceType === 20) {
     if (data.result === 20) {
-      resultText = `<span style="font-weight: bold;">${safeRollerName}</span> d20 attı: <strong style="color: #2ecc71;">20 (Kritik Başarı!)</strong>`;
+      resultText = t('dice_rolled_crit_success', { name: safeRollerName }, `<span style="font-weight: bold;">${safeRollerName}</span> rolled d20: <strong style="color: #2ecc71;">20 (Critical Success!)</strong>`);
     } else if (data.result === 1) {
-      resultText = `<span style="font-weight: bold;">${safeRollerName}</span> d20 attı: <strong style="color: #e74c3c;">1 (Kritik Başarısızlık!)</strong>`;
+      resultText = t('dice_rolled_crit_fail', { name: safeRollerName }, `<span style="font-weight: bold;">${safeRollerName}</span> rolled d20: <strong style="color: #e74c3c;">1 (Critical Failure!)</strong>`);
     }
   }
 
@@ -4094,10 +4095,10 @@ socket.on('diceRolled', (data) => {
   const toast = document.createElement('div');
   toast.className = 'dice-toast';
 
-  let toastText = `${escapeHtml(data.rollerName)}: d${data.diceType} 🎲 ${data.result}`;
+  let toastText = t('dice_toast_text', { name: escapeHtml(data.rollerName), type: data.diceType, result: data.result }, `${escapeHtml(data.rollerName)}: d${data.diceType} 🎲 ${data.result}`);
   if (data.diceType === 20) {
-    if (data.result === 20) toastText = `${escapeHtml(data.rollerName)}: 🎲 20 (Kritik!)`;
-    if (data.result === 1) toastText = `${escapeHtml(data.rollerName)}: 🎲 1 (Kritik!)`;
+    if (data.result === 20) toastText = t('dice_toast_crit_success', { name: escapeHtml(data.rollerName) }, `${escapeHtml(data.rollerName)}: 🎲 20 (Critical!)`);
+    if (data.result === 1) toastText = t('dice_toast_crit_fail', { name: escapeHtml(data.rollerName) }, `${escapeHtml(data.rollerName)}: 🎲 1 (Critical!)`);
   }
   toast.textContent = toastText;
 
@@ -4405,7 +4406,7 @@ function renderStatusPresets() {
     // Sil butonu
     card.querySelector('.btn-del-preset').addEventListener('click', (e) => {
       e.stopPropagation();
-      if (confirm(`"${preset.name}" şablonunu silmek istediğinize emin misiniz?`)) {
+      if (confirm(t('confirm_delete_template', { name: preset.name }, `Are you sure you want to permanently delete the "${preset.name}" template?`))) {
         socket.emit('deleteCustomEffect', preset.id);
       }
     });
@@ -4422,7 +4423,7 @@ function applyEffectToCurrentTargets(effect) {
   const targets = resolveStatusSelectedTargets(select ? select.value : 'selected');
 
   if (targets.length === 0) {
-    alert('Lütfen efekti uygulamak için en az bir HEDEF seçin!');
+    alert(t('alert_select_target_status', {}, 'Please select at least one TARGET to apply the effect!'));
     return;
   }
 
@@ -4533,7 +4534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSaveCustom.addEventListener('click', () => {
       const name = document.getElementById('status-builder-name')?.value.trim();
       if (!name) {
-        alert('Lütfen efekte bir İsim verin!');
+        alert(t('alert_give_status_name', {}, 'Please give the effect a Name!'));
         return;
       }
 
@@ -4573,7 +4574,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       socket.emit('saveCustomEffect', effectObj);
-      alert(`"${name}" özel efekt şablonu kaydedildi!`);
+      alert(t('alert_status_saved', { name: name }, `"${name}" custom status template saved!`));
 
       // Şablonlar sekmesine dön
       const presetTabBtn = document.querySelector('.status-tab-btn[data-tab="presets"]');
@@ -4905,11 +4906,11 @@ function submitBatchAssign() {
   const attackIds = Array.from(batchSelectedAttackIds);
 
   if (tokenIds.length === 0) {
-    alert('Lütfen en az bir hedef token seçin.');
+    alert(t('alert_select_batch_tokens', {}, 'Please select at least one target token.'));
     return;
   }
   if (attackIds.length === 0) {
-    alert('Lütfen tokenlara atanacak en az bir saldırı preseti seçin.');
+    alert(t('alert_select_batch_attacks', {}, 'Please select at least one attack preset to assign.'));
     return;
   }
 
@@ -5336,3 +5337,15 @@ setInterval(() => {
     .then(() => console.log('Sunucu uyanık tutuluyor...'))
     .catch(err => console.error('Ping hatası:', err));
 }, 10 * 60 * 1000);
+
+// Dil değiştiğinde arayüzü güncelle
+window.addEventListener('dnd:languageChange', () => {
+  renderPlayerInfo();
+  if (typeof renderCharacterList === 'function') {
+    renderCharacterList();
+  }
+  const statusEl = document.getElementById('status');
+  if (statusEl && socket && socket.connected) {
+    statusEl.innerText = t('connected', {}, 'Connected!');
+  }
+});

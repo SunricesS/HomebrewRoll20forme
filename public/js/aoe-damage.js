@@ -13,6 +13,9 @@
   let detectedTargets = []; // [{ type: 'character'|'marker', id, name, hp, maxHp, imgUrl, color, excluded: false }]
   let currentCombatActive = false;
 
+  // === I18N HELPER ===
+  const t = (key, params, fallback) => (window.I18n ? window.I18n.t(key, params, fallback) : (fallback || key));
+
   // === DOM ELEMENTLERİ ===
   const dmAoeBtn = document.getElementById('dm-aoe-damage-btn');
   const targetingLayer = document.getElementById('aoe-targeting-layer');
@@ -119,7 +122,7 @@
           targetData = {
             type: 'marker',
             id: m.id,
-            name: m.name || 'İşaret',
+            name: m.name || t('marker_fallback', {}, 'Marker'),
             hp: m.hp,
             maxHp: m.maxHp,
             imgUrl: m.imgUrl || null,
@@ -136,7 +139,7 @@
               type: 'character',
               id: p.character.id,
               playerId: p.id,
-              name: p.character.name || 'Oyuncu',
+              name: p.character.name || t('player_fallback', {}, 'Player'),
               hp: p.character.hp_current,
               maxHp: p.character.hp_max,
               imgUrl: p.character.avatar_url || p.imgUrl || null,
@@ -176,7 +179,7 @@
     if (typeof role === 'undefined' || role !== 'dm') return;
     if (!currentCombatActive) {
       if (typeof addLog === 'function') {
-        addLog('⚠️ Alan hasarı sadece Savaş (Combat) Modu aktifken kullanılabilir.', '#e5c158');
+        addLog(t('aoe_combat_only_warn', {}, '⚠️ Area damage can only be used while Combat Mode is active.'), '#e5c158');
       }
       return;
     }
@@ -204,7 +207,7 @@
     clearTargetHighlights();
 
     if (typeof addLog === 'function') {
-      addLog('🎯 Alan Hasarı Modu: Haritada merkeze tıklayıp sürükleyerek yarıçapı belirleyin. [İptal: ESC]', '#f59e0b');
+      addLog(t('aoe_start_hint', {}, '🎯 AoE Damage Mode: Click and drag on map from center to set radius. [Cancel: ESC]'), '#f59e0b');
     }
   }
 
@@ -342,10 +345,10 @@
     // Yarıçap ve hedef sayısı bilgileri
     const feet = Math.round((aoeRadius / 50) * 5);
     if (radiusInfoSpan) {
-      radiusInfoSpan.textContent = `Seçilen Alan: Yarıçap ${aoeRadius} px (~${feet} ft)`;
+      radiusInfoSpan.textContent = t('aoe_radius_info_full', { radius: aoeRadius, feet: feet }, `Selected Area: Radius ${aoeRadius} px (~${feet} ft)`);
     }
     if (targetsCountSpan) {
-      targetsCountSpan.textContent = `${detectedTargets.length} Hedef Kapsandı`;
+      targetsCountSpan.textContent = t('aoe_targets_count', { n: detectedTargets.length }, `${detectedTargets.length} Targets Covered`);
     }
 
     // Hedef listesini çiz
@@ -376,7 +379,7 @@
     if (!detectedTargets || detectedTargets.length === 0) {
       targetsListContainer.innerHTML = `
         <div style="padding: 12px; text-align: center; color: #94a3b8; font-size: 12px;">
-          ⚠️ Seçilen alanda hiçbir token veya hedef bulunamadı.
+          ${escapeHtml(t('aoe_no_targets_found', {}, '⚠️ No tokens or targets found in the selected area.'))}
         </div>
       `;
       return;
@@ -471,13 +474,13 @@
     // Hariç tutulmamış hedefleri filtrele
     const validTargets = detectedTargets.filter(t => !t.excluded);
     if (validTargets.length === 0) {
-      alert('Seçilen alanda hasar uygulanacak en az bir hedef seçili olmalıdır.');
+      alert(t('aoe_alert_no_targets', {}, 'At least one target must be selected to apply damage in the area.'));
       return;
     }
 
     if (btnSubmitAoe) {
       btnSubmitAoe.disabled = true;
-      btnSubmitAoe.textContent = 'Patlatılıyor...';
+      btnSubmitAoe.textContent = t('aoe_detonating_btn', {}, 'Detonating...');
     }
 
     try {
@@ -504,7 +507,7 @@
     } finally {
       if (btnSubmitAoe) {
         btnSubmitAoe.disabled = false;
-        btnSubmitAoe.textContent = '🔥 Hasarı Uygula';
+        btnSubmitAoe.textContent = t('aoe_submit_btn', {}, '🔥 Apply Damage');
       }
     }
   }

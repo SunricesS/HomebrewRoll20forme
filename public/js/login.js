@@ -1,10 +1,10 @@
-console.log('Login JS yükleniyor... v3');
+console.log('Login JS loaded v3 with i18n support');
 
-// === YAPILANDIRMA ===
+// === CONFIGURATION ===
 let currentProfile = null;
 let currentCharacter = null;
 
-// === UI ELEMENTLERİ ===
+// === UI ELEMENTS ===
 const roleSelectionModal = document.getElementById('role-selection');
 const profileSelectionModal = document.getElementById('profile-selection');
 const characterSelectionModal = document.getElementById('character-selection');
@@ -12,10 +12,10 @@ const characterCreationModal = document.getElementById('character-creation');
 const profileListUI = document.getElementById('profile-list');
 const characterListUI = document.getElementById('character-list');
 
-// === YARDIMCI FONKSİYONLAR ===
+// === HELPER FUNCTIONS ===
 
 /**
- * XSS koruması — kullanıcı girdilerini güvenli hale getirir.
+ * XSS protection — sanitizes user strings.
  */
 function escapeHtml(str) {
   if (str == null) return '';
@@ -24,7 +24,11 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// === MENÜ GEÇİŞ FONKSİYONLARI ===
+function tr(key, params, fallback) {
+  return typeof t === 'function' ? t(key, params, fallback) : (fallback || key);
+}
+
+// === MENU NAVIGATION FUNCTIONS ===
 function hideAllModals() {
   roleSelectionModal.classList.add('hidden');
   profileSelectionModal.classList.add('hidden');
@@ -55,29 +59,29 @@ window.showCharacterCreation = function () {
 };
 
 function startGameAs(role, characterData = null) {
-  // Bilgileri tarayıcı hafızasına (sessionStorage) kaydet
+  // Store info in sessionStorage
   sessionStorage.setItem('dnd_role', role);
   if (currentProfile) sessionStorage.setItem('dnd_profile', JSON.stringify(currentProfile));
   if (characterData) sessionStorage.setItem('dnd_character', JSON.stringify(characterData));
 
-  // Oyun sayfasına yönlendir
+  // Redirect to game page
   window.location.href = '/game.html';
 }
 
-// === SUNUCU API ÜZERİNDEN VERİ ÇEKME ===
+// === FETCH DATA VIA REST API ===
 
 async function fetchProfiles() {
-  profileListUI.innerHTML = '<p>Profiller yükleniyor...</p>';
+  profileListUI.innerHTML = `<p>${tr('loading_profiles', {}, 'Loading profiles...')}</p>`;
 
   try {
     const response = await fetch('/api/profiles');
-    if (!response.ok) throw new Error('Sunucu hatası');
+    if (!response.ok) throw new Error('Server error');
     const data = await response.json();
 
     profileListUI.innerHTML = '';
 
     if (!data || data.length === 0) {
-      profileListUI.innerHTML = '<p>Hiç profil bulunamadı.</p>';
+      profileListUI.innerHTML = `<p>${tr('no_profiles_found', {}, 'No profiles found.')}</p>`;
       return;
     }
 
@@ -86,7 +90,7 @@ async function fetchProfiles() {
       div.className = 'list-item';
 
       const nameSpan = document.createElement('span');
-      nameSpan.textContent = profile.username || 'İsimsiz Kullanıcı';
+      nameSpan.textContent = profile.username || tr('unnamed_user', {}, 'Unnamed User');
 
       const roleSpan = document.createElement('span');
       roleSpan.className = 'role';
@@ -103,23 +107,23 @@ async function fetchProfiles() {
       profileListUI.appendChild(div);
     });
   } catch (err) {
-    console.error("Profilleri çekerken hata:", err);
-    profileListUI.innerHTML = '<p style="color:#e74c3c">Veri çekilemedi!</p>';
+    console.error("Error fetching profiles:", err);
+    profileListUI.innerHTML = `<p style="color:#e74c3c">${tr('fetch_profiles_error', {}, 'Failed to fetch profiles!')}</p>`;
   }
 }
 
 async function fetchCharacters(userId) {
-  characterListUI.innerHTML = '<p>Karakterler yükleniyor...</p>';
+  characterListUI.innerHTML = `<p>${tr('loading_characters', {}, 'Loading characters...')}</p>`;
 
   try {
     const response = await fetch(`/api/characters/${encodeURIComponent(userId)}`);
-    if (!response.ok) throw new Error('Sunucu hatası');
+    if (!response.ok) throw new Error('Server error');
     const data = await response.json();
 
     characterListUI.innerHTML = '';
 
     if (!data || data.length === 0) {
-      characterListUI.innerHTML = '<p>Bu profile ait karakter bulunamadı. Lütfen yeni bir tane oluşturun.</p>';
+      characterListUI.innerHTML = `<p>${tr('no_characters_for_profile', {}, 'No characters found for this profile. Please create a new one.')}</p>`;
       return;
     }
 
@@ -135,7 +139,7 @@ async function fetchCharacters(userId) {
       const selectBtn = document.createElement('button');
       selectBtn.className = 'btn success';
       selectBtn.style.cssText = 'padding: 5px 10px; font-size: 12px;';
-      selectBtn.textContent = 'Seç';
+      selectBtn.textContent = tr('select_btn', {}, 'Select');
 
       div.appendChild(nameSpan);
       div.appendChild(selectBtn);
@@ -148,12 +152,12 @@ async function fetchCharacters(userId) {
       characterListUI.appendChild(div);
     });
   } catch (err) {
-    console.error("Karakterleri çekerken hata:", err);
-    characterListUI.innerHTML = '<p style="color:#e74c3c">Karakterler çekilemedi!</p>';
+    console.error("Error fetching characters:", err);
+    characterListUI.innerHTML = `<p style="color:#e74c3c">${tr('fetch_profiles_error', {}, 'Failed to fetch characters!')}</p>`;
   }
 }
 
-// === EVENT LISTENER'LAR ===
+// === EVENT LISTENERS ===
 
 document.getElementById('btn-dm-login').addEventListener('click', () => {
   currentProfile = { username: 'Dungeon Master', role: 'dm' };
@@ -164,12 +168,22 @@ document.getElementById('btn-player-login').addEventListener('click', showProfil
 
 document.getElementById('btn-create-character').addEventListener('click', showCharacterCreation);
 
-// KARAKTER OLUŞTURMA
+// Re-render when language changes
+window.addEventListener('dnd:languageChange', () => {
+  if (!profileSelectionModal.classList.contains('hidden')) {
+    fetchProfiles();
+  }
+  if (!characterSelectionModal.classList.contains('hidden') && currentProfile) {
+    fetchCharacters(currentProfile.id);
+  }
+});
+
+// CREATE CHARACTER
 document.getElementById('form-create-character').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   if (!currentProfile) {
-    alert("Lütfen önce bir profil seçin!");
+    alert(tr('alert_select_profile', {}, 'Please select a profile first!'));
     return showProfileSelection();
   }
 
@@ -178,7 +192,7 @@ document.getElementById('form-create-character').addEventListener('submit', asyn
   const avatarUrl = document.getElementById('char-avatar').value.trim();
 
   if (!name) {
-    alert('Karakter adı boş olamaz!');
+    alert(tr('alert_name_empty', {}, 'Character name cannot be empty!'));
     return;
   }
 
@@ -193,7 +207,7 @@ document.getElementById('form-create-character').addEventListener('submit', asyn
 
   const submitBtn = e.target.querySelector('button[type="submit"]');
   const originalText = submitBtn.innerText;
-  submitBtn.innerText = "Kaydediliyor...";
+  submitBtn.innerText = tr('saving_progress', {}, 'Saving...');
   submitBtn.disabled = true;
 
   try {
@@ -212,14 +226,14 @@ document.getElementById('form-create-character').addEventListener('submit', asyn
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || 'Bilinmeyen hata');
+      throw new Error(result.error || 'Unknown error');
     }
 
     e.target.reset();
     showCharacterSelection();
   } catch (err) {
-    console.error("Karakter oluşturulamadı:", err);
-    alert("Karakter oluşturulurken bir hata oluştu: " + err.message);
+    console.error("Error creating character:", err);
+    alert(tr('alert_char_error', {}, 'Error creating character: ') + err.message);
   } finally {
     submitBtn.innerText = originalText;
     submitBtn.disabled = false;

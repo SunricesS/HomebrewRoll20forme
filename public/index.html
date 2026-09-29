@@ -1,54 +1,61 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="DnD Masaüstü - Homebrew tabletop RPG platformu. DM veya oyuncu olarak giriş yap.">
-    <title>DnD Masaüstü - Giriş</title>
+    <meta name="description" content="DnD Desktop - Homebrew tabletop RPG platform. Log in as DM or player.">
+    <title data-i18n="page_title_login">DnD Desktop - Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700;800;900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=MedievalSharp&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-
 </head>
 
 <body id="login-body">
+    <!-- Language Switcher -->
+    <div class="lang-switcher login-lang-pos" id="lang-switcher" title="Language / Dil">
+        <span class="lang-icon">🌐</span>
+        <button type="button" class="lang-btn active" data-lang="en">EN</button>
+        <span class="lang-divider">|</span>
+        <button type="button" class="lang-btn" data-lang="tr">TR</button>
+    </div>
+
     <div id="login-overlay">
         <div class="modal-box" id="role-selection">
-            <h2>Giriş Yap</h2>
+            <h2 data-i18n="login">Log In</h2>
             <div class="button-group">
-                <button id="btn-dm-login" class="btn primary">DM Girişi</button>
-                <button id="btn-player-login" class="btn secondary">Kullanıcı Girişi</button>
+                <button id="btn-dm-login" class="btn primary" data-i18n="dm_login">DM Login</button>
+                <button id="btn-player-login" class="btn secondary" data-i18n="player_login">Player Login</button>
             </div>
         </div>
 
         <div class="modal-box hidden" id="profile-selection">
-            <h2>Profil Seç</h2>
+            <h2 data-i18n="select_profile">Select Profile</h2>
             <div id="profile-list" class="list-container">
-                <p>Profiller yükleniyor...</p>
+                <p data-i18n="loading_profiles">Loading profiles...</p>
             </div>
-            <button class="btn back-btn" onclick="showRoleSelection()">Geri</button>
+            <button class="btn back-btn" onclick="showRoleSelection()" data-i18n="back">Back</button>
         </div>
 
         <div class="modal-box hidden" id="character-selection">
-            <h2>Karakterini Seç</h2>
+            <h2 data-i18n="select_character">Select Your Character</h2>
             <div id="character-list" class="list-container">
-                <p>Karakterler yükleniyor...</p>
+                <p data-i18n="loading_characters">Loading characters...</p>
             </div>
-            <button id="btn-create-character" class="btn success action-btn">Yeni Karakter Oluştur</button>
-            <button class="btn back-btn" onclick="showProfileSelection()">Geri</button>
+            <button id="btn-create-character" class="btn success action-btn" data-i18n="create_new_character">Create New Character</button>
+            <button class="btn back-btn" onclick="showProfileSelection()" data-i18n="back">Back</button>
         </div>
 
         <div class="modal-box hidden" id="character-creation">
-            <h2>Karakter Oluştur</h2>
+            <h2 data-i18n="create_character">Create Character</h2>
             <form id="form-create-character">
                 <div class="form-group">
-                    <label>Karakter Adı:</label>
+                    <label data-i18n="char_name_label">Character Name:</label>
                     <input type="text" id="char-name" required>
                 </div>
                 <div class="form-group">
-                    <label>Maksimum HP:</label>
+                    <label data-i18n="max_hp_label">Maximum HP:</label>
                     <input type="number" id="char-hp-max" value="50" required>
                 </div>
                 <div class="stats-grid">
@@ -60,17 +67,18 @@
                     <div class="form-group"><label>CHR:</label><input type="number" id="stat-chr" value="10"></div>
                 </div>
                 <div class="form-group">
-                    <label>Avatar URL (Opsiyonel):</label>
+                    <label data-i18n="avatar_url_label">Avatar URL (Optional):</label>
                     <input type="text" id="char-avatar" placeholder="https://...">
                 </div>
                 <div class="button-group">
-                    <button type="submit" class="btn success">Oluştur ve Devam Et</button>
-                    <button type="button" class="btn back-btn" onclick="showCharacterSelection()">İptal</button>
+                    <button type="submit" class="btn success" data-i18n="create_and_continue">Create and Continue</button>
+                    <button type="button" class="btn back-btn" onclick="showCharacterSelection()" data-i18n="cancel">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
-    <script src="js/login.js?v=2"></script>
+    <script src="js/i18n.js"></script>
+    <script src="js/login.js?v=3"></script>
 </body>
 
 </html>

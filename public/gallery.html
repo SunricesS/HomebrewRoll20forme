@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="DnD Masaüstü - Sistem galerisi. Kayıtlı resimleri görüntüle ve URL kopyala.">
-    <title>Sistem Galeri - DND Masaüstü</title>
+    <meta name="description" content="DnD Desktop - System gallery. View saved images and copy URL.">
+    <title data-i18n="page_title_gallery">System Gallery - DnD Desktop</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700;800;900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=MedievalSharp&display=swap" rel="stylesheet">
@@ -12,20 +12,33 @@
 </head>
 <body class="gallery-body">
 
-    <h1 class="gallery-title">Kayıtlı Resimler</h1>
+    <!-- Language Switcher -->
+    <div class="lang-switcher gallery-lang-pos" id="lang-switcher" title="Language / Dil">
+        <span class="lang-icon">🌐</span>
+        <button type="button" class="lang-btn active" data-lang="en">EN</button>
+        <span class="lang-divider">|</span>
+        <button type="button" class="lang-btn" data-lang="tr">TR</button>
+    </div>
+
+    <h1 class="gallery-title" data-i18n="gallery_saved_images">Saved Images</h1>
 
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Resim adıyla ara...">
+        <input type="text" id="searchInput" placeholder="Search by image name..." data-i18n-placeholder="search_image_placeholder">
     </div>
 
     <div class="gallery-grid" id="galleryGrid">
-        <div class="loading">Resimler yükleniyor...</div>
+        <div class="loading" data-i18n="loading_images">Loading images...</div>
     </div>
 
-    <div id="toast" class="toast">URL Panoya Kopyalandı!</div>
+    <div id="toast" class="toast" data-i18n="copied_to_clipboard">URL Copied to Clipboard!</div>
 
+    <script src="js/i18n.js"></script>
     <script>
         let allImages = [];
+
+        function tr(key, params, fallback) {
+            return typeof t === 'function' ? t(key, params, fallback) : (fallback || key);
+        }
 
         async function fetchImages() {
             try {
@@ -35,7 +48,7 @@
                 renderImages(allImages);
             } catch (error) {
                 console.error('Fetch error:', error);
-                document.getElementById('galleryGrid').innerHTML = '<div class="loading" style="color: #e74c3c;">Resimler yüklenirken hata oluştu!</div>';
+                document.getElementById('galleryGrid').innerHTML = `<div class="loading" style="color: #e74c3c;">${tr('error_loading_images', {}, 'Error loading images!')}</div>`;
             }
         }
 
@@ -44,7 +57,7 @@
             grid.innerHTML = '';
 
             if (images.length === 0) {
-                grid.innerHTML = '<div class="loading">Henüz eklenmiş resim yok.</div>';
+                grid.innerHTML = `<div class="loading">${tr('no_images_yet', {}, 'No images added yet.')}</div>`;
                 return;
             }
 
@@ -55,12 +68,12 @@
 
                 const imgEl = document.createElement('img');
                 imgEl.src = img.url;
-                imgEl.alt = img.name || 'Resim';
+                imgEl.alt = img.name || tr('character', {}, 'Image');
                 imgEl.loading = 'lazy';
 
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'gallery-item-title';
-                titleDiv.textContent = img.name || 'İsimsiz';
+                titleDiv.textContent = img.name || tr('unnamed_image', {}, 'Unnamed');
 
                 item.appendChild(imgEl);
                 item.appendChild(titleDiv);
@@ -101,23 +114,30 @@
                 if (successful) {
                     showToast();
                 } else {
-                    alert("Kopyalanamadı: " + text);
+                    alert(tr('url_copy_failed', {}, 'Could not copy: ') + text);
                 }
             } catch (err) {
-                console.error('Kopyalama basarisiz', err);
-                prompt("URL'yi elle kopyalayın:", text);
+                console.error('Copy failed', err);
+                prompt(tr('url_copy_manual', {}, "Copy the URL manually:"), text);
             }
             document.body.removeChild(textArea);
         }
 
         function showToast() {
             const toast = document.getElementById("toast");
+            toast.textContent = tr('copied_to_clipboard', {}, 'URL Copied to Clipboard!');
             toast.classList.add("show");
             setTimeout(function() { toast.classList.remove("show"); }, 2500);
         }
 
         document.getElementById('searchInput').addEventListener('input', (e) => {
             const term = e.target.value.toLowerCase();
+            const filtered = allImages.filter(img => (img.name || '').toLowerCase().includes(term));
+            renderImages(filtered);
+        });
+
+        window.addEventListener('dnd:languageChange', () => {
+            const term = (document.getElementById('searchInput').value || '').toLowerCase();
             const filtered = allImages.filter(img => (img.name || '').toLowerCase().includes(term));
             renderImages(filtered);
         });

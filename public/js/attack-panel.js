@@ -13,6 +13,9 @@
   // Panel sadece DM için aktif
   if (typeof role === 'undefined' || role !== 'dm') return;
 
+  // === I18N HELPER ===
+  const t = (key, params, fallback) => (window.I18n ? window.I18n.t(key, params, fallback) : (fallback || key));
+
   // === STATE ===
   let selectedAttacker = null; // { type, id, name, data }
   let selectedTargets = [];    // Array of { type, id, name, data, tokenEl }
@@ -1713,8 +1716,8 @@
   }
 
   async function performAttack() {
-    if (!selectedAttacker) { alert('Lütfen bir SALDIRAN seçin!'); return; }
-    if (selectedTargets.length === 0) { alert('Lütfen en az bir HEDEF seçin!'); return; }
+    if (!selectedAttacker) { alert(t('alert_select_attacker', {}, 'Please select an ATTACKER!')); return; }
+    if (selectedTargets.length === 0) { alert(t('alert_select_target', {}, 'Please select at least one TARGET!')); return; }
 
     const consumesSlot = Boolean(activeEquippedPreset?.consumesSpellSlot);
     let chosenSpellLevel = 1;
@@ -1728,13 +1731,13 @@
 
       const minLevel = activeEquippedPreset.baseSpellLevel || 1;
       if (chosenSpellLevel < minLevel) {
-        alert(`Bu saldırı en az Seviye ${minLevel} büyü slotu gerektirir!`);
+        alert(t('alert_spell_slot_req', { lvl: minLevel }, `This attack requires at least a Level ${minLevel} spell slot!`));
         return;
       }
 
       const currentSlots = parseInt(slotDisplays[chosenSpellLevel]?.textContent || '0');
       if (currentSlots <= 0) {
-        alert(`${escapeHtml(selectedAttacker.name)} — Seviye ${chosenSpellLevel} büyü slotu kalmadı! Lütfen başka bir seviye seçin veya dinlenin.`);
+        alert(t('alert_no_spell_slots', { name: escapeHtml(selectedAttacker.name), lvl: chosenSpellLevel }, `${escapeHtml(selectedAttacker.name)} has no Level ${chosenSpellLevel} spell slots left! Please select another level or rest.`));
         return;
       }
 
@@ -2070,13 +2073,13 @@
    */
   async function applyDamage() {
     if (lastAttackResults.length === 0 && !pendingSpellSlotToConsume) {
-      alert('Uygulanacak hasar veya büyü yok!');
+      alert(t('alert_no_damage_or_spell', {}, 'No damage or spell to apply!'));
       return;
     }
 
     try {
       btnApplyDamage.disabled = true;
-      btnApplyDamage.textContent = 'Uygulanıyor...';
+      btnApplyDamage.textContent = t('applying', {}, 'Applying...');
 
       if (btnApplyDamage) {
         btnApplyDamage.classList.add('btn-apply-damage-hit');
@@ -2595,7 +2598,7 @@
       // Sil butonu
       card.querySelector('.btn-delete-atk-preset').addEventListener('click', (e) => {
         e.stopPropagation();
-        if (confirm(`"${preset.name}" presetini silmek istediğinize emin misiniz?`)) {
+        if (confirm(t('confirm_delete_preset', { name: preset.name }, `Are you sure you want to delete the "${preset.name}" preset?`))) {
           if (typeof socket !== 'undefined') {
             socket.emit('deleteAttackPreset', preset.id);
           }
@@ -2736,7 +2739,7 @@
     const id = document.getElementById('atk-builder-id')?.value.trim();
     const name = document.getElementById('atk-builder-name')?.value.trim();
     if (!name) {
-      alert('Lütfen saldırı preseti için bir İsim girin!');
+      alert(t('alert_give_preset_name', {}, 'Please enter a Name for the attack preset!'));
       return null;
     }
 
@@ -2838,7 +2841,7 @@
       equipPreset(preset, true);
       closeAttackPresetsModal();
     } else {
-      alert(`"${preset.name}" saldırı preseti kaydedildi!`);
+      alert(t('alert_preset_saved', { name: preset.name }, `"${preset.name}" attack preset saved!`));
       // Katalog sekmesine geç
       const listTabBtn = document.querySelector('.atk-tab-btn[data-tab="list"]');
       if (listTabBtn) listTabBtn.click();

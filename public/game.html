@@ -1,27 +1,28 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="DnD Masaüstü - Homebrew Roll20 tabletop oyun arayüzü. Harita, token ve zar sistemi.">
-    <title>DnD Masaüstü - Oyun</title>
+        content="DnD Desktop - Homebrew tabletop RPG platform. Maps, tokens, combat tracker, and dice system.">
+    <title data-i18n="page_title_game">DnD Desktop - Game</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700;800;900&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=MedievalSharp&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=9">
+    <link rel="stylesheet" href="css/style.css?v=10">
+    <script src="js/i18n.js"></script>
 </head>
 
 <body>
     <div id="app-container">
-        <!-- Sol Taraf (%75): Oyun Haritası -->
+        <!-- Left Side (75%): Game Map -->
         <div id="game-map">
             <div id="map-content">
                 <canvas id="drawing-layer"></canvas>
-                <!-- Daire Alan Hedefleme Katmanı (AoE) -->
+                <!-- Area of Effect Targeting Layer (AoE) -->
                 <div id="aoe-targeting-layer" class="aoe-targeting-layer hidden">
                     <svg id="aoe-svg-canvas" class="aoe-svg-canvas">
                         <circle id="aoe-svg-circle" class="aoe-svg-circle hidden" cx="0" cy="0" r="0" />
@@ -30,280 +31,284 @@
                     </svg>
                     <div id="aoe-radius-badge" class="aoe-radius-badge hidden">0 px</div>
                 </div>
-                <!-- Token Sistemi -->
+                <!-- Token System -->
             </div>
 
-            <!-- ==================== BG3 COMBAT / İNİSİYATİF BAR ==================== -->
+            <!-- ==================== BG3 COMBAT / INITIATIVE BAR ==================== -->
             <div id="bg3-combat-bar-container" class="bg3-combat-container hidden">
                 <div class="bg3-combat-decor-left"></div>
                 <div class="bg3-combat-inner">
-                    <!-- Sol Bilgi / Tur Rozeti -->
-                    <div class="bg3-combat-round-badge" id="bg3-round-badge" title="Mevcut Tur">
+                    <!-- Left Info / Round Badge -->
+                    <div class="bg3-combat-round-badge" id="bg3-round-badge" title="Current Round" data-i18n-title="combat_round_title">
                         <span class="bg3-round-icon">⚔️</span>
-                        <span class="bg3-round-text" id="bg3-round-display">Tur 1</span>
+                        <span class="bg3-round-text" id="bg3-round-display">Round 1</span>
                     </div>
 
-                    <!-- Kartlar Şeridi -->
+                    <!-- Cards Track -->
                     <div class="bg3-cards-wrapper" id="bg3-cards-wrapper">
                         <div class="bg3-cards-track" id="bg3-cards-track">
-                            <!-- JS ile dinamik render edilecek -->
+                            <!-- Rendered dynamically via JS -->
                         </div>
                     </div>
 
-                    <!-- Sağ Kontrol Butonları -->
+                    <!-- Right Control Buttons -->
                     <div class="bg3-combat-controls">
                         <button type="button" class="bg3-ctrl-btn bg3-btn-status" id="bg3-btn-status"
-                            title="✨ Status Efektleri Paneli">✨</button>
+                            title="✨ Status Effects Panel" data-i18n-title="combat_status_title">✨</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-prev" id="bg3-btn-prev"
-                            title="Önceki Tur">‹</button>
+                            title="Previous Turn" data-i18n-title="combat_prev_title">‹</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-next" id="bg3-btn-next"
-                            title="Sonraki Tur (Space / N)">
+                            title="Next Turn (Space / N)" data-i18n-title="combat_next_title">
                             <span class="bg3-next-text">›</span>
                         </button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-reroll" id="bg3-btn-reroll"
-                            title="Zarları Yeniden At">🔄</button>
+                            title="Reroll Initiative" data-i18n-title="combat_reroll_title">🔄</button>
                         <button type="button" class="bg3-ctrl-btn bg3-btn-close" id="bg3-btn-close"
-                            title="Combat Modunu Kapat">✕</button>
+                            title="Close Combat Mode" data-i18n-title="combat_close_title">✕</button>
                     </div>
                 </div>
                 <div class="bg3-combat-decor-right"></div>
             </div>
 
-            <!-- ==================== BG3 COMBAT BOTTOM HOTBAR (AKSIYON & SALDIRI BARI) ==================== -->
+            <!-- ==================== BG3 COMBAT BOTTOM HOTBAR (ACTION & ATTACK BAR) ==================== -->
             <div id="bg3-bottom-hotbar" class="bg3-hotbar-container hidden">
                 <div class="bg3-hotbar-decor-left"></div>
                 <div class="bg3-hotbar-inner">
-                    <!-- Aktif Karakter Portresi & Bilgi -->
+                    <!-- Active Character Portrait & Meta -->
                     <div class="bg3-hotbar-portrait-section" id="bg3-hotbar-portrait-section"
-                        title="Sırası Gelen Karakter">
+                        title="Active Turn Character" data-i18n-title="hotbar_portrait_title">
                         <div class="bg3-hotbar-avatar-wrap" id="bg3-hotbar-avatar-wrap">
-                            <!-- JS ile avatar / harf render edilir -->
+                            <!-- Avatar / Initial rendered via JS -->
                         </div>
                         <div class="bg3-hotbar-char-meta">
-                            <span class="bg3-hotbar-char-name" id="bg3-hotbar-char-name">Karakter</span>
-                            <span class="bg3-hotbar-char-turn-badge">⚔️ Aktif Sıra</span>
+                            <span class="bg3-hotbar-char-name" id="bg3-hotbar-char-name" data-i18n="character">Character</span>
+                            <span class="bg3-hotbar-char-turn-badge" data-i18n="hotbar_active_turn">⚔️ Active Turn</span>
                         </div>
                     </div>
 
                     <div class="bg3-hotbar-divider"></div>
 
-                    <!-- Atanmış Saldırı Slotları Şeridi -->
+                    <!-- Assigned Attack Slots Track -->
                     <div class="bg3-hotbar-slots-wrapper" id="bg3-hotbar-slots-wrapper">
                         <div class="bg3-hotbar-slots-track" id="bg3-hotbar-slots-track">
-                            <!-- JS ile saldırı kartları (slot butonları) dinamik doldurulur -->
+                            <!-- Filled dynamically via JS -->
                         </div>
                     </div>
 
                     <div class="bg3-hotbar-divider"></div>
 
-                    <!-- Hızlı Aksiyon / Saldırı Paneli Aç Butonu -->
+                    <!-- Quick Action / Open Attack Panel Button -->
                     <div class="bg3-hotbar-actions-end">
                         <button type="button" class="bg3-hotbar-action-btn" id="bg3-hotbar-open-panel-btn"
-                            title="⚔️ Saldırı Panelini Aç / Odakla">
+                            title="⚔️ Open / Focus Attack Panel" data-i18n-title="hotbar_open_panel_title">
                             <span class="hotbar-action-icon">⚔️</span>
-                            <span class="hotbar-action-text">Saldırı Paneli</span>
+                            <span class="hotbar-action-text" data-i18n="open_attack_panel">Attack Panel</span>
                         </button>
                     </div>
                 </div>
                 <div class="bg3-hotbar-decor-right"></div>
             </div>
 
-            <!-- Sol Alt Tetikleyici Buton -->
+            <!-- Bottom Left Trigger Button -->
             <button id="combat-mode-toggle-btn" class="combat-mode-floating-btn"
-                title="Combat Modunu Aç / Kapat (Kısayol: C)">
+                title="Toggle Combat Mode (Shortcut: C)" data-i18n-title="combat_mode_btn_title">
                 <span class="combat-btn-icon">⚔️</span>
-                <span class="combat-btn-text">Combat Modu</span>
-                <span class="combat-btn-status-badge hidden" id="combat-btn-status-badge">Aktif</span>
+                <span class="combat-btn-text" data-i18n="combat_mode_btn">Combat Mode</span>
+                <span class="combat-btn-status-badge hidden" id="combat-btn-status-badge" data-i18n="active">Active</span>
             </button>
 
-            <!-- DM Sol Alt Alan Hasarı (AoE) Butonu -->
+            <!-- DM Bottom Left Area Damage (AoE) Button -->
             <button id="dm-aoe-damage-btn" class="dm-aoe-floating-btn hidden"
-                title="💥 Alan Hasarı (AoE) — Haritada daire alan seçip toplu hasar uygula">
+                title="💥 Area Damage (AoE) — Select circular area on map to deal mass damage" data-i18n-title="aoe_floating_btn_title">
                 <span class="aoe-btn-icon">💥</span>
-                <span class="aoe-btn-text">Alan Hasarı</span>
+                <span class="aoe-btn-text" data-i18n="aoe_floating_btn">Area Damage</span>
             </button>
 
-            <!-- ==================== HARİTA ÇİZİM ARAÇ ÇUBUĞU ==================== -->
-            <div id="map-draw-toolbar" class="map-draw-toolbar" title="Çizim & Şekil Araçları">
-                <!-- Üst Satır: Araçlar & Gizle/Göster Butonu -->
+            <!-- ==================== MAP DRAWING TOOLBAR ==================== -->
+            <div id="map-draw-toolbar" class="map-draw-toolbar" title="Drawing & Shape Tools" data-i18n-title="draw_toolbar_title">
+                <!-- Top Row: Tools & Toggle Button -->
                 <div class="draw-tools-row">
                     <button type="button" class="draw-btn active" data-tool="pan" id="tool-btn-pan"
-                        title="El Aracı / Kaydırma (H) — Haritada serbestçe gezinin">
+                        title="Hand Tool / Pan (H) — Move freely around the map" data-i18n-title="tool_pan_title">
                         <span class="draw-btn-icon">✋</span>
-                        <span class="draw-btn-text">Gezin</span>
+                        <span class="draw-btn-text" data-i18n="tool_pan">Pan</span>
                     </button>
                     <div class="draw-tool-separator"></div>
-                    <button type="button" class="draw-btn" data-tool="pen" id="tool-btn-pen" title="Serbest Kalem (P)">
+                    <button type="button" class="draw-btn" data-tool="pen" id="tool-btn-pen" title="Freehand Pen (P)" data-i18n-title="tool_pen_title">
                         <span class="draw-btn-icon">✏️</span>
                     </button>
                     <button type="button" class="draw-btn" data-tool="straightLine" id="tool-btn-line"
-                        title="Düz Çizgi (L)">
+                        title="Straight Line (L)" data-i18n-title="tool_line_title">
                         <span class="draw-btn-icon">📏</span>
                     </button>
                     <button type="button" class="draw-btn" data-tool="arrow" id="tool-btn-arrow"
-                        title="Yön Oku (A) — Hareket/Hedef gösterme">
+                        title="Direction Arrow (A) — Movement/Target indicator" data-i18n-title="tool_arrow_title">
                         <span class="draw-btn-icon">↗️</span>
                     </button>
-                    <button type="button" class="draw-btn" data-tool="rect" id="tool-btn-rect" title="Dikdörtgen (R)">
+                    <button type="button" class="draw-btn" data-tool="rect" id="tool-btn-rect" title="Rectangle (R)" data-i18n-title="tool_rect_title">
                         <span class="draw-btn-icon">▢</span>
                     </button>
-                    <button type="button" class="draw-btn" data-tool="circle" id="tool-btn-circle" title="Daire (C)">
+                    <button type="button" class="draw-btn" data-tool="circle" id="tool-btn-circle" title="Circle (C)" data-i18n-title="tool_circle_title">
                         <span class="draw-btn-icon">○</span>
                     </button>
                     <div class="draw-tool-separator"></div>
                     <button type="button" class="draw-btn" data-tool="eraser" id="tool-btn-eraser"
-                        title="Silgi (E) — İstenilen kısmı sil">
+                        title="Eraser (E) — Erase drawings" data-i18n-title="tool_eraser_title">
                         <span class="draw-btn-icon">🧹</span>
                     </button>
                     <button type="button" class="draw-btn draw-btn-toggle-options" id="btn-toggle-draw-options"
-                        title="Ayarları Aç / Kapat">
+                        title="Toggle Settings" data-i18n-title="tool_settings_title">
                         <span class="draw-btn-icon">⚙️</span>
                     </button>
                 </div>
 
-                <!-- Alt Satır: Kalınlık, Renk, Dolgu, Geri Al -->
+                <!-- Bottom Row: Thickness, Color, Fill, Undo -->
                 <div class="draw-settings-row" id="draw-settings-row">
-                    <!-- Boyut / Kalınlık Seçimi -->
-                    <div class="draw-setting-item" id="draw-size-setting-item" title="Kalem / Silgi Kalınlığı">
-                        <span class="draw-setting-label" id="draw-size-label">Kalınlık:</span>
+                    <!-- Size / Thickness Selection -->
+                    <div class="draw-setting-item" id="draw-size-setting-item" title="Thickness / Size">
+                        <span class="draw-setting-label" id="draw-size-label" data-i18n="draw_thickness_label">Thickness:</span>
                         <div class="draw-size-pills">
-                            <button type="button" class="size-pill" data-size="3" title="İnce (3px)">İnce</button>
+                            <button type="button" class="size-pill" data-size="3" title="Thin (3px)" data-i18n="size_thin">Thin</button>
                             <button type="button" class="size-pill active" data-size="6"
-                                title="Orta (6px)">Orta</button>
-                            <button type="button" class="size-pill" data-size="14" title="Kalın (14px)">Kalın</button>
-                            <button type="button" class="size-pill" data-size="28" title="Çok Kalın (28px)">Çok
-                                Kalın</button>
+                                title="Medium (6px)" data-i18n="size_medium">Medium</button>
+                            <button type="button" class="size-pill" data-size="14" title="Thick (14px)" data-i18n="size_thick">Thick</button>
+                            <button type="button" class="size-pill" data-size="28" title="Very Thick (28px)" data-i18n="size_very_thick">Very Thick</button>
                         </div>
                         <input type="range" id="draw-size-slider" min="2" max="100" value="6" class="draw-size-range"
-                            title="Hassas Boyut Ayarı (2px - 100px)">
+                            title="Precise Size Adjustment (2px - 100px)" data-i18n-title="precise_size_title">
                         <span id="draw-size-preview" class="draw-size-val">6px</span>
                     </div>
 
                     <div class="draw-setting-divider"></div>
 
-                    <!-- Renk Paleti -->
-                    <div class="draw-setting-item" id="draw-color-setting-item" title="Çizim Rengi">
-                        <span class="draw-setting-label">Renk:</span>
+                    <!-- Color Palette -->
+                    <div class="draw-setting-item" id="draw-color-setting-item" title="Drawing Color">
+                        <span class="draw-setting-label" data-i18n="draw_color_label">Color:</span>
                         <div class="draw-color-presets">
                             <button type="button" class="color-dot active" data-color="#e74c3c"
-                                style="background:#e74c3c;" title="Kırmızı"></button>
+                                style="background:#e74c3c;" title="Red" data-i18n-title="color_red"></button>
                             <button type="button" class="color-dot" data-color="#3498db" style="background:#3498db;"
-                                title="Mavi"></button>
+                                title="Blue" data-i18n-title="color_blue"></button>
                             <button type="button" class="color-dot" data-color="#2ecc71" style="background:#2ecc71;"
-                                title="Yeşil"></button>
+                                title="Green" data-i18n-title="color_green"></button>
                             <button type="button" class="color-dot" data-color="#f1c40f" style="background:#f1c40f;"
-                                title="Sarı"></button>
+                                title="Yellow" data-i18n-title="color_yellow"></button>
                             <button type="button" class="color-dot" data-color="#9b59b6" style="background:#9b59b6;"
-                                title="Mor"></button>
+                                title="Purple" data-i18n-title="color_purple"></button>
                             <button type="button" class="color-dot" data-color="#ffffff" style="background:#ffffff;"
-                                title="Beyaz"></button>
+                                title="White" data-i18n-title="color_white"></button>
                             <button type="button" class="color-dot" data-color="#222222"
-                                style="background:#222222; border:1px solid #777;" title="Siyah"></button>
+                                style="background:#222222; border:1px solid #777;" title="Black" data-i18n-title="color_black"></button>
                         </div>
                         <input type="color" id="draw-custom-color" value="#e74c3c" class="draw-custom-color-picker"
-                            title="Özel Renk Seçimi">
+                            title="Custom Color Selection" data-i18n-title="color_custom_title">
                     </div>
 
                     <div class="draw-setting-divider"></div>
 
-                    <!-- Şekil Dolgu Seçeneği -->
+                    <!-- Shape Fill Option -->
                     <label class="draw-fill-toggle" id="draw-fill-toggle-label"
-                        title="Şekillerin içini yarı saydam renkle doldur">
+                        title="Fill shapes with semi-transparent color" data-i18n-title="draw_fill_title">
                         <input type="checkbox" id="draw-fill-checkbox">
-                        <span class="draw-fill-text">Dolgu</span>
+                        <span class="draw-fill-text" data-i18n="draw_fill_label">Fill</span>
                     </label>
 
                     <div class="draw-setting-divider"></div>
 
-                    <!-- Geri Al & Temizle Butonları -->
+                    <!-- Undo & Clear Buttons -->
                     <div class="draw-action-btns">
                         <button type="button" id="btn-draw-undo" class="draw-mini-action-btn"
-                            title="Geri Al (Ctrl+Z)">↩️ Geri Al</button>
+                            title="Undo (Ctrl+Z)" data-i18n-title="draw_undo_title" data-i18n="draw_undo">↩️ Undo</button>
                         <button type="button" id="btn-draw-clear-mine" class="draw-mini-action-btn draw-danger-btn"
-                            title="Kendi Çizimlerimi Temizle">🗑️ Temizle</button>
+                            title="Clear My Drawings" data-i18n-title="draw_clear_mine_title" data-i18n="draw_clear_mine">🗑️ Clear</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Silgi Dairesel İmleç Önizlemesi -->
+            <!-- Eraser Circular Cursor Preview -->
             <div id="eraser-cursor" class="eraser-cursor hidden"></div>
 
-            <!-- DM Oyuncu Token Sağ Tık Hızlı Boyut Menüsü -->
+            <!-- DM Player Token Right Click Context Menu -->
             <div id="player-token-context-menu" class="player-token-context-menu hidden">
                 <div class="token-context-header">
-                    <span class="token-context-title" id="token-context-player-name">Oyuncu</span>
+                    <span class="token-context-title" id="token-context-player-name">Player</span>
                     <span class="token-context-current-size" id="token-context-size-badge">50px</span>
                 </div>
                 <div class="token-context-divider"></div>
-                <div class="token-context-section-label">Token Boyutu:</div>
+                <div class="token-context-section-label" data-i18n="token_ctx_size_label">Token Size:</div>
                 <div class="token-context-size-pills">
                     <button type="button" class="token-context-size-btn" data-size="35">35px
-                        <small>(Minik)</small></button>
+                        <small>(Tiny)</small></button>
                     <button type="button" class="token-context-size-btn" data-size="50">50px
-                        <small>(Orta)</small></button>
+                        <small>(Medium)</small></button>
                     <button type="button" class="token-context-size-btn" data-size="80">80px
-                        <small>(Büyük)</small></button>
+                        <small>(Large)</small></button>
                     <button type="button" class="token-context-size-btn" data-size="120">120px
-                        <small>(Devasa)</small></button>
+                        <small>(Huge)</small></button>
                     <button type="button" class="token-context-size-btn" data-size="160">160px
-                        <small>(Muazzam)</small></button>
+                        <small>(Gargantuan)</small></button>
                 </div>
                 <div class="token-context-custom-row">
                     <input type="number" id="token-context-custom-size-input" min="20" max="400" step="5"
-                        placeholder="Özel px">
+                        placeholder="Custom px" data-i18n-placeholder="token_ctx_custom_placeholder">
                     <button type="button" id="token-context-custom-size-btn"
-                        class="token-context-action-btn">Uygula</button>
+                        class="token-context-action-btn" data-i18n="token_ctx_apply">Apply</button>
                 </div>
                 <div class="token-context-divider"></div>
-                <button type="button" id="token-context-open-editor-btn" class="token-context-edit-player-btn">⚙️
-                    Karakteri Düzenle</button>
+                <button type="button" id="token-context-open-editor-btn" class="token-context-edit-player-btn" data-i18n="token_ctx_edit_char">⚙️ Edit Character</button>
             </div>
 
-            <!-- ==================== HARİTA YAKINLAŞTIRMA & KAMERA KONTROLLERİ ==================== -->
+            <!-- ==================== MAP ZOOM & CAMERA CONTROLS ==================== -->
             <div id="map-zoom-controls" class="map-zoom-controls-widget"
-                title="Harita Yakınlaştırma & Kamera Kontrolleri">
+                title="Map Zoom & Camera Controls">
                 <div class="map-zoom-actions">
                     <button type="button" id="btn-zoom-in" class="map-zoom-btn"
-                        title="Yakınlaştır (Tekerlek İleri / +)">+</button>
+                        title="Zoom In (Wheel Forward / +)" data-i18n-title="zoom_in_title">+</button>
                     <button type="button" id="btn-zoom-reset" class="map-zoom-level-badge"
-                        title="Varsayılan Boyut (%100) — Sıfırlamak için tıklayın">
+                        title="Default Size (100%) — Click to reset" data-i18n-title="zoom_reset_title">
                         <span id="map-zoom-level">100%</span>
                     </button>
                     <button type="button" id="btn-zoom-out" class="map-zoom-btn"
-                        title="Uzaklaştır (Tekerlek Geri / -)">−</button>
+                        title="Zoom Out (Wheel Backward / -)" data-i18n-title="zoom_out_title">−</button>
                     <button type="button" id="btn-zoom-fit" class="map-zoom-btn map-fit-btn"
-                        title="Haritayı Ekrana Sığdır (F)">⛶</button>
+                        title="Fit Map to Screen (F)" data-i18n-title="zoom_fit_title">⛶</button>
                 </div>
             </div>
         </div>
 
-        <!-- Sağ Taraf (%25): Kontrol Paneli -->
-        <div id="panel-resize-handle" title="Paneli yeniden boyutlandır"></div>
+        <!-- Right Side (25%): Control Panel -->
+        <div id="panel-resize-handle" title="Resize panel"></div>
         <div id="control-panel">
             <div class="control-panel-header-row">
-                <h3 class="control-panel-title">Kontrol Paneli</h3>
-                <div class="game-mode-widget" id="game-mode-widget">
-                    <div class="game-mode-toggle-group" id="game-mode-toggle-group">
-                        <button type="button" class="mode-btn active" id="btn-mode-gunes" data-mode="gunes"
-                            title="Güneş Modu (Varsayılan Oyun Deneyimi)">☀️ Güneş</button>
-                        <button type="button" class="mode-btn" id="btn-mode-kenan" data-mode="kenan"
-                            title="Kenan Modu (Karanlık Sistemi & Tur Bilgisi)">🌑 Kenan</button>
+                <h3 class="control-panel-title" data-i18n="control_panel_title">Control Panel</h3>
+                <div class="header-right-controls" style="display: flex; align-items: center; gap: 8px;">
+                    <div class="lang-switcher game-lang-pos" id="game-lang-switcher" aria-label="Language Selector">
+                        <button type="button" class="lang-btn active" data-lang="en">EN</button>
+                        <span class="lang-divider">|</span>
+                        <button type="button" class="lang-btn" data-lang="tr">TR</button>
+                    </div>
+                    <div class="game-mode-widget" id="game-mode-widget">
+                        <div class="game-mode-toggle-group" id="game-mode-toggle-group">
+                            <button type="button" class="mode-btn active" id="btn-mode-gunes" data-mode="gunes"
+                                title="Sun Mode (Default Experience)" data-i18n-title="mode_gunes_title" data-i18n="mode_gunes">☀️ Sun</button>
+                            <button type="button" class="mode-btn" id="btn-mode-kenan" data-mode="kenan"
+                                title="Kenan Mode (Darkness System & Turn Info)" data-i18n-title="mode_kenan_title" data-i18n="mode_kenan">🌑 Kenan</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Kenan Modu: Aktif Tur Bilgisi Kartı -->
+            <!-- Kenan Mode: Active Turn Info Card -->
             <div id="kenan-turn-info-card" class="kenan-only kenan-turn-info-card">
                 <div class="kenan-turn-idle-state">
                     <span class="idle-icon">⚔️</span>
-                    <span class="idle-text">Savaş modu başladığında sıradaki savaşçının detayları burada
-                        görüntülenir.</span>
+                    <span class="idle-text" data-i18n="kenan_turn_idle">When combat mode starts, details of the active warrior appear here.</span>
                 </div>
             </div>
 
-            <p>Durum: <span id="status">Bağlanıyor...</span></p>
+            <p><span data-i18n="status_label">Status:</span> <span id="status" data-i18n="connecting">Connecting...</span></p>
 
-            <!-- Zar Atma Paneli -->
+            <!-- Dice Panel -->
             <div id="dice-panel" class="dice-panel">
                 <button class="dice-btn" data-dice="4">d4</button>
                 <button class="dice-btn" data-dice="6">d6</button>
@@ -313,128 +318,126 @@
                 <button class="dice-btn" data-dice="20">d20</button>
             </div>
             <ul id="logs">
-                <li>Odaya bekleniyor...</li>
+                <li data-i18n="logs_waiting">Waiting for room...</li>
             </ul>
 
-            <!-- Sadece DM'ye görünecek Araçlar Bölümü -->
+            <!-- DM Tools (Visible to DM only) -->
             <div id="dm-tools" class="hidden dm-tools-section">
                 <div class="dm-tools-header">
-                    <h4>DM Araçları</h4>
+                    <h4 data-i18n="dm_tools_title">DM Tools</h4>
                     <div class="dm-tools-actions">
                         <button class="btn warning action-btn dm-combat-btn" id="btn-dm-toggle-combat"
-                            title="Combat Modunu Başlat / Kapat">⚔️ Combat Modu</button>
+                            title="Toggle Combat Mode" data-i18n-title="dm_toggle_combat_title" data-i18n="combat_mode_btn">⚔️ Combat Mode</button>
                         <button class="btn secondary action-btn dm-status-btn" id="btn-dm-status-toolbox"
-                            title="Durum Efektleri ve Yaratıcı">✨ Status Efektleri</button>
+                            title="Status Effects and Creator" data-i18n-title="dm_status_toolbox_title" data-i18n="combat_status_title">✨ Status Effects</button>
                         <button class="btn secondary action-btn dm-batch-attacks-btn" id="btn-dm-batch-assign-attacks"
-                            title="Harita Tokenlarına Toplu Saldırı Ata">⚡ Toplu Saldırı Ata</button>
-                        <button class="btn primary action-btn dm-save-btn" id="btn-force-save">Harita Kaydet</button>
+                            title="Batch Assign Attacks to Map Tokens" data-i18n-title="dm_batch_assign_title" data-i18n="dm_batch_assign_title">⚡ Batch Assign</button>
+                        <button class="btn primary action-btn dm-save-btn" id="btn-force-save" data-i18n="dm_save_map_btn">Save Map</button>
                         <button class="btn secondary dm-gallery-btn"
-                            onclick="window.open('/gallery.html', '_blank')">Galeriyi Aç</button>
+                            onclick="window.open('/gallery.html', '_blank')" data-i18n="dm_open_gallery_btn">Open Gallery</button>
                     </div>
                 </div>
 
                 <details class="dm-collapsible dm-create-token-section">
-                    <summary>Yeni Token Oluştur & Hazır Şemalar</summary>
+                    <summary data-i18n="dm_create_token_summary">Create New Token & Presets</summary>
                     <div class="dm-collapsible-body">
-                        <!-- Hazır Şema Seçimi & Yönetimi -->
+                        <!-- Saved Presets Selection & Management -->
                         <div class="token-schema-box">
                             <div class="token-schema-header">
-                                <span class="token-schema-title">📜 Kayıtlı Hazır Şemalar</span>
-                                <span id="dm-token-preset-badge" class="token-schema-badge">0 Şema</span>
+                                <span class="token-schema-title" data-i18n="token_preset_title">📜 Saved Presets</span>
+                                <span id="dm-token-preset-badge" class="token-schema-badge">0 Presets</span>
                             </div>
                             <div class="token-schema-row">
                                 <select id="dm-token-preset-select" class="atk-select token-schema-select">
-                                    <option value="">— Hazır Şema Seç (Değerleri Doldur) —</option>
+                                    <option value="" data-i18n="token_preset_select_opt">— Select Preset (Auto-fill) —</option>
                                 </select>
                                 <button type="button" id="btn-delete-token-preset"
-                                    class="atk-mini-btn token-schema-del-btn" title="Seçili Şemayı Supabase'den Sil"
+                                    class="atk-mini-btn token-schema-del-btn" title="Delete Selected Preset from Database" data-i18n-title="token_preset_del_title"
                                     style="display: none;">🗑️</button>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label>Token / İşaret Adı:</label>
-                            <input type="text" id="dm-marker-name" maxlength="40" placeholder="Ör: Goblin Okçu veya G"
+                            <label data-i18n="token_name_label">Token / Marker Name:</label>
+                            <input type="text" id="dm-marker-name" maxlength="40" placeholder="e.g.: Goblin Archer or G" data-i18n-placeholder="token_name_placeholder"
                                 class="input-light">
                         </div>
                         <div class="form-group form-group-relative">
-                            <label>İşaret Resim URL (Opsiyonel):</label>
-                            <input type="text" id="dm-marker-img" placeholder="URL girin veya resim sürükleyin..."
+                            <label data-i18n="token_img_label">Token Image URL (Optional):</label>
+                            <input type="text" id="dm-marker-img" placeholder="Enter URL or drag an image..." data-i18n-placeholder="token_img_placeholder"
                                 class="input-light">
                         </div>
                         <div class="form-group">
-                            <label>Renk:</label>
+                            <label data-i18n="token_color_label">Color:</label>
                             <input type="color" id="dm-marker-color" value="#f1c40f">
                         </div>
 
-                        <!-- Cansız Obje Türü Seçimi -->
+                        <!-- Entity Type Selection -->
                         <div class="form-group" style="margin-top:4px;">
-                            <label>Token / Varlık Türü:</label>
+                            <label data-i18n="token_type_label">Token / Entity Type:</label>
                             <select id="dm-marker-type" class="atk-select"
                                 style="width:100%; font-size:12px; font-weight:700;">
-                                <option value="creature">👤 Canlı Yaratık / NPC</option>
-                                <option value="explosive">💣 Patlayıcı Nesne (Ölümde Patlar)</option>
-                                <option value="aura">🔮 Aura / Totem (Her Tur Etki Yayar)</option>
-                                <option value="spawner">🌀 Çağırıcı / Yuva (Her Tur Düşman Doğurur)</option>
+                                <option value="creature" data-i18n="entity_creature">👤 Living Creature / NPC</option>
+                                <option value="explosive" data-i18n="entity_explosive">💣 Explosive Object (Detonates on death)</option>
+                                <option value="aura" data-i18n="entity_aura">🔮 Aura / Totem (Emits aura every turn)</option>
+                                <option value="spawner" data-i18n="entity_spawner">🌀 Spawner / Nest (Spawns enemies every turn)</option>
                             </select>
                         </div>
 
-                        <!-- Cansız Obje Özel Ayarları -->
+                        <!-- Inanimate Object Custom Config -->
                         <div id="dm-marker-object-config-wrap" class="hidden object-config-card"
                             style="margin: 8px 0; padding: 10px; background: rgba(30, 20, 10, 0.45); border-radius: 8px; border: 1px dashed #f59e0b;">
                             <div
                                 style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                                <strong id="dm-marker-object-badge-title" style="font-size:12px; color:#f59e0b;">⚙️
-                                    Nesne İşlev Ayarları</strong>
-                                <span id="dm-marker-object-hint" style="font-size:10px; color:#cbd5e1;">Patlama / Alan
-                                    Etkisi</span>
+                                <strong id="dm-marker-object-badge-title" style="font-size:12px; color:#f59e0b;" data-i18n="object_function_title">⚙️ Object Function Settings</strong>
+                                <span id="dm-marker-object-hint" style="font-size:10px; color:#cbd5e1;" data-i18n="object_hint_explosion">Explosion / Area Effect</span>
                             </div>
                             <div class="stats-grid stats-grid-2col">
                                 <div class="form-group">
-                                    <label style="font-size:11px;">Etki Yarıçapı (px):</label>
+                                    <label style="font-size:11px;" data-i18n="object_radius_label">Effect Radius (px):</label>
                                     <input type="number" id="dm-marker-obj-radius" value="120" min="20" max="2000"
                                         placeholder="120">
                                 </div>
                                 <div class="form-group">
-                                    <label style="font-size:11px;">Hasar Miktarı:</label>
+                                    <label style="font-size:11px;" data-i18n="object_damage_label">Damage Amount:</label>
                                     <input type="number" id="dm-marker-obj-damage" value="20" min="0" placeholder="0">
                                 </div>
                             </div>
                             <div class="stats-grid stats-grid-2col" style="margin-top: 4px;">
                                 <div class="form-group">
-                                    <label style="font-size:11px;">Hasar Türü:</label>
+                                    <label style="font-size:11px;" data-i18n="object_damage_type_label">Damage Type:</label>
                                     <select id="dm-marker-obj-damage-type" class="atk-select" style="font-size:11px;">
-                                        <option value="fire">🔥 Ateş (Fire)</option>
-                                        <option value="necrotic">💀 Nekrotik (Necrotic)</option>
-                                        <option value="poison">🧪 Zehir (Poison)</option>
-                                        <option value="acid">🧪 Asit (Acid)</option>
-                                        <option value="lightning">⚡ Yıldırım (Lightning)</option>
-                                        <option value="cold">❄️ Soğuk (Cold)</option>
-                                        <option value="force">🌀 Kuvvet (Force)</option>
-                                        <option value="radiant">✨ Işıma (Radiant)</option>
-                                        <option value="physical">⚔️ Fiziksel (Physical)</option>
+                                        <option value="fire" data-i18n="damage_type_fire">🔥 Fire</option>
+                                        <option value="necrotic" data-i18n="damage_type_necrotic">💀 Necrotic</option>
+                                        <option value="poison" data-i18n="damage_type_poison">🧪 Poison</option>
+                                        <option value="acid" data-i18n="damage_type_acid">🧪 Acid</option>
+                                        <option value="lightning" data-i18n="damage_type_lightning">⚡ Lightning</option>
+                                        <option value="cold" data-i18n="damage_type_cold">❄️ Cold</option>
+                                        <option value="force" data-i18n="damage_type_force">🌀 Force</option>
+                                        <option value="radiant" data-i18n="damage_type_radiant">✨ Radiant</option>
+                                        <option value="physical" data-i18n="damage_type_physical">⚔️ Physical</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label style="font-size:11px;">Hedef Filtresi:</label>
+                                    <label style="font-size:11px;" data-i18n="target_filter_label">Target Filter:</label>
                                     <select id="dm-marker-obj-target-filter" class="atk-select" style="font-size:11px;">
-                                        <option value="all">👥 Herkes (Dost & Düşman)</option>
-                                        <option value="players">🛡️ Sadece Oyuncular</option>
-                                        <option value="markers">👾 Sadece Yaratıklar</option>
+                                        <option value="all" data-i18n="target_filter_all">👥 Everyone (Friend & Foe)</option>
+                                        <option value="players" data-i18n="target_filter_players">🛡️ Players Only</option>
+                                        <option value="markers" data-i18n="target_filter_markers">👾 Creatures Only</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <!-- Uygulanacak Durum Efektleri -->
+                            <!-- Applied Status Effects -->
                             <div class="form-group" style="margin-top: 6px;">
-                                <label style="font-size:11px;">✨ Verilecek Durum Efekti:</label>
+                                <label style="font-size:11px;" data-i18n="apply_status_effect_label">✨ Apply Status Effect:</label>
                                 <div style="display:flex; gap:6px;">
                                     <select id="dm-marker-obj-effect-select" class="atk-select"
                                         style="flex:1; font-size:11px;">
-                                        <option value="">— Durum Efekti Seç (Opsiyonel) —</option>
+                                        <option value="" data-i18n="status_select_opt">— Select Status Effect (Optional) —</option>
                                     </select>
-                                    <input type="number" id="dm-marker-obj-effect-duration" placeholder="Tur" min="1"
-                                        max="20" style="width:55px; font-size:11px;" title="Boş ise varsayılan/kalıcı">
+                                    <input type="number" id="dm-marker-obj-effect-duration" placeholder="Rounds" data-i18n-placeholder="duration_placeholder" min="1"
+                                        max="20" style="width:55px; font-size:11px;" title="Blank=Permanent">
                                     <button type="button" id="dm-marker-obj-btn-add-effect" class="atk-mini-btn"
                                         style="padding:2px 8px;">➕</button>
                                 </div>
@@ -442,53 +445,51 @@
                                     style="margin-top: 4px; min-height: 20px;"></div>
                             </div>
 
-                            <!-- Patlayıcıya Özel: Patlayınca Yok Ol -->
+                            <!-- Explosive Specific: Destroy on Detonation -->
                             <div id="dm-marker-obj-destroy-row" class="form-group form-group-checkbox"
                                 style="display:flex; align-items:center; gap:8px; margin-top:6px;">
                                 <input type="checkbox" id="dm-marker-obj-destroy" checked
                                     style="width:15px; height:15px; cursor:pointer;">
                                 <label for="dm-marker-obj-destroy"
-                                    style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Patlayınca
-                                    Haritadan Silinsin</label>
+                                    style="cursor:pointer; font-size:11px; color:#f87171; margin:0;" data-i18n="destroy_on_detonate">💥 Remove from map when exploded</label>
                             </div>
 
-                            <!-- Auraya Özel: Tetiklenme Zamanı -->
+                            <!-- Aura Specific: Timing -->
                             <div id="dm-marker-obj-timing-row" class="form-group hidden" style="margin-top:6px;">
-                                <label style="font-size:11px; color:#c084fc;">🔮 Aura Tetiklenme Zamanı:</label>
+                                <label style="font-size:11px; color:#c084fc;" data-i18n="aura_timing_label">🔮 Aura Trigger Timing:</label>
                                 <select id="dm-marker-obj-timing" class="atk-select" style="font-size:11px;">
-                                    <option value="turn">⚡ Sırası Geldiğinde (Her Tur)</option>
-                                    <option value="round">🔄 Raund Başlangıcında</option>
+                                    <option value="turn" data-i18n="aura_timing_turn">⚡ On its turn (Every Turn)</option>
+                                    <option value="round" data-i18n="aura_timing_round">🔄 At Round Start</option>
                                 </select>
                             </div>
 
-                            <!-- Çağırıcı / Yuva Özel Ayarları -->
+                            <!-- Spawner Specific -->
                             <div id="dm-marker-obj-spawner-section" class="hidden"
                                 style="margin-top:6px; background:rgba(16, 185, 129, 0.12); border:1px solid rgba(16, 185, 129, 0.3); border-radius:6px; padding:8px;">
                                 <div class="form-group">
-                                    <label style="font-size:11px; color:#34d399; font-weight:700;">👾 Doğurulacak Düşman
-                                        Şablonu:</label>
+                                    <label style="font-size:11px; color:#34d399; font-weight:700;" data-i18n="spawner_preset_label">👾 Enemy Template to Spawn:</label>
                                     <select id="dm-marker-obj-spawner-preset" class="atk-select"
                                         style="font-size:11px;">
-                                        <option value="">— Hazır Düşman Seçin —</option>
+                                        <option value="" data-i18n="spawner_preset_opt">— Select Enemy —</option>
                                     </select>
                                 </div>
                                 <div class="stats-grid stats-grid-3col" style="margin-top:4px;">
                                     <div class="form-group">
-                                        <label style="font-size:11px; color:#a7f3d0;">Dalga Başı Adet:</label>
+                                        <label style="font-size:11px; color:#a7f3d0;" data-i18n="spawner_count_label">Count Per Wave:</label>
                                         <input type="number" id="dm-marker-obj-spawner-count" value="1" min="1"
                                             max="10">
                                     </div>
                                     <div class="form-group">
-                                        <label style="font-size:11px; color:#a7f3d0;">Doğma Menzili (px):</label>
+                                        <label style="font-size:11px; color:#a7f3d0;" data-i18n="spawner_radius_label">Spawn Radius (px):</label>
                                         <input type="number" id="dm-marker-obj-spawner-radius" value="85" min="40"
                                             max="500">
                                     </div>
                                     <div class="form-group">
-                                        <label style="font-size:11px; color:#a7f3d0;">Zamanlama:</label>
+                                        <label style="font-size:11px; color:#a7f3d0;" data-i18n="spawner_timing_label">Timing:</label>
                                         <select id="dm-marker-obj-spawner-timing" class="atk-select"
                                             style="font-size:11px;">
-                                            <option value="turn">⚡ Sırası Geldiğinde (Tur)</option>
-                                            <option value="round">🔄 Raund Başlangıcında</option>
+                                            <option value="turn" data-i18n="aura_timing_turn">⚡ On its turn (Every Turn)</option>
+                                            <option value="round" data-i18n="aura_timing_round">🔄 At Round Start</option>
                                         </select>
                                     </div>
                                 </div>
@@ -497,28 +498,27 @@
                                     <input type="checkbox" id="dm-marker-obj-spawner-destroy" checked
                                         style="width:15px; height:15px; cursor:pointer;">
                                     <label for="dm-marker-obj-spawner-destroy"
-                                        style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Kırılınca /
-                                        Canı 0 Olunca Haritadan Silinsin</label>
+                                        style="cursor:pointer; font-size:11px; color:#f87171; margin:0;" data-i18n="spawner_destroy_label">💥 Destroy / Remove from map when HP reaches 0</label>
                                 </div>
                             </div>
                         </div>
                         <div class="stats-grid stats-grid-3col">
-                            <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-hp"
-                                    placeholder="örn: 10"></div>
-                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-marker-max-hp"
-                                    placeholder="örn: 10"></div>
-                            <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-marker-size"
+                            <div class="form-group"><label data-i18n="current_hp_label">Current HP:</label><input type="number" id="dm-marker-hp"
+                                    placeholder="e.g.: 10"></div>
+                            <div class="form-group"><label data-i18n="max_hp_label">Max HP:</label><input type="number" id="dm-marker-max-hp"
+                                    placeholder="e.g.: 10"></div>
+                            <div class="form-group"><label data-i18n="size_px_label">Size (px):</label><input type="number" id="dm-marker-size"
                                     value="50"></div>
                         </div>
-                        <!-- AC Değerleri -->
+                        <!-- AC Values -->
                         <div class="stats-grid stats-grid-2col">
-                            <div class="form-group"><label>AC:</label><input type="number" id="dm-marker-ac"
-                                    placeholder="örn: 12" value="10"></div>
-                            <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-marker-ac-bonus"
+                            <div class="form-group"><label data-i18n="ac_label">AC:</label><input type="number" id="dm-marker-ac"
+                                    placeholder="e.g.: 12" value="10"></div>
+                            <div class="form-group"><label data-i18n="ac_bonus_label">AC Bonus:</label><input type="number" id="dm-marker-ac-bonus"
                                     placeholder="0" value="0"></div>
                         </div>
 
-                        <!-- Kenan Modu: Marker Karanlık Alanı -->
+                        <!-- Kenan Mode: Marker Darkness Field -->
                         <div class="kenan-only dm-kenan-marker-darkness-section"
                             style="margin-top:6px; padding:8px; background:rgba(147, 51, 234, 0.1); border-radius:6px; border:1px solid rgba(168, 85, 247, 0.35);">
                             <div class="form-group form-group-checkbox"
@@ -526,21 +526,18 @@
                                 <input type="checkbox" id="dm-marker-has-darkness"
                                     style="width:16px; height:16px; cursor:pointer;">
                                 <label for="dm-marker-has-darkness"
-                                    style="cursor:pointer; font-weight:700; color:#c084fc; font-size:12px; margin:0;">🌑
-                                    Karanlığa Sahip Olsun</label>
+                                    style="cursor:pointer; font-weight:700; color:#c084fc; font-size:12px; margin:0;" data-i18n="kenan_has_darkness">🌑 Possesses Darkness</label>
                             </div>
                             <div id="dm-marker-darkness-inputs" class="stats-grid stats-grid-2col hidden"
                                 style="margin-top:6px;">
-                                <div class="form-group"><label style="color:#c084fc; font-size:11px;">Mevcut
-                                        Karanlık:</label><input type="number" id="dm-marker-darkness" placeholder="0"
+                                <div class="form-group"><label style="color:#c084fc; font-size:11px;" data-i18n="kenan_current_darkness">Current Darkness:</label><input type="number" id="dm-marker-darkness" placeholder="0"
                                         value="0" min="0"></div>
-                                <div class="form-group"><label style="color:#c084fc; font-size:11px;">Maks
-                                        Karanlık:</label><input type="number" id="dm-marker-max-darkness"
+                                <div class="form-group"><label style="color:#c084fc; font-size:11px;" data-i18n="kenan_max_darkness">Max Darkness:</label><input type="number" id="dm-marker-max-darkness"
                                         placeholder="100" value="100" min="1"></div>
                             </div>
                         </div>
-                        <!-- Stat Değerleri -->
-                        <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;">Stat / Bonus (Saldırı için)</p>
+                        <!-- Stat Values -->
+                        <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;" data-i18n="stat_bonus_hint">Stat / Bonus (For Attacks)</p>
                         <div class="stats-grid">
                             <div class="form-group"><label>STR:</label><input type="number" id="dm-marker-str"
                                     placeholder="0" value="0"><input type="number" id="dm-marker-str-bonus"
@@ -561,101 +558,95 @@
                                     placeholder="0" value="0"><input type="number" id="dm-marker-chr-bonus"
                                     placeholder="B" value="0" style="margin-top:2px;"></div>
                         </div>
-                        <!-- Tokene Eklenecek Saldırılar (Opsiyonel) -->
+                        <!-- Attacks to assign to token (Optional) -->
                         <div class="form-group" style="margin-top: 8px;">
                             <details class="dm-collapsible">
-                                <summary style="font-size: 11px; color: #94a3b8; cursor: pointer; user-select: none;">⚡
-                                    Tokene Saldırı Ata (Opsiyonel)</summary>
+                                <summary style="font-size: 11px; color: #94a3b8; cursor: pointer; user-select: none;" data-i18n="assign_attacks_to_token">⚡ Assign Attacks to Token (Optional)</summary>
                                 <div id="dm-create-token-attacks-list" class="assigned-attacks-grid"
                                     style="max-height: 120px; overflow-y: auto; margin-top: 6px; padding: 4px; background: rgba(0,0,0,0.2); border-radius: 4px;">
-                                    <span style="font-size: 11px; color: #64748b;">Saldırı presetleri
-                                        yükleniyor...</span>
+                                    <span style="font-size: 11px; color: #64748b;" data-i18n="attacks_loading">Loading attacks...</span>
                                 </div>
                             </details>
                         </div>
-                        <!-- Aksiyon Butonları (Spawn & Şema Kaydet) -->
+
                         <div class="token-create-actions-group">
                             <button type="button" id="btn-add-marker" class="btn primary action-btn token-spawn-btn"
-                                title="Belirtilen özelliklerdeki tokeni haritaya yerleştirir">🚀 Haritaya Spawn
-                                Et</button>
+                                title="Places token on map with specified properties" data-i18n-title="spawn_to_map_title" data-i18n="spawn_to_map_btn">🚀 Spawn to Map</button>
                             <button type="button" id="btn-save-token-preset"
                                 class="btn secondary action-btn token-save-preset-btn"
-                                title="Girilen can, stat, isim ve resim değerlerini Supabase'e şema olarak kaydeder">💾
-                                Şema Olarak Kaydet</button>
+                                title="Saves HP, stats, name, and image values as a schema to database" data-i18n-title="save_token_preset_title" data-i18n="save_token_preset_btn">💾 Save as Preset</button>
                         </div>
                     </div>
                 </details>
 
                 <hr class="dm-divider">
 
-                <h4>DM Kalem Rengi</h4>
+                <h4 data-i18n="dm_pen_title">DM Pen Color</h4>
                 <div class="form-group">
-                    <label>Çizim Rengi:</label>
+                    <label data-i18n="drawing_color_label">Drawing Color:</label>
                     <input type="color" id="dm-pen-color" value="#8e44ad">
                 </div>
-                <button id="btn-update-dm-pen" class="btn primary action-btn dm-pen-btn">Rengi Güncelle</button>
+                <button id="btn-update-dm-pen" class="btn primary action-btn dm-pen-btn" data-i18n="update_color_btn">Update Color</button>
 
                 <hr class="dm-divider">
 
                 <div class="form-group form-group-relative">
-                    <label>Arka Plan URL:</label>
-                    <input type="text" id="dm-bg-url" placeholder="URL girin veya resim sürükleyin..."
+                    <label data-i18n="bg_url_label">Background URL:</label>
+                    <input type="text" id="dm-bg-url" placeholder="Enter URL or drag an image..." data-i18n-placeholder="bg_url_placeholder"
                         class="input-light">
                 </div>
-                <button id="btn-set-bg" class="btn secondary action-btn">Arka Planı Değiştir</button>
-                <button id="btn-clear-all-drawings" class="btn danger action-btn">Tüm Çizimleri Temizle</button>
+                <button id="btn-set-bg" class="btn secondary action-btn" data-i18n="change_bg_btn">Change Background</button>
+                <button id="btn-clear-all-drawings" class="btn danger action-btn" data-i18n="clear_all_drawings_btn">Clear All Drawings</button>
 
                 <hr class="dm-divider dm-divider-spaced">
 
-                <h4>Oyuncuları Yönet</h4>
+                <h4 data-i18n="manage_players_title">Manage Players</h4>
                 <div id="dm-player-list" class="list-container dm-player-list">
-                    <p class="empty-state-text">Bağlı oyuncu yok.</p>
+                    <p class="empty-state-text" data-i18n="no_connected_players">No connected players.</p>
                 </div>
 
                 <div id="dm-player-editor" class="hidden character-card dm-player-editor">
-                    <h4 id="dm-edit-name" class="dm-edit-name">Seçilen Oyuncu</h4>
+                    <h4 id="dm-edit-name" class="dm-edit-name" data-i18n="selected_player_title">Selected Player</h4>
                     <form id="dm-edit-form">
                         <div class="stats-grid stats-grid-3col">
-                            <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-edit-hp"></div>
-                            <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-edit-max-hp">
+                            <div class="form-group"><label data-i18n="current_hp_label">Current HP:</label><input type="number" id="dm-edit-hp"></div>
+                            <div class="form-group"><label data-i18n="max_hp_label">Max HP:</label><input type="number" id="dm-edit-max-hp">
                             </div>
-                            <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-edit-size"
+                            <div class="form-group"><label data-i18n="size_px_label">Size (px):</label><input type="number" id="dm-edit-size"
                                     placeholder="50" min="20" max="400" step="5" value="50"></div>
                         </div>
                         <div class="dm-token-size-presets-row" id="dm-player-size-presets">
-                            <span class="dm-size-presets-label">📏 Token Boyutu:</span>
+                            <span class="dm-size-presets-label" data-i18n="token_size_label">📏 Token Size:</span>
                             <div class="dm-size-presets-group">
                                 <button type="button" class="dm-size-pill" data-size="35"
-                                    title="Minik (Tiny) — 35px">35px</button>
+                                    title="Tiny (35px)" data-i18n-title="size_tiny_title">35px</button>
                                 <button type="button" class="dm-size-pill active" data-size="50"
-                                    title="Orta (Medium / Standart 1x1) — 50px">50px</button>
+                                    title="Medium (Standard 1x1) — 50px" data-i18n-title="size_medium_title">50px</button>
                                 <button type="button" class="dm-size-pill" data-size="80"
-                                    title="Büyük (Large / 2x2) — 80px">80px</button>
+                                    title="Large (2x2) — 80px" data-i18n-title="size_large_title">80px</button>
                                 <button type="button" class="dm-size-pill" data-size="120"
-                                    title="Devasa (Huge / 3x3) — 120px">120px</button>
+                                    title="Huge (3x3) — 120px" data-i18n-title="size_huge_title">120px</button>
                                 <button type="button" class="dm-size-pill" data-size="160"
-                                    title="Muazzam (Gargantuan / 4x4) — 160px">160px</button>
+                                    title="Gargantuan (4x4) — 160px" data-i18n-title="size_gargantuan_title">160px</button>
                             </div>
                         </div>
                         <div class="stats-grid stats-grid-3col">
-                            <div class="form-group"><label>AC:</label><input type="number" id="dm-edit-ac"></div>
-                            <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-edit-ac-bonus">
+                            <div class="form-group"><label data-i18n="ac_label">AC:</label><input type="number" id="dm-edit-ac"></div>
+                            <div class="form-group"><label data-i18n="ac_bonus_label">AC Bonus:</label><input type="number" id="dm-edit-ac-bonus">
                             </div>
-                            <div class="form-group"><label>Yozlaşma:</label><input type="number"
+                            <div class="form-group"><label data-i18n="corruption_label">Corruption:</label><input type="number"
                                     id="dm-edit-corruption"></div>
                         </div>
 
-                        <!-- Kenan Modu: Oyuncu Karanlık Değerleri -->
+                        <!-- Kenan Mode: Player Darkness Values -->
                         <div class="kenan-only dm-player-darkness-section stats-grid stats-grid-2col"
                             style="margin-top:6px; padding:6px 8px; background:rgba(147, 51, 234, 0.1); border-radius:6px; border:1px solid rgba(168, 85, 247, 0.35);">
-                            <div class="form-group"><label style="color:#c084fc; font-weight:700; font-size:11px;">🌑
-                                    Karanlık:</label><input type="number" id="dm-edit-darkness" placeholder="0" min="0">
+                            <div class="form-group"><label style="color:#c084fc; font-weight:700; font-size:11px;" data-i18n="kenan_current_darkness">🌑 Current Darkness:</label><input type="number" id="dm-edit-darkness" placeholder="0" min="0">
                             </div>
-                            <div class="form-group"><label style="color:#c084fc; font-weight:700; font-size:11px;">Maks
-                                    Karanlık:</label><input type="number" id="dm-edit-max-darkness" placeholder="100"
+                            <div class="form-group"><label style="color:#c084fc; font-weight:700; font-size:11px;" data-i18n="kenan_max_darkness">Max Darkness:</label><input type="number" id="dm-edit-max-darkness" placeholder="100"
                                     min="1"></div>
                         </div>
-                        <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;">Stat / Bonus</p>
+                        <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;" data-i18n="stats_label">Stat / Bonus</p>
                         <div class="stats-grid">
                             <div class="form-group"><label>STR:</label><input type="number" id="dm-edit-str"><input
                                     type="number" id="dm-edit-str-bonus" placeholder="B" style="margin-top:2px;"></div>
@@ -670,7 +661,7 @@
                             <div class="form-group"><label>CHR:</label><input type="number" id="dm-edit-chr"><input
                                     type="number" id="dm-edit-chr-bonus" placeholder="B" style="margin-top:2px;"></div>
                         </div>
-                        <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;">Büyü Slotları</p>
+                        <p style="font-size:11px; color:#bdc3c7; margin:5px 0 2px;" data-i18n="spell_slots_label">Spell Slots</p>
                         <div class="stats-grid stats-grid-4col">
                             <div class="form-group"><label>Lvl1:</label><input type="number" id="dm-edit-spell-lvl1"
                                     min="0"></div>
@@ -682,140 +673,131 @@
                                     min="0"></div>
                         </div>
 
-                        <!-- Aktif Durum Efektleri -->
+                        <!-- Active Status Effects -->
                         <div class="token-status-effects-section">
                             <div class="token-status-effects-header">
-                                <label class="token-status-effects-label">✨ Aktif Durum Efektleri:</label>
+                                <label class="token-status-effects-label" data-i18n="active_status_effects_label">✨ Active Status Effects:</label>
                                 <button type="button" id="dm-player-clear-all-effects"
-                                    class="atk-mini-btn token-clear-all-effects-btn" style="display:none;">Tümünü
-                                    Kaldır</button>
+                                    class="atk-mini-btn token-clear-all-effects-btn" style="display:none;" data-i18n="clear_all_effects_btn">Remove All</button>
                             </div>
                             <div id="dm-player-active-effects" class="status-target-effects-list">
-                                <!-- JS ile doldurulacak -->
+                                <!-- Populated dynamically -->
                             </div>
                             <div class="token-add-effect-row">
                                 <select id="dm-player-add-effect-select" class="atk-select token-add-effect-select">
-                                    <option value="">— Durum Efekti Ekle —</option>
+                                    <option value="" data-i18n="add_status_effect_opt">— Add Status Effect —</option>
                                 </select>
                                 <input type="number" id="dm-player-add-effect-duration"
-                                    class="atk-input token-add-effect-duration" placeholder="Tur (Boş=Kalıcı)" min="1"
-                                    max="99" title="Tur sayısı (boş bırakılırsa varsayılan/kalıcı)">
+                                    class="atk-input token-add-effect-duration" placeholder="Rounds (Blank=Permanent)" data-i18n-placeholder="duration_placeholder" min="1"
+                                    max="99" title="Rounds (blank = permanent)">
                                 <button type="button" id="dm-player-btn-add-effect"
-                                    class="atk-mini-btn token-add-effect-btn">➕ Ekle</button>
+                                    class="atk-mini-btn token-add-effect-btn" data-i18n="add_effect_btn">➕ Add</button>
                             </div>
                         </div>
 
-                        <!-- Atanmış Saldırılar (Attack Loadout) -->
+                        <!-- Assigned Attacks (Attack Loadout) -->
                         <div class="token-assigned-attacks-section">
                             <div class="token-assigned-attacks-header">
                                 <div class="token-assigned-attacks-title-row">
-                                    <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar
-                                        Loadout):</label>
-                                    <span id="dm-player-assigned-count" class="token-assigned-count-badge">(0
-                                        Seçili)</span>
+                                    <label class="token-assigned-attacks-label" data-i18n="assigned_attacks_title">⚔️ Assigned Attacks (Hotbar Loadout):</label>
+                                    <span id="dm-player-assigned-count" class="token-assigned-count-badge">(0 Selected)</span>
                                 </div>
-                                <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin
-                                    (Sınırsız)</span>
+                                <span class="token-assigned-attacks-hint" data-i18n="assigned_attacks_hint">Select attacks to display on bottom hotbar (Unlimited)</span>
                             </div>
                             <div class="assigned-attacks-toolbar">
-                                <input type="text" id="dm-player-assigned-search" placeholder="Saldırı ara..."
+                                <input type="text" id="dm-player-assigned-search" placeholder="Search attacks..." data-i18n-placeholder="search_attacks_placeholder"
                                     class="assigned-search-input">
                                 <div class="assigned-quick-actions">
-                                    <button type="button" id="dm-player-assigned-select-all" class="atk-mini-btn">Tümünü
-                                        Seç</button>
+                                    <button type="button" id="dm-player-assigned-select-all" class="atk-mini-btn" data-i18n="select_all_btn">Select All</button>
                                     <button type="button" id="dm-player-assigned-clear-all"
-                                        class="atk-mini-btn">Temizle</button>
+                                        class="atk-mini-btn" data-i18n="clear_btn">Clear</button>
                                 </div>
                             </div>
                             <div id="dm-player-assigned-attacks" class="assigned-attacks-grid">
-                                <!-- JS ile tüm presetler checkbox listesi olarak doldurulacak -->
+                                <!-- Populated dynamically -->
                             </div>
                         </div>
 
                         <div class="button-group button-group-row">
                             <button type="button" id="dm-edit-save-btn"
-                                class="btn success action-btn dm-edit-action-btn" disabled>Kayıtlı</button>
+                                class="btn success action-btn dm-edit-action-btn" disabled data-i18n="saved">Saved</button>
                             <button type="button" class="btn back-btn action-btn dm-edit-action-btn"
-                                onclick="if(typeof flushDmEdit === 'function') flushDmEdit(); document.getElementById('dm-player-editor').classList.add('hidden'); editingPlayerId = null;">Kapat</button>
+                                onclick="if(typeof flushDmEdit === 'function') flushDmEdit(); document.getElementById('dm-player-editor').classList.add('hidden'); editingPlayerId = null;" data-i18n="close">Close</button>
                         </div>
                     </form>
                 </div>
 
-                <p class="dm-hint-text">
-                    * Bir işareti silmek için üzerine sağ tıklayın.
+                <p class="dm-hint-text" data-i18n="right_click_delete_marker_hint">
+                    * Right-click on a marker to delete it.
                 </p>
 
                 <hr class="dm-divider dm-divider-spaced">
 
-                <!-- ============ SALDIRI PANELİ ============ -->
+                <!-- ============ ATTACK PANEL ============ -->
                 <details class="dm-collapsible atk-panel-collapsible" id="attack-panel-container">
-                    <summary>⚔️ Saldırı / Hasar Paneli</summary>
+                    <summary data-i18n="attack_panel_title">⚔️ Attack / Damage Panel</summary>
                     <div class="dm-collapsible-body attack-panel">
 
-                        <!-- Kuşanılmış Saldırı Preseti -->
+                        <!-- Equipped Attack Preset -->
                         <div class="atk-section atk-preset-section">
                             <div class="atk-section-header">
-                                <h5>🎯 Kuşanılmış Saldırı Preseti</h5>
+                                <h5 data-i18n="equipped_preset_heading">🎯 Equipped Attack Preset</h5>
                                 <button type="button" id="btn-open-attack-presets" class="atk-mini-btn"
-                                    title="Hazır Saldırılar & Preset Yöneticisi">⚙️ Presetler</button>
+                                    title="Attack Presets Manager" data-i18n-title="attack_presets_modal_title" data-i18n="btn_presets">⚙️ Presets</button>
                             </div>
                             <select id="atk-preset-select" class="atk-select">
-                                <option value="">— Serbest Saldırı (Özel Zar Havuzu) —</option>
+                                <option value="" data-i18n="free_attack_opt">— Free Attack (Custom Dice Pool) —</option>
                             </select>
                             <div id="atk-preset-info-banner" class="atk-preset-info-banner hidden">
                                 <div class="atk-preset-badge-row">
-                                    <span id="atk-preset-badge-stat" class="atk-preset-chip">STR</span>
-                                    <span id="atk-preset-badge-type" class="atk-preset-chip">Fiziksel</span>
-                                    <span id="atk-preset-badge-halfmiss" class="atk-preset-chip hidden">🛡️ Iska: ½
-                                        Hasar</span>
-                                    <span id="atk-preset-badge-status" class="atk-preset-chip hidden">✨ Durum</span>
+                                    <span id="atk-preset-badge-stat" class="atk-preset-chip" data-i18n="stat_chip">STR</span>
+                                    <span id="atk-preset-badge-type" class="atk-preset-chip" data-i18n="physical_chip">Physical</span>
+                                    <span id="atk-preset-badge-halfmiss" class="atk-preset-chip hidden" data-i18n="half_miss_chip">🛡️ Miss: ½ Damage</span>
+                                    <span id="atk-preset-badge-status" class="atk-preset-chip hidden" data-i18n="status_chip">✨ Status</span>
                                     <span id="atk-preset-badge-aoe" class="atk-preset-chip hidden"
-                                        style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;">💥
-                                        Alan Hasarı</span>
+                                        style="background:rgba(239,68,68,0.25); border-color:#ef4444; color:#fca5a5;" data-i18n="aoe_chip">💥 Area Damage</span>
                                 </div>
                                 <div id="atk-preset-desc-text" class="atk-preset-desc-text"></div>
                             </div>
                         </div>
 
-                        <!-- Saldıran & Hedef Seçimi -->
+                        <!-- Attacker & Target Selection -->
                         <div class="atk-section">
                             <div class="atk-section-header">
-                                <h5>🗡️ Saldıran & 🎯 Hedef</h5>
-                                <button id="atk-btn-refresh" class="atk-mini-btn" title="Listeyi yenile">🔄</button>
+                                <h5 data-i18n="attacker_and_target_heading">🗡️ Attacker & 🎯 Target</h5>
+                                <button id="atk-btn-refresh" class="atk-mini-btn" title="Refresh List" data-i18n-title="refresh_list_title">🔄</button>
                             </div>
 
-                            <label class="atk-field-label">🗡️ Saldıran (statları kullanılır):</label>
+                            <label class="atk-field-label" data-i18n="attacker_select_label">🗡️ Attacker (stats are used):</label>
                             <select id="atk-attacker-select" class="atk-select">
-                                <option value="">— Saldıran Seç —</option>
+                                <option value="" data-i18n="attacker_select_opt">— Select Attacker —</option>
                             </select>
                             <div id="atk-attacker-info" class="atk-target-info">
-                                <span class="atk-hint">Saldıran seçilmedi</span>
+                                <span class="atk-hint" data-i18n="no_attacker_selected">No attacker selected</span>
                             </div>
 
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                                <label class="atk-field-label" style="margin: 0;">🎯 Hedef (AC'si kontrol edilir, hasarı
-                                    alır):</label>
+                                <label class="atk-field-label" style="margin: 0;" data-i18n="target_select_label">🎯 Target (checks AC, receives damage):</label>
                                 <button type="button" id="atk-btn-clear-targets" class="atk-mini-btn"
-                                    title="Tüm hedefleri ve seçim çerçevelerini temizle">❌ Temizle</button>
+                                    title="Clear all targets and selection rings" data-i18n-title="target_clear_title" data-i18n="clear_btn">❌ Clear</button>
                             </div>
                             <select id="atk-target-select" class="atk-select">
-                                <option value="">— Hedef Seç —</option>
+                                <option value="" data-i18n="target_select_opt">— Select Target —</option>
                             </select>
-                            <span class="atk-ctrl-hint">💡 Haritadaki token'lara <strong>Ctrl + Sol Tık</strong> ile
-                                çoklu hedef seçebilirsiniz.</span>
+                            <span class="atk-ctrl-hint" data-i18n="target_ctrl_hint">💡 You can multi-select targets with <strong>Ctrl + Left Click</strong> on map tokens.</span>
                             <div id="atk-selected-targets-list" class="atk-target-list"></div>
                             <div id="atk-target-info" class="atk-target-info">
-                                <span class="atk-hint">Hedef seçilmedi</span>
+                                <span class="atk-hint" data-i18n="no_target_selected">No target selected</span>
                             </div>
                         </div>
 
-                        <!-- Genel Modifikatörler -->
+                        <!-- Modifiers -->
                         <div class="atk-section">
-                            <h5>📊 Modifikatörler</h5>
+                            <h5 data-i18n="modifiers_heading">📊 Modifiers</h5>
                             <div class="atk-grid-2">
                                 <div class="atk-field">
-                                    <label>Zar Stat</label>
+                                    <label data-i18n="dice_stat_label">Dice Stat</label>
                                     <select id="atk-modifier" class="atk-select">
                                         <option value="STR">STR</option>
                                         <option value="DEX">DEX</option>
@@ -826,41 +808,40 @@
                                     </select>
                                 </div>
                                 <div class="atk-field">
-                                    <label>Hedef AC</label>
+                                    <label data-i18n="target_ac_label">Target AC</label>
                                     <input type="number" id="atk-target-ac" value="10" class="atk-input">
                                 </div>
                                 <div class="atk-field">
-                                    <label>Manuel Ek</label>
+                                    <label data-i18n="manual_bonus_label">Manual Bonus</label>
                                     <input type="number" id="atk-extra-damage" value="0" class="atk-input">
                                 </div>
                                 <div class="atk-field">
-                                    <label>Saldırı Adet</label>
+                                    <label data-i18n="attack_count_label">Attack Count</label>
                                     <input type="number" id="atk-attack-count" value="1" min="1" max="20"
                                         class="atk-input">
                                 </div>
                             </div>
                             <div class="atk-check-row">
-                                <label class="atk-check"><input type="checkbox" id="atk-advantage"> Avantaj</label>
-                                <label class="atk-check"><input type="checkbox" id="atk-disadvantage">
-                                    Dezavantaj</label>
+                                <label class="atk-check"><input type="checkbox" id="atk-advantage"> <span data-i18n="advantage_label">Advantage</span></label>
+                                <label class="atk-check"><input type="checkbox" id="atk-disadvantage"> <span data-i18n="disadvantage_label">Disadvantage</span></label>
                             </div>
                         </div>
 
-                        <!-- Saldırı / Hasar Kanalları -->
+                        <!-- Damage Channels -->
                         <div class="atk-section">
-                            <h5>⚔️ Hasar Kanalları</h5>
+                            <h5 data-i18n="damage_channels_heading">⚔️ Damage Channels</h5>
 
-                            <!-- Fiziksel / Ana Kanal -->
+                            <!-- Physical / Main Channel -->
                             <div class="atk-damage-channel" data-channel="phys">
                                 <div class="atk-channel-header">
                                     <div class="atk-channel-title-row">
-                                        <span class="atk-channel-label">Fiziksel/Ana:</span>
+                                        <span class="atk-channel-label" data-i18n="phys_main_channel">Physical/Main:</span>
                                         <select id="atk-phys-damage-type" class="atk-select-damage-type"
-                                            title="Hasar Türü">
-                                            <option value="slashing">⚔️ Kesme</option>
-                                            <option value="bludgeoning">🔨 Ezme</option>
-                                            <option value="piercing">🏹 Delme</option>
-                                            <option value="magic">✨ Büyü</option>
+                                            title="Damage Type">
+                                            <option value="slashing" data-i18n="type_slashing">⚔️ Slashing</option>
+                                            <option value="bludgeoning" data-i18n="type_bludgeoning">🔨 Bludgeoning</option>
+                                            <option value="piercing" data-i18n="type_piercing">🏹 Piercing</option>
+                                            <option value="magic" data-i18n="type_magic">✨ Magic</option>
                                         </select>
                                     </div>
                                     <div id="atk-phys-target-status" class="atk-channel-target-status"></div>
@@ -868,10 +849,10 @@
 
                                 <div class="atk-pool-display" id="atk-phys-display">
                                     <div class="atk-pool-badges" id="atk-phys-badges">
-                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                        <span class="atk-pool-empty-hint" data-i18n="no_dice_selected">No dice selected</span>
                                     </div>
                                     <div class="atk-pool-result hidden" id="atk-phys-result">
-                                        <div class="atk-result-total">Toplam: <span id="atk-phys-total-val">0</span>
+                                        <div class="atk-result-total"><span data-i18n="total">Total: </span><span id="atk-phys-total-val">0</span>
                                         </div>
                                         <div class="atk-result-breakdown" id="atk-phys-breakdown-val"></div>
                                     </div>
@@ -880,20 +861,20 @@
                                 <div class="atk-dice-toolbar">
                                     <div class="atk-dice-buttons">
                                         <button type="button" class="atk-die-btn atk-die-4" data-die="4"
-                                            title="d4 ekle">d4</button>
+                                            title="Add d4">d4</button>
                                         <button type="button" class="atk-die-btn atk-die-6" data-die="6"
-                                            title="d6 ekle">d6</button>
+                                            title="Add d6">d6</button>
                                         <button type="button" class="atk-die-btn atk-die-8" data-die="8"
-                                            title="d8 ekle">d8</button>
+                                            title="Add d8">d8</button>
                                         <button type="button" class="atk-die-btn atk-die-10" data-die="10"
-                                            title="d10 ekle">d10</button>
+                                            title="Add d10">d10</button>
                                         <button type="button" class="atk-die-btn atk-die-12" data-die="12"
-                                            title="d12 ekle">d12</button>
+                                            title="Add d12">d12</button>
                                         <button type="button" class="atk-die-btn atk-die-20" data-die="20"
-                                            title="d20 ekle">d20</button>
+                                            title="Add d20">d20</button>
                                     </div>
                                     <div class="atk-dice-actions">
-                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                        <div class="atk-bonus-stepper" title="Fixed damage bonus">
                                             <button type="button" class="atk-bonus-btn atk-bonus-minus"
                                                 data-action="minus">-</button>
                                             <input type="number" class="atk-bonus-input" id="atk-phys-bonus" value="0"
@@ -902,9 +883,9 @@
                                                 data-action="plus">+</button>
                                         </div>
                                         <button type="button" class="atk-action-btn atk-btn-roll" id="atk-phys-roll"
-                                            title="Sadece bu havuzu at">Zar At</button>
+                                            title="Roll this pool only" data-i18n-title="roll_this_pool_only" data-i18n="roll_this_pool_only">Roll Pool</button>
                                         <button type="button" class="atk-action-btn atk-btn-clear" id="atk-phys-clear"
-                                            title="Havuzu temizle">Temizle</button>
+                                            title="Clear pool" data-i18n-title="clear_pool_title" data-i18n="clear_btn">Clear</button>
                                     </div>
                                 </div>
                             </div>
@@ -913,15 +894,15 @@
                             <div class="atk-damage-channel" data-channel="elem1">
                                 <div class="atk-channel-header">
                                     <span class="atk-channel-label"
-                                        style="color:var(--danger, #ef4444);">Ateş/El.1</span>
+                                        style="color:var(--danger, #ef4444);" data-i18n="elem1_label">Fire/El.1</span>
                                 </div>
 
                                 <div class="atk-pool-display" id="atk-elem1-display">
                                     <div class="atk-pool-badges" id="atk-elem1-badges">
-                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                        <span class="atk-pool-empty-hint" data-i18n="no_dice_selected">No dice selected</span>
                                     </div>
                                     <div class="atk-pool-result hidden" id="atk-elem1-result">
-                                        <div class="atk-result-total">Toplam: <span id="atk-elem1-total-val">0</span>
+                                        <div class="atk-result-total"><span data-i18n="total">Total: </span><span id="atk-elem1-total-val">0</span>
                                         </div>
                                         <div class="atk-result-breakdown" id="atk-elem1-breakdown-val"></div>
                                     </div>
@@ -930,20 +911,20 @@
                                 <div class="atk-dice-toolbar">
                                     <div class="atk-dice-buttons">
                                         <button type="button" class="atk-die-btn atk-die-4" data-die="4"
-                                            title="d4 ekle">d4</button>
+                                            title="Add d4">d4</button>
                                         <button type="button" class="atk-die-btn atk-die-6" data-die="6"
-                                            title="d6 ekle">d6</button>
+                                            title="Add d6">d6</button>
                                         <button type="button" class="atk-die-btn atk-die-8" data-die="8"
-                                            title="d8 ekle">d8</button>
+                                            title="Add d8">d8</button>
                                         <button type="button" class="atk-die-btn atk-die-10" data-die="10"
-                                            title="d10 ekle">d10</button>
+                                            title="Add d10">d10</button>
                                         <button type="button" class="atk-die-btn atk-die-12" data-die="12"
-                                            title="d12 ekle">d12</button>
+                                            title="Add d12">d12</button>
                                         <button type="button" class="atk-die-btn atk-die-20" data-die="20"
-                                            title="d20 ekle">d20</button>
+                                            title="Add d20">d20</button>
                                     </div>
                                     <div class="atk-dice-actions">
-                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                        <div class="atk-bonus-stepper" title="Fixed damage bonus">
                                             <button type="button" class="atk-bonus-btn atk-bonus-minus"
                                                 data-action="minus">-</button>
                                             <input type="number" class="atk-bonus-input" id="atk-elem1-bonus" value="0"
@@ -952,9 +933,9 @@
                                                 data-action="plus">+</button>
                                         </div>
                                         <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem1-roll"
-                                            title="Sadece bu havuzu at">Zar At</button>
+                                            title="Roll this pool only" data-i18n-title="roll_this_pool_only" data-i18n="roll_this_pool_only">Roll Pool</button>
                                         <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem1-clear"
-                                            title="Havuzu temizle">Temizle</button>
+                                            title="Clear pool" data-i18n-title="clear_pool_title" data-i18n="clear_btn">Clear</button>
                                     </div>
                                 </div>
                             </div>
@@ -963,15 +944,15 @@
                             <div class="atk-damage-channel" data-channel="elem2">
                                 <div class="atk-channel-header">
                                     <span class="atk-channel-label"
-                                        style="color:var(--accent, #0ea5e9);">Buz/El.2</span>
+                                        style="color:var(--accent, #0ea5e9);" data-i18n="elem2_label">Cold/El.2</span>
                                 </div>
 
                                 <div class="atk-pool-display" id="atk-elem2-display">
                                     <div class="atk-pool-badges" id="atk-elem2-badges">
-                                        <span class="atk-pool-empty-hint">Zar seçilmedi</span>
+                                        <span class="atk-pool-empty-hint" data-i18n="no_dice_selected">No dice selected</span>
                                     </div>
                                     <div class="atk-pool-result hidden" id="atk-elem2-result">
-                                        <div class="atk-result-total">Toplam: <span id="atk-elem2-total-val">0</span>
+                                        <div class="atk-result-total"><span data-i18n="total">Total: </span><span id="atk-elem2-total-val">0</span>
                                         </div>
                                         <div class="atk-result-breakdown" id="atk-elem2-breakdown-val"></div>
                                     </div>
@@ -980,20 +961,20 @@
                                 <div class="atk-dice-toolbar">
                                     <div class="atk-dice-buttons">
                                         <button type="button" class="atk-die-btn atk-die-4" data-die="4"
-                                            title="d4 ekle">d4</button>
+                                            title="Add d4">d4</button>
                                         <button type="button" class="atk-die-btn atk-die-6" data-die="6"
-                                            title="d6 ekle">d6</button>
+                                            title="Add d6">d6</button>
                                         <button type="button" class="atk-die-btn atk-die-8" data-die="8"
-                                            title="d8 ekle">d8</button>
+                                            title="Add d8">d8</button>
                                         <button type="button" class="atk-die-btn atk-die-10" data-die="10"
-                                            title="d10 ekle">d10</button>
+                                            title="Add d10">d10</button>
                                         <button type="button" class="atk-die-btn atk-die-12" data-die="12"
-                                            title="d12 ekle">d12</button>
+                                            title="Add d12">d12</button>
                                         <button type="button" class="atk-die-btn atk-die-20" data-die="20"
-                                            title="d20 ekle">d20</button>
+                                            title="Add d20">d20</button>
                                     </div>
                                     <div class="atk-dice-actions">
-                                        <div class="atk-bonus-stepper" title="Sabit hasar bonusu">
+                                        <div class="atk-bonus-stepper" title="Fixed damage bonus">
                                             <button type="button" class="atk-bonus-btn atk-bonus-minus"
                                                 data-action="minus">-</button>
                                             <input type="number" class="atk-bonus-input" id="atk-elem2-bonus" value="0"
@@ -1002,20 +983,19 @@
                                                 data-action="plus">+</button>
                                         </div>
                                         <button type="button" class="atk-action-btn atk-btn-roll" id="atk-elem2-roll"
-                                            title="Sadece bu havuzu at">Zar At</button>
+                                            title="Roll this pool only" data-i18n-title="roll_this_pool_only" data-i18n="roll_this_pool_only">Roll Pool</button>
                                         <button type="button" class="atk-action-btn atk-btn-clear" id="atk-elem2-clear"
-                                            title="Havuzu temizle">Temizle</button>
+                                            title="Clear pool" data-i18n-title="clear_pool_title" data-i18n="clear_btn">Clear</button>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Büyü Slotu & Seviye Seçimi (Preset büyü slotu harcadığında veya serbest slot kullanımında görünür) -->
+                            <!-- Spell Slot & Level Controls -->
                             <div id="atk-spell-slot-control-group" class="atk-spell-slot-control-group"
                                 style="display:none;">
                                 <div class="atk-slot-control-header">
-                                    <span class="atk-slot-control-title">✨ Büyü Slotu Kullanımı</span>
-                                    <span id="atk-slot-control-badge" class="atk-slot-badge-info">Gerekli: Min Lvl
-                                        1</span>
+                                    <span class="atk-slot-control-title" data-i18n="spell_slot_control_title">✨ Spell Slot Usage</span>
+                                    <span id="atk-slot-control-badge" class="atk-slot-badge-info">Required: Min Lvl 1</span>
                                 </div>
                                 <div class="atk-spell-slots">
                                     <div class="atk-slot" data-slot-level="1"><span>Lvl 1:</span> <span
@@ -1044,19 +1024,17 @@
                                 <div id="atk-slot-scaling-note" class="atk-slot-scaling-note"></div>
                             </div>
 
-                            <button id="atk-btn-attack" class="atk-btn atk-btn-attack atk-btn-physical">⚔️
-                                SALDIR</button>
+                            <button id="atk-btn-attack" class="atk-btn atk-btn-attack atk-btn-physical" data-i18n="btn_attack">⚔️ ATTACK</button>
                         </div>
 
-                        <!-- Savaş Logu -->
+                        <!-- Combat Log -->
                         <div class="atk-section">
                             <div class="atk-section-header">
-                                <h5>Savaş Logu</h5>
-                                <button id="atk-btn-clear-log" class="atk-mini-btn">Temizle</button>
+                                <h5 data-i18n="combat_log_title">Combat Log</h5>
+                                <button id="atk-btn-clear-log" class="atk-mini-btn" data-i18n="clear_btn">Clear</button>
                             </div>
                             <div id="atk-combat-log" class="atk-combat-log"></div>
-                            <button id="atk-btn-apply-damage" class="atk-btn atk-btn-damage hidden">Hasarı
-                                Uygula</button>
+                            <button id="atk-btn-apply-damage" class="atk-btn atk-btn-damage hidden" data-i18n="apply_damage_btn">Apply Damage</button>
                         </div>
 
                     </div>
@@ -1064,133 +1042,129 @@
 
             </div>
 
-            <!-- Yalnızca Oyunculara Görünecek Bilgi Paneli -->
+            <!-- Player Info Panel (Visible to players only) -->
             <div id="player-info-panel" class="hidden player-info-section">
-                <h4>Karakterim</h4>
+                <h4 data-i18n="my_character_heading">My Character</h4>
                 <div id="my-character-card" class="character-card">
-                    <!-- JS ile doldurulacak -->
+                    <!-- Populated dynamically -->
                 </div>
 
                 <hr class="dm-divider dm-divider-spaced">
 
-                <h4>Token Özelleştir</h4>
+                <h4 data-i18n="customize_token_heading">Customize Token</h4>
                 <div class="form-group form-group-relative">
-                    <label>Token Resim URL:</label>
-                    <input type="text" id="player-token-img" placeholder="URL girin veya resim sürükleyin..."
+                    <label data-i18n="token_img_label_player">Token Image URL:</label>
+                    <input type="text" id="player-token-img" placeholder="Enter URL or drag an image..." data-i18n-placeholder="bg_url_placeholder"
                         class="input-light">
                 </div>
                 <div class="form-group">
-                    <label>Çizim ve Token Rengi:</label>
+                    <label data-i18n="token_color_label_player">Drawing & Token Color:</label>
                     <input type="color" id="player-token-color" value="#3498db">
                 </div>
-                <button id="btn-update-token" class="btn primary action-btn">Uygula</button>
+                <button id="btn-update-token" class="btn primary action-btn" data-i18n="apply_btn_player">Apply</button>
 
-                <button id="btn-clear-my-drawings" class="btn warning action-btn">Sadece Benim Çizimlerimi
-                    Temizle</button>
+                <button id="btn-clear-my-drawings" class="btn warning action-btn" data-i18n="clear_my_drawings_btn">Clear Only My Drawings</button>
 
                 <hr class="dm-divider dm-divider-spaced">
 
-                <h4>Diğer Oyuncular</h4>
+                <h4 data-i18n="other_players_heading">Other Players</h4>
                 <div id="other-players-list">
-                    <!-- JS ile doldurulacak -->
+                    <!-- Populated dynamically -->
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- DM Marker Düzenleme Modalı -->
+    <!-- DM Marker Edit Modal -->
     <div id="dm-marker-editor-modal" class="hidden dm-modal-overlay">
         <div class="modal-box dm-modal-box">
-            <h3 id="dm-marker-edit-title" class="dm-modal-title">Token Düzenle</h3>
+            <h3 id="dm-marker-edit-title" class="dm-modal-title" data-i18n="marker_editor_title">Edit Token</h3>
             <div class="form-group">
-                <label>İşaret/Token Adı (harf):</label>
-                <input type="text" id="dm-marker-edit-name" maxlength="2" placeholder="Ör: G" class="input-light">
+                <label data-i18n="marker_name_label">Marker/Token Name (letter):</label>
+                <input type="text" id="dm-marker-edit-name" maxlength="2" placeholder="e.g.: G" data-i18n-placeholder="marker_name_placeholder" class="input-light">
             </div>
             <div class="form-group form-group-relative">
-                <label>İşaret Resim URL:</label>
-                <input type="text" id="dm-marker-edit-img" placeholder="URL girin..." class="input-light">
+                <label data-i18n="token_img_label_player">Token Image URL:</label>
+                <input type="text" id="dm-marker-edit-img" placeholder="Enter URL..." class="input-light">
             </div>
             <div class="form-group">
-                <label>Renk:</label>
+                <label data-i18n="token_color_label">Color:</label>
                 <input type="color" id="dm-marker-edit-color" value="#f1c40f">
             </div>
 
-            <!-- Token / Varlık Türü (Düzenleme) -->
+            <!-- Token / Entity Type (Edit) -->
             <div class="form-group" style="margin-top:4px;">
-                <label>Token / Varlık Türü:</label>
+                <label data-i18n="token_type_label">Token / Entity Type:</label>
                 <select id="dm-marker-edit-type" class="atk-select"
                     style="width:100%; font-size:12px; font-weight:700;">
-                    <option value="creature">👤 Canlı Yaratık / NPC</option>
-                    <option value="explosive">💣 Patlayıcı Nesne (Ölümde Patlar)</option>
-                    <option value="aura">🔮 Aura / Totem (Her Tur Etki Yayar)</option>
-                    <option value="spawner">🌀 Çağırıcı / Yuva (Her Tur Düşman Doğurur)</option>
+                    <option value="creature" data-i18n="entity_creature">👤 Living Creature / NPC</option>
+                    <option value="explosive" data-i18n="entity_explosive">💣 Explosive Object (Detonates on death)</option>
+                    <option value="aura" data-i18n="entity_aura">🔮 Aura / Totem (Emits aura every turn)</option>
+                    <option value="spawner" data-i18n="entity_spawner">🌀 Spawner / Nest (Spawns enemies every turn)</option>
                 </select>
             </div>
 
-            <!-- Cansız Obje Özel Ayarları (Düzenleme) -->
+            <!-- Inanimate Object Custom Config (Edit) -->
             <div id="dm-marker-edit-object-config-wrap" class="hidden object-config-card"
                 style="margin: 8px 0; padding: 10px; background: rgba(30, 20, 10, 0.45); border-radius: 8px; border: 1px dashed #f59e0b;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                    <strong id="dm-marker-edit-object-badge-title" style="font-size:12px; color:#f59e0b;">⚙️ Nesne İşlev
-                        Ayarları</strong>
+                    <strong id="dm-marker-edit-object-badge-title" style="font-size:12px; color:#f59e0b;" data-i18n="object_function_title">⚙️ Object Function Settings</strong>
                     <div style="display:flex; gap:4px;">
                         <button type="button" id="dm-marker-btn-test-detonate" class="atk-mini-btn"
-                            style="background:#dc2626; color:#fff; border-color:#ef4444;" title="Şimdi Patlat">💥
-                            Patlat</button>
+                            style="background:#dc2626; color:#fff; border-color:#ef4444;" title="Detonate Now" data-i18n="btn_detonate_now">💥 Detonate</button>
                         <button type="button" id="dm-marker-btn-test-aura" class="atk-mini-btn"
-                            style="background:#7c3aed; color:#fff; border-color:#a855f7;" title="Aura Nabzı Gönder">🔮
-                            Nabız Ver</button>
+                            style="background:#7c3aed; color:#fff; border-color:#a855f7;" title="Pulse Aura" data-i18n="btn_pulse_aura">🔮 Pulse Aura</button>
                         <button type="button" id="dm-marker-btn-test-spawn" class="atk-mini-btn"
                             style="background:#059669; color:#fff; border-color:#10b981; display:none;"
-                            title="Şimdi 1 Dalga Düşman Doğur">🌀 Doğur (Test)</button>
+                            title="Spawn 1 Wave Now" data-i18n="btn_spawn_wave">🌀 Spawn Wave (Test)</button>
                     </div>
                 </div>
                 <div class="stats-grid stats-grid-2col">
                     <div class="form-group">
-                        <label style="font-size:11px;">Etki Yarıçapı (px):</label>
+                        <label style="font-size:11px;" data-i18n="object_radius_label">Effect Radius (px):</label>
                         <input type="number" id="dm-marker-edit-obj-radius" value="120" min="20" max="2000"
                             placeholder="120">
                     </div>
                     <div class="form-group">
-                        <label style="font-size:11px;">Hasar Miktarı:</label>
+                        <label style="font-size:11px;" data-i18n="object_damage_label">Damage Amount:</label>
                         <input type="number" id="dm-marker-edit-obj-damage" value="20" min="0" placeholder="0">
                     </div>
                 </div>
                 <div class="stats-grid stats-grid-2col" style="margin-top: 4px;">
                     <div class="form-group">
-                        <label style="font-size:11px;">Hasar Türü:</label>
+                        <label style="font-size:11px;" data-i18n="object_damage_type_label">Damage Type:</label>
                         <select id="dm-marker-edit-obj-damage-type" class="atk-select" style="font-size:11px;">
-                            <option value="fire">🔥 Ateş (Fire)</option>
-                            <option value="necrotic">💀 Nekrotik (Necrotic)</option>
-                            <option value="poison">🧪 Zehir (Poison)</option>
-                            <option value="acid">🧪 Asit (Acid)</option>
-                            <option value="lightning">⚡ Yıldırım (Lightning)</option>
-                            <option value="cold">❄️ Soğuk (Cold)</option>
-                            <option value="force">🌀 Kuvvet (Force)</option>
-                            <option value="radiant">✨ Işıma (Radiant)</option>
-                            <option value="physical">⚔️ Fiziksel (Physical)</option>
+                            <option value="fire" data-i18n="damage_type_fire">🔥 Fire</option>
+                            <option value="necrotic" data-i18n="damage_type_necrotic">💀 Necrotic</option>
+                            <option value="poison" data-i18n="damage_type_poison">🧪 Poison</option>
+                            <option value="acid" data-i18n="damage_type_acid">🧪 Acid</option>
+                            <option value="lightning" data-i18n="damage_type_lightning">⚡ Lightning</option>
+                            <option value="cold" data-i18n="damage_type_cold">❄️ Cold</option>
+                            <option value="force" data-i18n="damage_type_force">🌀 Force</option>
+                            <option value="radiant" data-i18n="damage_type_radiant">✨ Radiant</option>
+                            <option value="physical" data-i18n="damage_type_physical">⚔️ Physical</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label style="font-size:11px;">Hedef Filtresi:</label>
+                        <label style="font-size:11px;" data-i18n="target_filter_label">Target Filter:</label>
                         <select id="dm-marker-edit-obj-target-filter" class="atk-select" style="font-size:11px;">
-                            <option value="all">👥 Herkes (Dost & Düşman)</option>
-                            <option value="players">🛡️ Sadece Oyuncular</option>
-                            <option value="markers">👾 Sadece Yaratıklar</option>
+                            <option value="all" data-i18n="target_filter_all">👥 Everyone (Friend & Foe)</option>
+                            <option value="players" data-i18n="target_filter_players">🛡️ Players Only</option>
+                            <option value="markers" data-i18n="target_filter_markers">👾 Creatures Only</option>
                         </select>
                     </div>
                 </div>
 
-                <!-- Uygulanacak Durum Efektleri -->
+                <!-- Applied Status Effects -->
                 <div class="form-group" style="margin-top: 6px;">
-                    <label style="font-size:11px;">✨ Verilecek Durum Efekti:</label>
+                    <label style="font-size:11px;" data-i18n="apply_status_effect_label">✨ Apply Status Effect:</label>
                     <div style="display:flex; gap:6px;">
                         <select id="dm-marker-edit-obj-effect-select" class="atk-select"
                             style="flex:1; font-size:11px;">
-                            <option value="">— Durum Efekti Seç (Opsiyonel) —</option>
+                            <option value="" data-i18n="status_select_opt">— Select Status Effect (Optional) —</option>
                         </select>
-                        <input type="number" id="dm-marker-edit-obj-effect-duration" placeholder="Tur" min="1" max="20"
-                            style="width:55px; font-size:11px;" title="Boş ise varsayılan/kalıcı">
+                        <input type="number" id="dm-marker-edit-obj-effect-duration" placeholder="Rounds" data-i18n-placeholder="duration_placeholder" min="1" max="20"
+                            style="width:55px; font-size:11px;" title="Blank=Permanent">
                         <button type="button" id="dm-marker-edit-obj-btn-add-effect" class="atk-mini-btn"
                             style="padding:2px 8px;">➕</button>
                     </div>
@@ -1198,49 +1172,47 @@
                         style="margin-top: 4px; min-height: 20px;"></div>
                 </div>
 
-                <!-- Patlayıcıya Özel: Patlayınca Yok Ol -->
+                <!-- Explosive Specific: Destroy on Detonation -->
                 <div id="dm-marker-edit-obj-destroy-row" class="form-group form-group-checkbox"
                     style="display:flex; align-items:center; gap:8px; margin-top:6px;">
                     <input type="checkbox" id="dm-marker-edit-obj-destroy" checked
                         style="width:15px; height:15px; cursor:pointer;">
                     <label for="dm-marker-edit-obj-destroy"
-                        style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Patlayınca Haritadan
-                        Silinsin</label>
+                        style="cursor:pointer; font-size:11px; color:#f87171; margin:0;" data-i18n="destroy_on_detonate">💥 Remove from map when exploded</label>
                 </div>
 
-                <!-- Auraya Özel: Tetiklenme Zamanı -->
+                <!-- Aura Specific: Timing -->
                 <div id="dm-marker-edit-obj-timing-row" class="form-group hidden" style="margin-top:6px;">
-                    <label style="font-size:11px; color:#c084fc;">🔮 Aura Tetiklenme Zamanı:</label>
+                    <label style="font-size:11px; color:#c084fc;" data-i18n="aura_timing_label">🔮 Aura Trigger Timing:</label>
                     <select id="dm-marker-edit-obj-timing" class="atk-select" style="font-size:11px;">
-                        <option value="turn">⚡ Sırası Geldiğinde (Her Tur)</option>
-                        <option value="round">🔄 Raund Başlangıcında</option>
+                        <option value="turn" data-i18n="aura_timing_turn">⚡ On its turn (Every Turn)</option>
+                        <option value="round" data-i18n="aura_timing_round">🔄 At Round Start</option>
                     </select>
                 </div>
 
-                <!-- Çağırıcı / Yuva Özel Ayarları (Düzenleme) -->
+                <!-- Spawner Specific -->
                 <div id="dm-marker-edit-obj-spawner-section" class="hidden"
                     style="margin-top:6px; background:rgba(16, 185, 129, 0.12); border:1px solid rgba(16, 185, 129, 0.3); border-radius:6px; padding:8px;">
                     <div class="form-group">
-                        <label style="font-size:11px; color:#34d399; font-weight:700;">👾 Doğurulacak Düşman
-                            Şablonu:</label>
+                        <label style="font-size:11px; color:#34d399; font-weight:700;" data-i18n="spawner_preset_label">👾 Enemy Template to Spawn:</label>
                         <select id="dm-marker-edit-obj-spawner-preset" class="atk-select" style="font-size:11px;">
-                            <option value="">— Hazır Düşman Seçin —</option>
+                            <option value="" data-i18n="spawner_preset_opt">— Select Enemy —</option>
                         </select>
                     </div>
                     <div class="stats-grid stats-grid-3col" style="margin-top:4px;">
                         <div class="form-group">
-                            <label style="font-size:11px; color:#a7f3d0;">Dalga Başı Adet:</label>
+                            <label style="font-size:11px; color:#a7f3d0;" data-i18n="spawner_count_label">Count Per Wave:</label>
                             <input type="number" id="dm-marker-edit-obj-spawner-count" value="1" min="1" max="10">
                         </div>
                         <div class="form-group">
-                            <label style="font-size:11px; color:#a7f3d0;">Doğma Menzili (px):</label>
+                            <label style="font-size:11px; color:#a7f3d0;" data-i18n="spawner_radius_label">Spawn Radius (px):</label>
                             <input type="number" id="dm-marker-edit-obj-spawner-radius" value="85" min="40" max="500">
                         </div>
                         <div class="form-group">
-                            <label style="font-size:11px; color:#a7f3d0;">Zamanlama:</label>
+                            <label style="font-size:11px; color:#a7f3d0;" data-i18n="spawner_timing_label">Timing:</label>
                             <select id="dm-marker-edit-obj-spawner-timing" class="atk-select" style="font-size:11px;">
-                                <option value="turn">⚡ Sırası Geldiğinde (Tur)</option>
-                                <option value="round">🔄 Raund Başlangıcında</option>
+                                <option value="turn" data-i18n="aura_timing_turn">⚡ On its turn (Every Turn)</option>
+                                <option value="round" data-i18n="aura_timing_round">🔄 At Round Start</option>
                             </select>
                         </div>
                     </div>
@@ -1249,22 +1221,21 @@
                         <input type="checkbox" id="dm-marker-edit-obj-spawner-destroy" checked
                             style="width:15px; height:15px; cursor:pointer;">
                         <label for="dm-marker-edit-obj-spawner-destroy"
-                            style="cursor:pointer; font-size:11px; color:#f87171; margin:0;">💥 Kırılınca / Canı 0
-                            Olunca Haritadan Silinsin</label>
+                            style="cursor:pointer; font-size:11px; color:#f87171; margin:0;" data-i18n="spawner_destroy_label">💥 Destroy / Remove from map when HP reaches 0</label>
                     </div>
                 </div>
             </div>
             <div class="stats-grid stats-grid-3col">
-                <div class="form-group"><label>Mevcut HP:</label><input type="number" id="dm-marker-edit-hp"></div>
-                <div class="form-group"><label>Maks HP:</label><input type="number" id="dm-marker-edit-max-hp"></div>
-                <div class="form-group"><label>Boyut (px):</label><input type="number" id="dm-marker-edit-size"></div>
+                <div class="form-group"><label data-i18n="current_hp_label">Current HP:</label><input type="number" id="dm-marker-edit-hp"></div>
+                <div class="form-group"><label data-i18n="max_hp_label">Max HP:</label><input type="number" id="dm-marker-edit-max-hp"></div>
+                <div class="form-group"><label data-i18n="size_px_label">Size (px):</label><input type="number" id="dm-marker-edit-size"></div>
             </div>
             <div class="stats-grid stats-grid-2col">
-                <div class="form-group"><label>AC:</label><input type="number" id="dm-marker-edit-ac"></div>
-                <div class="form-group"><label>AC Bonus:</label><input type="number" id="dm-marker-edit-ac-bonus"></div>
+                <div class="form-group"><label data-i18n="ac_label">AC:</label><input type="number" id="dm-marker-edit-ac"></div>
+                <div class="form-group"><label data-i18n="ac_bonus_label">AC Bonus:</label><input type="number" id="dm-marker-edit-ac-bonus"></div>
             </div>
 
-            <!-- Kenan Modu: Marker Karanlık Alanı -->
+            <!-- Kenan Mode: Marker Darkness Field -->
             <div class="kenan-only dm-kenan-marker-darkness-edit-section"
                 style="margin-top:6px; padding:8px; background:rgba(147, 51, 234, 0.1); border-radius:6px; border:1px solid rgba(168, 85, 247, 0.35);">
                 <div class="form-group form-group-checkbox"
@@ -1272,18 +1243,17 @@
                     <input type="checkbox" id="dm-marker-edit-has-darkness"
                         style="width:16px; height:16px; cursor:pointer;">
                     <label for="dm-marker-edit-has-darkness"
-                        style="cursor:pointer; font-weight:700; color:#c084fc; font-size:12px; margin:0;">🌑 Karanlığa
-                        Sahip Olsun</label>
+                        style="cursor:pointer; font-weight:700; color:#c084fc; font-size:12px; margin:0;" data-i18n="kenan_has_darkness">🌑 Possesses Darkness</label>
                 </div>
                 <div id="dm-marker-edit-darkness-inputs" class="stats-grid stats-grid-2col hidden"
                     style="margin-top:6px;">
-                    <div class="form-group"><label style="color:#c084fc; font-size:11px;">Mevcut Karanlık:</label><input
+                    <div class="form-group"><label style="color:#c084fc; font-size:11px;" data-i18n="kenan_current_darkness">Current Darkness:</label><input
                             type="number" id="dm-marker-edit-darkness" placeholder="0" min="0"></div>
-                    <div class="form-group"><label style="color:#c084fc; font-size:11px;">Maks Karanlık:</label><input
+                    <div class="form-group"><label style="color:#c084fc; font-size:11px;" data-i18n="kenan_max_darkness">Max Darkness:</label><input
                             type="number" id="dm-marker-edit-max-darkness" placeholder="100" min="1"></div>
                 </div>
             </div>
-            <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;">Stat / Bonus</p>
+            <p style="font-size:11px; color:#bdc3c7; margin:6px 0 2px;" data-i18n="stats_label">Stat / Bonus</p>
             <div class="stats-grid">
                 <div class="form-group"><label>STR:</label><input type="number" id="dm-marker-edit-str"
                         placeholder="0"><input type="number" id="dm-marker-edit-str-bonus" placeholder="B"
@@ -1305,54 +1275,52 @@
                         style="margin-top:2px;"></div>
             </div>
 
-            <!-- Aktif Durum Efektleri -->
+            <!-- Active Status Effects -->
             <div class="token-status-effects-section">
                 <div class="token-status-effects-header">
-                    <label class="token-status-effects-label">✨ Aktif Durum Efektleri:</label>
+                    <label class="token-status-effects-label" data-i18n="active_status_effects_label">✨ Active Status Effects:</label>
                     <button type="button" id="dm-marker-clear-all-effects"
-                        class="atk-mini-btn token-clear-all-effects-btn" style="display:none;">Tümünü Kaldır</button>
+                        class="atk-mini-btn token-clear-all-effects-btn" style="display:none;" data-i18n="clear_all_effects_btn">Remove All</button>
                 </div>
                 <div id="dm-marker-active-effects" class="status-target-effects-list">
-                    <!-- JS ile doldurulacak -->
+                    <!-- Populated dynamically -->
                 </div>
                 <div class="token-add-effect-row">
                     <select id="dm-marker-add-effect-select" class="atk-select token-add-effect-select">
-                        <option value="">— Durum Efekti Ekle —</option>
+                        <option value="" data-i18n="add_status_effect_opt">— Add Status Effect —</option>
                     </select>
                     <input type="number" id="dm-marker-add-effect-duration" class="atk-input token-add-effect-duration"
-                        placeholder="Tur (Boş=Kalıcı)" min="1" max="99"
-                        title="Tur sayısı (boş bırakılırsa varsayılan/kalıcı)">
-                    <button type="button" id="dm-marker-btn-add-effect" class="atk-mini-btn token-add-effect-btn">➕
-                        Ekle</button>
+                        placeholder="Rounds (Blank=Permanent)" data-i18n-placeholder="duration_placeholder" min="1" max="99"
+                        title="Rounds (blank = permanent)">
+                    <button type="button" id="dm-marker-btn-add-effect" class="atk-mini-btn token-add-effect-btn" data-i18n="add_effect_btn">➕ Add</button>
                 </div>
             </div>
 
-            <!-- Atanmış Saldırılar (Attack Loadout) -->
+            <!-- Assigned Attacks (Attack Loadout) -->
             <div class="token-assigned-attacks-section">
                 <div class="token-assigned-attacks-header">
                     <div class="token-assigned-attacks-title-row">
-                        <label class="token-assigned-attacks-label">⚔️ Atanmış Saldırılar (Hotbar Loadout):</label>
-                        <span id="dm-marker-assigned-count" class="token-assigned-count-badge">(0 Seçili)</span>
+                        <label class="token-assigned-attacks-label" data-i18n="assigned_attacks_title">⚔️ Assigned Attacks (Hotbar Loadout):</label>
+                        <span id="dm-marker-assigned-count" class="token-assigned-count-badge">(0 Selected)</span>
                     </div>
-                    <span class="token-assigned-attacks-hint">Alt barda görünecek saldırıları seçin (Sınırsız)</span>
+                    <span class="token-assigned-attacks-hint" data-i18n="assigned_attacks_hint">Select attacks to display on bottom hotbar (Unlimited)</span>
                 </div>
                 <div class="assigned-attacks-toolbar">
-                    <input type="text" id="dm-marker-assigned-search" placeholder="Saldırı ara..."
+                    <input type="text" id="dm-marker-assigned-search" placeholder="Search attacks..." data-i18n-placeholder="search_attacks_placeholder"
                         class="assigned-search-input">
                     <div class="assigned-quick-actions">
-                        <button type="button" id="dm-marker-assigned-select-all" class="atk-mini-btn">Tümünü
-                            Seç</button>
-                        <button type="button" id="dm-marker-assigned-clear-all" class="atk-mini-btn">Temizle</button>
+                        <button type="button" id="dm-marker-assigned-select-all" class="atk-mini-btn" data-i18n="select_all_btn">Select All</button>
+                        <button type="button" id="dm-marker-assigned-clear-all" class="atk-mini-btn" data-i18n="clear_btn">Clear</button>
                     </div>
                 </div>
                 <div id="dm-marker-assigned-attacks" class="assigned-attacks-grid">
-                    <!-- JS ile tüm presetler checkbox listesi olarak doldurulacak -->
+                    <!-- Populated dynamically -->
                 </div>
             </div>
 
             <div class="button-group button-group-row" style="margin-top: 12px;">
-                <button id="btn-save-marker-edit" class="btn success action-btn dm-edit-action-btn">Kaydet</button>
-                <button id="btn-cancel-marker-edit" class="btn back-btn action-btn dm-edit-action-btn">İptal</button>
+                <button id="btn-save-marker-edit" class="btn success action-btn dm-edit-action-btn" data-i18n="save_marker_edit_btn">Save</button>
+                <button id="btn-cancel-marker-edit" class="btn back-btn action-btn dm-edit-action-btn" data-i18n="cancel_marker_edit_btn">Cancel</button>
             </div>
         </div>
     </div>
@@ -1361,49 +1329,48 @@
     <div id="dm-status-toolbox-modal" class="hidden dm-modal-overlay">
         <div class="modal-box dm-modal-box status-toolbox-modal-box">
             <div class="status-modal-header">
-                <h3 class="dm-modal-title" style="margin-bottom:0;">✨ Status Efektleri & Yaratıcı</h3>
-                <button type="button" class="btn-close-modal" id="btn-close-status-toolbox" title="Kapat">✕</button>
+                <h3 class="dm-modal-title" style="margin-bottom:0;" data-i18n="status_toolbox_title">✨ Status Effects & Creator</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-status-toolbox" title="Close" data-i18n-title="close">✕</button>
             </div>
 
-            <!-- 1. Hedef Seçim Alanı -->
+            <!-- 1. Target Selection Area -->
             <div class="status-target-section">
                 <div class="status-target-header">
-                    <label class="status-section-label">🎯 Hedef Token:</label>
-                    <span class="status-target-hint">💡 Ctrl+Click ile haritadan da hedef seçebilirsiniz</span>
+                    <label class="status-section-label" data-i18n="status_target_token_label">🎯 Target Token:</label>
+                    <span class="status-target-hint" data-i18n="status_target_hint">💡 You can also select targets with Ctrl+Click from the map</span>
                 </div>
                 <select id="status-target-select" class="atk-select status-target-select">
-                    <option value="selected">-- Seçili Hedefler (Haritadakiler) --</option>
+                    <option value="selected" data-i18n="status_target_selected_opt">-- Selected Targets (On Map) --</option>
                 </select>
                 <div id="status-target-active-effects" class="status-target-effects-list">
-                    <!-- Hedefin üzerindeki aktif efektler ve silme butonları buraya gelir -->
+                    <!-- Populated dynamically -->
                 </div>
             </div>
 
-            <!-- 2. Sekmeler (Tabs) -->
+            <!-- 2. Tabs -->
             <div class="status-tabs-nav">
-                <button type="button" class="status-tab-btn active" data-tab="presets">📜 Hazır & Özel
-                    Şablonlar</button>
-                <button type="button" class="status-tab-btn" data-tab="builder">🛠️ Özel Efekt Yarat (Builder)</button>
+                <button type="button" class="status-tab-btn active" data-tab="presets" data-i18n="status_tab_presets">📜 Presets & Custom Templates</button>
+                <button type="button" class="status-tab-btn" data-tab="builder" data-i18n="status_tab_builder">🛠️ Custom Effect Builder</button>
             </div>
 
-            <!-- Tab 1: Şablonlar Kataloğu -->
+            <!-- Tab 1: Presets Catalog -->
             <div id="status-tab-presets" class="status-tab-pane active">
                 <div class="status-presets-grid" id="status-presets-grid">
-                    <!-- JS ile dinamik doldurulacak -->
+                    <!-- Populated dynamically -->
                 </div>
             </div>
 
-            <!-- Tab 2: Custom Effect Builder Formu -->
+            <!-- Tab 2: Custom Effect Builder Form -->
             <div id="status-tab-builder" class="status-tab-pane">
                 <div class="status-builder-form">
                     <div class="form-group">
-                        <label>Efekt Adı:</label>
-                        <input type="text" id="status-builder-name" placeholder="Örn: Alevli Lanet, Kutsal Koruma"
+                        <label data-i18n="status_effect_name_label">Effect Name:</label>
+                        <input type="text" id="status-builder-name" placeholder="e.g.: Flaming Curse, Divine Shield" data-i18n-placeholder="status_name_placeholder"
                             class="input-light">
                     </div>
 
                     <div class="form-group">
-                        <label>İkon / Emoji:</label>
+                        <label data-i18n="status_icon_label">Icon / Emoji:</label>
                         <div class="status-icon-picker-row">
                             <input type="text" id="status-builder-icon" value="✨" maxlength="4"
                                 class="status-icon-input input-light">
@@ -1429,131 +1396,122 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="status-section-label">Modifikatör Kuralları:</label>
+                        <label class="status-section-label" data-i18n="status_rules_heading">Modifier Rules:</label>
                         <div class="status-rules-checklist">
-                            <!-- DoT Hasarı -->
+                            <!-- DoT Damage -->
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-dot">
-                                    <span>🔥 Tur Sonu Hasar (DoT)</span>
+                                    <span data-i18n="rule_dot">🔥 Damage Over Turn (DoT)</span>
                                 </label>
                                 <div class="status-dot-inputs hidden" id="status-dot-inputs-row">
                                     <input type="number" id="status-builder-dot-min" placeholder="Min" value="1" min="1"
                                         class="atk-input status-mini-input">
                                     <span>-</span>
-                                    <input type="number" id="status-builder-dot-max" placeholder="Maks" value="6"
+                                    <input type="number" id="status-builder-dot-max" placeholder="Max" value="6"
                                         min="1" class="atk-input status-mini-input">
-                                    <span style="font-size:11px; color:#bdc3c7;">Hasar</span>
+                                    <span style="font-size:11px; color:#bdc3c7;">Damage</span>
                                 </div>
                             </div>
 
-                            <!-- Körlük -->
+                            <!-- Blindness -->
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-blind">
-                                    <span>👁️ Körlük <small style="color:#bdc3c7;">(Kendi yapacağı saldırılar
-                                            dezavantajlı)</small></span>
+                                    <span>👁️ <span data-i18n="rule_blind">Blindness</span> <small style="color:#bdc3c7;" data-i18n="rule_blind_desc">(Own attacks have disadvantage)</small></span>
                                 </label>
                             </div>
 
-                            <!-- Felç -->
+                            <!-- Paralyzed -->
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-paralyzed">
-                                    <span>⚡ Felç <small style="color:#bdc3c7;">(Gelen tüm saldırılar kesin vurur & 2x
-                                            kritik)</small></span>
+                                    <span>⚡ <span data-i18n="rule_paralyzed">Paralyzed</span> <small style="color:#bdc3c7;" data-i18n="rule_paralyzed_desc">(All incoming attacks auto-hit & 2x crit)</small></span>
                                 </label>
                             </div>
 
-                            <!-- Barınak -->
+                            <!-- Shelter -->
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-shelter">
-                                    <span>🛡️ Barınak <small style="color:#bdc3c7;">(Hasar almaz -
-                                            Dokunulmaz)</small></span>
+                                    <span>🛡️ <span data-i18n="rule_shelter">Shelter</span> <small style="color:#bdc3c7;" data-i18n="rule_shelter_desc">(Takes no damage - Invulnerable)</small></span>
                                 </label>
                             </div>
 
-                            <!-- Hazır -->
+                            <!-- Prepared -->
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-prepared">
-                                    <span>🎯 Hazır <small style="color:#bdc3c7;">(Gelen saldırılar dezavantajlı
-                                            olur)</small></span>
+                                    <span>🎯 <span data-i18n="rule_prepared">Prepared</span> <small style="color:#bdc3c7;" data-i18n="rule_prepared_desc">(Incoming attacks have disadvantage)</small></span>
                                 </label>
                             </div>
 
-                            <!-- Sabitlenemez / Durdurulamaz -->
+                            <!-- Unstoppable -->
                             <div class="status-rule-item">
                                 <label class="status-checkbox-label">
                                     <input type="checkbox" id="status-rule-unstoppable">
-                                    <span>🦏 Durdurulamaz <small style="color:#bdc3c7;">(Felç etkisine
-                                            bağışıklık)</small></span>
+                                    <span>🦏 <span data-i18n="rule_unstoppable">Unstoppable</span> <small style="color:#bdc3c7;" data-i18n="rule_unstoppable_desc">(Immune to paralysis)</small></span>
                                 </label>
                             </div>
 
-                            <!-- Hasar Dirençleri (0.5x) -->
+                            <!-- Damage Resistances (0.5x) -->
                             <div class="status-rule-group-title"
-                                style="margin-top:8px; font-size:11px; font-weight:bold; color:var(--accent-hover);">🛡️
-                                Hasar Dirençleri (0.5x Hasar):</div>
+                                style="margin-top:8px; font-size:11px; font-weight:bold; color:var(--accent-hover);" data-i18n="rule_res_title">🛡️ Damage Resistances (0.5x Damage):</div>
                             <div class="status-subrules-grid"
                                 style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px;">
                                 <label class="status-checkbox-label"><input type="checkbox"
-                                        id="status-rule-res-bludgeoning"> <span>🔨 Ezme Direnci</span></label>
+                                        id="status-rule-res-bludgeoning"> <span data-i18n="res_bludgeoning">🔨 Bludgeoning Resistance</span></label>
                                 <label class="status-checkbox-label"><input type="checkbox"
-                                        id="status-rule-res-slashing"> <span>⚔️ Kesme Direnci</span></label>
+                                        id="status-rule-res-slashing"> <span data-i18n="res_slashing">⚔️ Slashing Resistance</span></label>
                                 <label class="status-checkbox-label"><input type="checkbox"
-                                        id="status-rule-res-piercing"> <span>🏹 Delme Direnci</span></label>
+                                        id="status-rule-res-piercing"> <span data-i18n="res_piercing">🏹 Piercing Resistance</span></label>
                                 <label class="status-checkbox-label"><input type="checkbox" id="status-rule-res-magic">
-                                    <span>🔮 Büyü Direnci</span></label>
+                                    <span data-i18n="res_magic">🔮 Magic Resistance</span></label>
                             </div>
 
-                            <!-- Hasar Zayıflıkları (2x) -->
+                            <!-- Damage Vulnerabilities (2x) -->
                             <div class="status-rule-group-title"
-                                style="margin-top:8px; font-size:11px; font-weight:bold; color:var(--danger, #ef4444);">
-                                💥 Hasar Zayıflıkları (2x Hasar):</div>
+                                style="margin-top:8px; font-size:11px; font-weight:bold; color:var(--danger, #ef4444);" data-i18n="rule_vuln_title">💥 Damage Vulnerabilities (2x Damage):</div>
                             <div class="status-subrules-grid"
                                 style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px;">
                                 <label class="status-checkbox-label"><input type="checkbox"
-                                        id="status-rule-vuln-bludgeoning"> <span>💥🔨 Ezme Zayıflığı</span></label>
+                                        id="status-rule-vuln-bludgeoning"> <span data-i18n="vuln_bludgeoning">💥🔨 Bludgeoning Vulnerability</span></label>
                                 <label class="status-checkbox-label"><input type="checkbox"
-                                        id="status-rule-vuln-slashing"> <span>💥⚔️ Kesme Zayıflığı</span></label>
+                                        id="status-rule-vuln-slashing"> <span data-i18n="vuln_slashing">💥⚔️ Slashing Vulnerability</span></label>
                                 <label class="status-checkbox-label"><input type="checkbox"
-                                        id="status-rule-vuln-piercing"> <span>💥🏹 Delme Zayıflığı</span></label>
+                                        id="status-rule-vuln-piercing"> <span data-i18n="vuln_piercing">💥🏹 Piercing Vulnerability</span></label>
                                 <label class="status-checkbox-label"><input type="checkbox" id="status-rule-vuln-magic">
-                                    <span>💥✨ Büyü Zayıflığı</span></label>
+                                    <span data-i18n="vuln_magic">💥✨ Magic Vulnerability</span></label>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Süre Ayarı -->
+                    <!-- Duration Setting -->
                     <div class="form-group status-duration-group">
-                        <label>Süre:</label>
+                        <label data-i18n="duration_label">Duration:</label>
                         <div class="status-duration-row">
                             <div class="status-dur-input-wrap">
                                 <input type="number" id="status-builder-duration" value="2" min="1" max="50"
                                     class="input-light" style="width: 80px;">
-                                <span>Tur / Round</span>
+                                <span data-i18n="duration_rounds_label">Rounds / Turns</span>
                             </div>
                             <label class="status-checkbox-label" style="margin-left: 14px;">
                                 <input type="checkbox" id="status-builder-permanent">
-                                <span>Süresiz / Kalıcı</span>
+                                <span data-i18n="duration_permanent_label">Permanent / Indefinite</span>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Butonlar -->
+                    <!-- Action Buttons -->
                     <div class="button-group button-group-row status-builder-actions">
-                        <button type="button" id="btn-save-custom-status" class="btn primary action-btn">💾 Şablonu
-                            Kaydet</button>
-                        <button type="button" id="btn-apply-custom-status" class="btn success action-btn">⚡ Hedefe
-                            Uygula</button>
+                        <button type="button" id="btn-save-custom-status" class="btn primary action-btn" data-i18n="btn_save_status_template">💾 Save Template</button>
+                        <button type="button" id="btn-apply-custom-status" class="btn success action-btn" data-i18n="btn_apply_status_to_target">⚡ Apply to Target</button>
                     </div>
                 </div>
             </div>
 
             <div class="button-group button-group-row" style="margin-top: 14px; justify-content: flex-end;">
-                <button type="button" class="btn back-btn action-btn" id="btn-cancel-status-toolbox">Kapat</button>
+                <button type="button" class="btn back-btn action-btn" id="btn-cancel-status-toolbox" data-i18n="close">Close</button>
             </div>
         </div>
     </div>
@@ -1562,51 +1520,51 @@
     <div id="dm-attack-presets-modal" class="hidden dm-modal-overlay">
         <div class="modal-box dm-modal-box attack-presets-modal-box">
             <div class="status-modal-header">
-                <h3 class="dm-modal-title" style="margin-bottom:0;">🎯 Hazır Saldırı Presetleri & Yöneticisi</h3>
-                <button type="button" class="btn-close-modal" id="btn-close-attack-presets" title="Kapat">✕</button>
+                <h3 class="dm-modal-title" style="margin-bottom:0;" data-i18n="attack_presets_modal_title">🎯 Attack Presets Manager</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-attack-presets" title="Close" data-i18n-title="modal_close_title">✕</button>
             </div>
 
-            <!-- Sekmeler (Tabs) -->
+            <!-- Tabs -->
             <div class="status-tabs-nav">
-                <button type="button" class="atk-tab-btn active" data-tab="list">📜 Saldırı Presetleri Kataloğu</button>
-                <button type="button" class="atk-tab-btn" data-tab="builder">🛠️ Yeni Saldırı Yarat (Builder)</button>
+                <button type="button" class="atk-tab-btn active" data-tab="list" data-i18n="atk_tab_list">📜 Attack Presets Catalog</button>
+                <button type="button" class="atk-tab-btn" data-tab="builder" data-i18n="atk_tab_builder">🛠️ Create New Attack (Builder)</button>
             </div>
 
-            <!-- Tab 1: Preset Kataloğu Listesi -->
+            <!-- Tab 1: Presets Catalog List -->
             <div id="atk-tab-list" class="atk-tab-pane active">
                 <div class="atk-catalog-toolbar">
                     <div class="atk-catalog-search-wrap">
                         <span class="atk-catalog-search-icon">🔍</span>
-                        <input type="text" id="atk-catalog-search" placeholder="Presetlerde ara (ad, stat, tür)..."
+                        <input type="text" id="atk-catalog-search" placeholder="Search presets (name, stat, type)..." data-i18n-placeholder="atk_search_placeholder"
                             class="atk-search-input">
                     </div>
-                    <span id="atk-catalog-count-badge" class="atk-count-badge">0 Preset</span>
+                    <span id="atk-catalog-count-badge" class="atk-count-badge">0 Presets</span>
                     <button type="button" id="btn-catalog-new-preset"
-                        class="btn primary action-btn atk-new-preset-btn">+ Yeni Preset Ekle</button>
+                        class="btn primary action-btn atk-new-preset-btn" data-i18n="btn_new_preset">+ Add New Preset</button>
                 </div>
                 <div class="atk-presets-grid" id="atk-presets-grid">
-                    <!-- JS ile dinamik doldurulacak -->
+                    <!-- Populated dynamically -->
                 </div>
             </div>
 
-            <!-- Tab 2: Preset Creator Builder Formu -->
+            <!-- Tab 2: Preset Creator Builder Form -->
             <div id="atk-tab-builder" class="atk-tab-pane">
                 <div id="atk-builder-mode-banner" class="atk-builder-mode-banner">
-                    <span id="atk-builder-mode-text">✨ Yeni Saldırı Preseti Yarat (Sınırsız)</span>
+                    <span id="atk-builder-mode-text" data-i18n="builder_mode_new">✨ Create New Attack Preset (Unlimited)</span>
                     <button type="button" id="btn-builder-reset" class="atk-mini-btn btn-builder-cancel-edit"
-                        style="display:none;">✕ İptal / Yeni Presete Dön</button>
+                        style="display:none;" data-i18n="btn_cancel_edit_preset">✕ Cancel / Back to New Preset</button>
                 </div>
                 <div class="atk-builder-form">
                     <input type="hidden" id="atk-builder-id" value="">
 
                     <div class="stats-grid stats-grid-3col">
                         <div class="form-group">
-                            <label>Saldırı / Aksiyon Adı:</label>
-                            <input type="text" id="atk-builder-name" placeholder="Örn: Kutsal Şifa, Vampirik Darbe"
+                            <label data-i18n="atk_name_label">Attack / Action Name:</label>
+                            <input type="text" id="atk-builder-name" placeholder="e.g.: Divine Smite, Vampiric Strike" data-i18n-placeholder="atk_name_placeholder"
                                 class="input-light">
                         </div>
                         <div class="form-group">
-                            <label>ZarStat (Bonus):</label>
+                            <label data-i18n="atk_stat_label">Dice Stat (Bonus):</label>
                             <select id="atk-builder-stat" class="atk-select">
                                 <option value="STR">STR</option>
                                 <option value="DEX">DEX</option>
@@ -1617,42 +1575,42 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Hasar Türü:</label>
+                            <label data-i18n="damage_channels_heading">Damage Type:</label>
                             <select id="atk-builder-phys-type" class="atk-select">
-                                <option value="slashing">⚔️ Kesme</option>
-                                <option value="bludgeoning">🔨 Ezme</option>
-                                <option value="piercing">🏹 Delme</option>
-                                <option value="magic">✨ Büyü</option>
+                                <option value="slashing" data-i18n="type_slashing">⚔️ Slashing</option>
+                                <option value="bludgeoning" data-i18n="type_bludgeoning">🔨 Bludgeoning</option>
+                                <option value="piercing" data-i18n="type_piercing">🏹 Piercing</option>
+                                <option value="magic" data-i18n="type_magic">✨ Magic</option>
                             </select>
                         </div>
                     </div>
 
-                    <!-- Aksiyon Niteliği Seçimi: Hasar / Şifa / Hibrit -->
+                    <!-- Action Nature Selection -->
                     <div class="form-group" style="margin-top:6px;">
-                        <label style="font-weight:700; color:#38bdf8;">Aksiyon Niteliği / Rolü:</label>
+                        <label style="font-weight:700; color:#38bdf8;" data-i18n="atk_nature_label">Action Role / Nature:</label>
                         <select id="atk-builder-action-nature" class="atk-select"
                             style="font-weight:700; background:rgba(15, 23, 42, 0.85); border-color:#38bdf8;">
-                            <option value="damage" selected>⚔️ Hasar Saldırısı (Doğrudan Zar/Hasar)</option>
-                            <option value="heal">💚 Can Yenileme / Şifa (Doğrudan İyileştirme)</option>
-                            <option value="hybrid">🩸 Hibrit (Hasar Vururken Can Yenileme / Çalma)</option>
+                            <option value="damage" selected data-i18n="nature_damage">⚔️ Damage Attack (Direct Dice/Damage)</option>
+                            <option value="heal" data-i18n="nature_heal">💚 Healing / Restore HP (Direct Healing)</option>
+                            <option value="hybrid" data-i18n="nature_hybrid">🩸 Hybrid (Deal Damage & Drain/Restore HP)</option>
                         </select>
                     </div>
 
-                    <!-- Şifa / Can Yenileme Yapılandırması (Şifa veya Hibrit seçilince görünür) -->
+                    <!-- Healing / HP Restore Config -->
                     <div id="atk-builder-heal-section" class="atk-builder-heal-section"
                         style="display:none; margin-top:8px; background:rgba(16, 185, 129, 0.09); border:1px solid rgba(16, 185, 129, 0.35); border-radius:8px; padding:10px 12px;">
                         <div
                             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                             <strong style="color:#34d399; font-size:12px; display:flex; align-items:center; gap:6px;">
-                                <span>💚</span> Şifa / Can Yenileme Ayarları
+                                <span>💚</span> <span data-i18n="heal_settings_title">Healing & HP Restore Settings</span>
                             </strong>
-                            <span style="font-size:11px; color:#a7f3d0;">Can basma ve vampirik sömürü</span>
+                            <span style="font-size:11px; color:#a7f3d0;" data-i18n="heal_settings_hint">Healing and vampiric life drain</span>
                         </div>
 
-                        <!-- Şifa Zar Havuzu -->
+                        <!-- Heal Dice Pool -->
                         <div class="atk-builder-pool-row" id="atk-builder-heal-row"
                             style="background:rgba(6, 78, 59, 0.35); border-radius:6px; padding:6px 8px; margin-bottom:8px;">
-                            <span class="pool-row-label" style="color:#6ee7b7; font-weight:700;">Şifa Zarları:</span>
+                            <span class="pool-row-label" style="color:#6ee7b7; font-weight:700;" data-i18n="heal_dice_label">Healing Dice:</span>
                             <div class="pool-dice-steppers">
                                 <span class="stepper-item">d4:<input type="number" id="atk-bpool-heal-d4" min="0"
                                         max="20" value="0" class="mini-num"></span>
@@ -1673,20 +1631,18 @@
 
                         <div class="stats-grid stats-grid-2col">
                             <div class="form-group">
-                                <label style="color:#6ee7b7; font-size:11px; font-weight:600;">Şifa Kime
-                                    Uygulanacak?</label>
+                                <label style="color:#6ee7b7; font-size:11px; font-weight:600;" data-i18n="heal_target_label">Who receives the healing?</label>
                                 <select id="atk-builder-heal-target" class="atk-select" style="font-size:12px;">
-                                    <option value="self">👤 Kullanan / Saldıran (Self / Can Çalma)</option>
-                                    <option value="target">🎯 Hedeflenen Kişi (Müttefik / Dost)</option>
+                                    <option value="self" data-i18n="heal_target_self">👤 Caster / Attacker (Self / Lifesteal)</option>
+                                    <option value="target" data-i18n="heal_target_other">🎯 Targeted Entity (Ally / Friend)</option>
                                 </select>
                             </div>
                             <div class="form-group" id="atk-builder-lifesteal-wrap">
-                                <label style="color:#f87171; font-size:11px; font-weight:600;">🩸 Can Çalma Oranı
-                                    (%):</label>
+                                <label style="color:#f87171; font-size:11px; font-weight:600;" data-i18n="lifesteal_percent_label">🩸 Lifesteal Percentage (%):</label>
                                 <div style="display:flex; align-items:center; gap:6px;">
                                     <input type="number" id="atk-builder-lifesteal-percent" min="0" max="100" value="0"
                                         class="input-light" style="width:70px; text-align:center;">
-                                    <span style="font-size:11px; color:#cbd5e1;">Hasarın %'si kadar can çalar</span>
+                                    <span style="font-size:11px; color:#cbd5e1;" data-i18n="lifesteal_percent_desc">% of dealt damage restored as HP</span>
                                 </div>
                             </div>
                         </div>
@@ -1694,66 +1650,61 @@
 
                     <div class="stats-grid stats-grid-2col" style="margin-top:8px;">
                         <div class="form-group">
-                            <label>Saldırı Adedi:</label>
+                            <label data-i18n="attack_count_builder">Attack Count:</label>
                             <input type="number" id="atk-builder-count" value="1" min="1" max="20" class="input-light">
                         </div>
                         <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
                             <label class="status-checkbox-label" style="margin-top:14px;">
                                 <input type="checkbox" id="atk-builder-consumes-slot">
-                                <span style="color:var(--accent-hover, #38bdf8); font-weight:700;">✨ Büyü Slotu
-                                    Harcar</span>
+                                <span style="color:var(--accent-hover, #38bdf8); font-weight:700;" data-i18n="consumes_spell_slot_check">✨ Consumes Spell Slot</span>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Büyü Slotu & Seviye Ölçekleme Alanı (Büyü Slotu Harcar seçilince görünür) -->
+                    <!-- Spell Slot & Level Scaling Section -->
                     <div id="atk-builder-spell-slot-section" class="atk-builder-spell-section" style="display:none;">
                         <div class="stats-grid stats-grid-2col" style="align-items:center;">
                             <div class="form-group">
-                                <label style="color:#93c5fd; font-weight:600;">Taban Büyü Seviyesi (Minimum):</label>
+                                <label style="color:#93c5fd; font-weight:600;" data-i18n="base_spell_lvl_label">Base Spell Level (Minimum):</label>
                                 <select id="atk-builder-base-spell-level" class="atk-select">
-                                    <option value="1">Seviye 1 Slot</option>
-                                    <option value="2">Seviye 2 Slot</option>
-                                    <option value="3">Seviye 3 Slot</option>
-                                    <option value="4">Seviye 4 Slot</option>
+                                    <option value="1">Level 1</option>
+                                    <option value="2">Level 2</option>
+                                    <option value="3">Level 3</option>
+                                    <option value="4">Level 4</option>
                                 </select>
                             </div>
-                            <div style="font-size:12px; color:#cbd5e1; padding-top:12px;">
-                                En az bu seviye slot ile saldıralabilir. Üst slotlarla saldırdığında aşağıdaki seviye
-                                zarları geçerli olur.
+                            <div style="font-size:12px; color:#cbd5e1; padding-top:12px;" data-i18n="base_spell_lvl_desc">
+                                Requires at least this level slot. Higher slots scale with tabs below.
                             </div>
                         </div>
 
-                        <!-- Seviye Sekmeleri -->
+                        <!-- Level Tabs -->
                         <div class="atk-builder-lvl-tabs" id="atk-builder-lvl-tabs">
-                            <button type="button" class="atk-lvl-tab-btn active" data-lvl="1">Seviye 1 (Taban)</button>
-                            <button type="button" class="atk-lvl-tab-btn" data-lvl="2">Seviye 2</button>
-                            <button type="button" class="atk-lvl-tab-btn" data-lvl="3">Seviye 3</button>
-                            <button type="button" class="atk-lvl-tab-btn" data-lvl="4">Seviye 4</button>
+                            <button type="button" class="atk-lvl-tab-btn active" data-lvl="1" data-i18n="lvl_tab_1">Level 1 (Base)</button>
+                            <button type="button" class="atk-lvl-tab-btn" data-lvl="2" data-i18n="lvl_tab_2">Level 2</button>
+                            <button type="button" class="atk-lvl-tab-btn" data-lvl="3" data-i18n="lvl_tab_3">Level 3</button>
+                            <button type="button" class="atk-lvl-tab-btn" data-lvl="4" data-i18n="lvl_tab_4">Level 4</button>
                         </div>
 
                         <div class="atk-lvl-tab-banner" id="atk-lvl-tab-banner">
-                            <span id="atk-lvl-tab-hint">📌 <strong>Seviye 1 (Taban Zar Havuzu)</strong>: Bu seviyedeki
-                                zarlar varsayılan hasar olarak kullanılır.</span>
+                            <span id="atk-lvl-tab-hint">📌 <strong>Level 1 (Base Dice Pool)</strong>: Default damage dice used for this preset.</span>
                             <div class="atk-lvl-tab-actions">
                                 <button type="button" id="btn-copy-base-to-lvl" class="atk-mini-btn"
-                                    style="display:none;" title="Taban seviyedeki zarları bu seviyeye kopyalar">📋
-                                    Tabanı Kopyala</button>
+                                    style="display:none;" title="Copy base level dice to this level" data-i18n="copy_base_to_lvl">📋 Copy Base</button>
                                 <button type="button" id="btn-clear-curr-lvl" class="atk-mini-btn" style="display:none;"
-                                    title="Bu seviyeyi boş bırakır (Taban değerler geçerli olur)">🗑️ Seviyeyi Sıfırla
-                                    (Boş Bırak)</button>
+                                    title="Reset this level to empty" data-i18n="clear_curr_lvl">🗑️ Reset Level</button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Zar Havuzları Yapılandırması -->
+                    <!-- Dice Pools Configuration -->
                     <div class="atk-builder-pools-section">
-                        <label class="status-section-label">🎲 Zar Havuzları <span id="atk-builder-pools-lvl-tag"
-                                style="color:var(--gold, #fbbf24); font-size:11px;">[Seviye 1 - Taban]</span>:</label>
+                        <label class="status-section-label"><span data-i18n="dice_pools_heading">🎲 Dice Pools</span> <span id="atk-builder-pools-lvl-tag"
+                                style="color:var(--gold, #fbbf24); font-size:11px;">[Level 1 - Base]</span>:</label>
 
-                        <!-- Fiziksel / Ana Havuz -->
+                        <!-- Physical / Main Pool -->
                         <div class="atk-builder-pool-row" id="atk-builder-phys-row">
-                            <span class="pool-row-label">Ana Hasar:</span>
+                            <span class="pool-row-label" data-i18n="main_damage_pool">Main Damage:</span>
                             <div class="pool-dice-steppers">
                                 <span class="stepper-item">d4:<input type="number" id="atk-bpool-phys-d4" min="0"
                                         max="20" value="0" class="mini-num"></span>
@@ -1772,9 +1723,9 @@
                             </div>
                         </div>
 
-                        <!-- Ateş/Elem1 Havuz -->
+                        <!-- Fire/Elem1 Pool -->
                         <div class="atk-builder-pool-row" id="atk-builder-elem1-row">
-                            <span class="pool-row-label">Ateş/El.1:</span>
+                            <span class="pool-row-label" data-i18n="elem1_label">Fire/El.1:</span>
                             <div class="pool-dice-steppers">
                                 <span class="stepper-item">d4:<input type="number" id="atk-bpool-elem1-d4" min="0"
                                         max="20" value="0" class="mini-num"></span>
@@ -1793,9 +1744,9 @@
                             </div>
                         </div>
 
-                        <!-- Buz/Elem2 Havuz -->
+                        <!-- Cold/Elem2 Pool -->
                         <div class="atk-builder-pool-row" id="atk-builder-elem2-row">
-                            <span class="pool-row-label">Buz/El.2:</span>
+                            <span class="pool-row-label" data-i18n="elem2_label">Cold/El.2:</span>
                             <div class="pool-dice-steppers">
                                 <span class="stepper-item">d4:<input type="number" id="atk-bpool-elem2-d4" min="0"
                                         max="20" value="0" class="mini-num"></span>
@@ -1815,63 +1766,59 @@
                         </div>
                     </div>
 
-                    <!-- Ekstra Seçenekler: Durum Etkisi & Iska Yarım Hasar -->
+                    <!-- Extra Options: Status Effect & Half Miss -->
                     <div class="stats-grid stats-grid-2col" style="margin-top:10px;">
                         <div class="form-group">
-                            <label>İsabet Halinde Durum Etkisi Bağla:</label>
+                            <label data-i18n="status_on_hit_label">Attach Status Effect on Hit:</label>
                             <select id="atk-builder-status-effect" class="atk-select">
-                                <option value="">— Durum Etkisi Yok —</option>
+                                <option value="" data-i18n="status_none_opt">— No Status Effect —</option>
                             </select>
                         </div>
                         <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
                             <label class="status-checkbox-label" style="margin-top:16px;">
                                 <input type="checkbox" id="atk-builder-half-miss">
-                                <span>🛡️ Iska Olsa Bile Yarım Hasar Vur</span>
+                                <span data-i18n="half_miss_check">🛡️ Deal Half Damage on Miss</span>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Alan Hasarı (AoE) Yapılandırması -->
+                    <!-- Area Damage (AoE) Config -->
                     <div class="stats-grid stats-grid-2col"
                         style="margin-top:10px; background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.28); border-radius:6px; padding:10px 12px;">
                         <div class="form-group" style="display:flex; flex-direction:column; justify-content:center;">
                             <label class="status-checkbox-label">
                                 <input type="checkbox" id="atk-builder-is-aoe">
-                                <span style="color:#f87171; font-weight:700;">💥 Alan Hasarı (AoE)</span>
+                                <span style="color:#f87171; font-weight:700;" data-i18n="is_aoe_check">💥 Area Damage (AoE)</span>
                             </label>
-                            <span style="font-size:11px; color:#94a3b8; margin-top:2px;">Saldırı isabet ettiğinde hedef
-                                çevresindeki düşmanlara patlama hasarı verir</span>
+                            <span style="font-size:11px; color:#94a3b8; margin-top:2px;" data-i18n="is_aoe_desc">Deals explosion damage to surrounding enemies on hit</span>
                         </div>
                         <div class="form-group" id="atk-builder-aoe-radius-group"
                             style="display:none; justify-content:center;">
-                            <label style="color:#f87171; font-size:12px; font-weight:600; margin-bottom:4px;">Patlama
-                                Yarıçapı:</label>
+                            <label style="color:#f87171; font-size:12px; font-weight:600; margin-bottom:4px;" data-i18n="aoe_radius_label">Explosion Radius:</label>
                             <div style="display:flex; align-items:center; gap:8px;">
                                 <input type="number" id="atk-builder-aoe-radius" value="1" min="0.5" step="0.5" max="30"
                                     class="input-light" style="width:75px; text-align:center;">
-                                <span style="font-size:12px; color:#cbd5e1; font-weight:500;">Metre (m)</span>
-                                <span style="font-size:11px; color:#94a3b8;">(~1 grid karesi)</span>
+                                <span style="font-size:12px; color:#cbd5e1; font-weight:500;" data-i18n="meters_unit">Meters (m)</span>
+                                <span style="font-size:11px; color:#94a3b8;" data-i18n="meters_grid_hint">(~1 grid square)</span>
                             </div>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label>Açıklama / Not:</label>
+                        <label data-i18n="desc_note_label">Description / Note:</label>
                         <input type="text" id="atk-builder-desc"
-                            placeholder="Örn: 1d6+2 Fiziksel + 1d6 Ateş. Yanma uygular." class="input-light">
+                            placeholder="e.g.: 1d8+2 Slashing + 1d6 Fire. Applies Burn on hit." data-i18n-placeholder="desc_note_placeholder" class="input-light">
                     </div>
 
                     <div class="button-group button-group-row status-builder-actions">
-                        <button type="button" id="btn-save-atk-preset" class="btn primary action-btn">💾 Preseti
-                            Kaydet</button>
-                        <button type="button" id="btn-equip-and-save-preset" class="btn success action-btn">⚡ Kuşan &
-                            Kaydet</button>
+                        <button type="button" id="btn-save-atk-preset" class="btn primary action-btn" data-i18n="btn_save_atk_preset">💾 Save Preset</button>
+                        <button type="button" id="btn-equip-and-save-preset" class="btn success action-btn" data-i18n="btn_equip_and_save_preset">⚡ Equip & Save</button>
                     </div>
                 </div>
             </div>
 
             <div class="button-group button-group-row" style="margin-top: 14px; justify-content: flex-end;">
-                <button type="button" class="btn back-btn action-btn" id="btn-cancel-attack-presets">Kapat</button>
+                <button type="button" class="btn back-btn action-btn" id="btn-cancel-attack-presets" data-i18n="close">Close</button>
             </div>
         </div>
     </div>
@@ -1880,27 +1827,27 @@
     <div id="dm-batch-attacks-modal" class="hidden dm-modal-overlay">
         <div class="modal-box dm-modal-box batch-attacks-modal-box">
             <div class="status-modal-header">
-                <h3 class="dm-modal-title" style="margin-bottom:0;">⚡ Tokenlara Toplu Saldırı Ata</h3>
-                <button type="button" class="btn-close-modal" id="btn-close-batch-attacks" title="Kapat">✕</button>
+                <h3 class="dm-modal-title" style="margin-bottom:0;" data-i18n="batch_attacks_modal_title">⚡ Batch Assign Attacks to Tokens</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-batch-attacks" title="Close" data-i18n-title="modal_close_title">✕</button>
             </div>
 
-            <p class="batch-attacks-intro-text">
-                Haritadaki mevcut veya seçilen tokenlara (canavar/NPC) tek seferde saldırı presetleri atayın.
+            <p class="batch-attacks-intro-text" data-i18n="batch_attacks_intro">
+                Assign attack presets to existing or selected tokens (monsters/NPCs) on the map at once.
             </p>
 
             <div class="batch-attacks-grid-columns">
                 <!-- Sol Kolon: Hedef Tokenlar -->
                 <div class="batch-col batch-col-tokens">
                     <div class="batch-col-header">
-                        <span class="batch-col-title">👾 1. Hedef Tokenları Seçin</span>
-                        <span id="batch-tokens-count" class="token-assigned-count-badge">0 Token</span>
+                        <span class="batch-col-title" data-i18n="batch_col_tokens_title">👾 1. Select Target Tokens</span>
+                        <span id="batch-tokens-count" class="token-assigned-count-badge" data-i18n="batch_tokens_count" data-i18n-params='{"n": 0}'>0 Tokens</span>
                     </div>
                     <div class="assigned-actions-bar">
-                        <input type="text" id="batch-tokens-search" placeholder="Token ara..."
+                        <input type="text" id="batch-tokens-search" placeholder="Search tokens..." data-i18n-placeholder="batch_search_tokens"
                             class="assigned-search-input">
                         <div class="assigned-quick-btn-group">
-                            <button type="button" id="batch-tokens-select-all" class="atk-mini-btn">Tümünü Seç</button>
-                            <button type="button" id="batch-tokens-clear-all" class="atk-mini-btn">Temizle</button>
+                            <button type="button" id="batch-tokens-select-all" class="atk-mini-btn" data-i18n="select_all_btn">Select All</button>
+                            <button type="button" id="batch-tokens-clear-all" class="atk-mini-btn" data-i18n="clear_btn">Clear</button>
                         </div>
                     </div>
                     <div id="batch-tokens-list" class="batch-checklist-container">
@@ -1911,15 +1858,15 @@
                 <!-- Sağ Kolon: Atanacak Saldırılar -->
                 <div class="batch-col batch-col-attacks">
                     <div class="batch-col-header">
-                        <span class="batch-col-title">⚔️ 2. Atanacak Saldırıları Seçin</span>
-                        <span id="batch-attacks-count" class="token-assigned-count-badge">0 Saldırı</span>
+                        <span class="batch-col-title" data-i18n="batch_col_attacks_title">⚔️ 2. Select Attacks to Assign</span>
+                        <span id="batch-attacks-count" class="token-assigned-count-badge" data-i18n="batch_attacks_count" data-i18n-params='{"n": 0}'>0 Attacks</span>
                     </div>
                     <div class="assigned-actions-bar">
-                        <input type="text" id="batch-attacks-search" placeholder="Saldırı preset ara..."
+                        <input type="text" id="batch-attacks-search" placeholder="Search attack presets..." data-i18n-placeholder="batch_search_attacks"
                             class="assigned-search-input">
                         <div class="assigned-quick-btn-group">
-                            <button type="button" id="batch-attacks-select-all" class="atk-mini-btn">Tümünü Seç</button>
-                            <button type="button" id="batch-attacks-clear-all" class="atk-mini-btn">Temizle</button>
+                            <button type="button" id="batch-attacks-select-all" class="atk-mini-btn" data-i18n="select_all_btn">Select All</button>
+                            <button type="button" id="batch-attacks-clear-all" class="atk-mini-btn" data-i18n="clear_btn">Clear</button>
                         </div>
                     </div>
                     <div id="batch-attacks-list" class="batch-checklist-container">
@@ -1931,22 +1878,21 @@
             <!-- Alt Ayarlar & Eylem Barı -->
             <div class="batch-bottom-bar">
                 <div class="batch-mode-selector">
-                    <span class="batch-mode-label">Atama Modu:</span>
+                    <span class="batch-mode-label" data-i18n="batch_mode_label">Assignment Mode:</span>
                     <label class="batch-radio-label">
                         <input type="radio" name="batch-assign-mode" value="append" checked>
-                        <span>➕ Mevcutlara Ekle</span>
+                        <span data-i18n="batch_mode_append">➕ Append to Existing</span>
                     </label>
                     <label class="batch-radio-label">
                         <input type="radio" name="batch-assign-mode" value="replace">
-                        <span>🔄 Üzerine Yaz (Yenileriyle Değiştir)</span>
+                        <span data-i18n="batch_mode_replace">🔄 Replace (Overwrite with New)</span>
                     </label>
                 </div>
 
                 <div class="batch-actions-right">
-                    <span id="batch-assign-summary-badge" class="batch-summary-badge">0 Token | 0 Saldırı seçildi</span>
-                    <button type="button" class="btn back-btn action-btn" id="btn-cancel-batch-attacks">İptal</button>
-                    <button type="button" class="btn primary action-btn" id="btn-submit-batch-attacks" disabled>⚡ Seçili
-                        Tokenlara Ata</button>
+                    <span id="batch-assign-summary-badge" class="batch-summary-badge" data-i18n="batch_summary_badge" data-i18n-params='{"tokens": 0, "attacks": 0}'>0 Tokens | 0 Attacks selected</span>
+                    <button type="button" class="btn back-btn action-btn" id="btn-cancel-batch-attacks" data-i18n="cancel">Cancel</button>
+                    <button type="button" class="btn primary action-btn" id="btn-submit-batch-attacks" disabled data-i18n="btn_submit_batch_attacks">⚡ Assign to Selected Tokens</button>
                 </div>
             </div>
         </div>
@@ -1956,23 +1902,23 @@
     <div id="dm-aoe-modal" class="modal-overlay hidden" style="z-index: 1200;">
         <div class="modal-box dm-modal-box aoe-modal-box">
             <div class="status-modal-header">
-                <h3 class="dm-modal-title" style="margin-bottom:0;">💥 Alan Hasarı Uygula (AoE)</h3>
-                <button type="button" class="btn-close-modal" id="btn-close-aoe-modal" title="Kapat">✕</button>
+                <h3 class="dm-modal-title" style="margin-bottom:0;" data-i18n="aoe_modal_title">💥 Apply Area of Effect Damage (AoE)</h3>
+                <button type="button" class="btn-close-modal" id="btn-close-aoe-modal" title="Close" data-i18n-title="modal_close_title">✕</button>
             </div>
 
             <div class="aoe-modal-summary-banner">
                 <span class="aoe-summary-icon">🎯</span>
                 <div class="aoe-summary-text">
-                    <span id="aoe-modal-radius-info">Seçilen Alan Yarıçapı: 0 px</span>
-                    <small id="aoe-modal-targets-count">0 Hedef Kapsandı</small>
+                    <span id="aoe-modal-radius-info" data-i18n="aoe_radius_info" data-i18n-params='{"radius": 0}'>Selected Area Radius: 0 px</span>
+                    <small id="aoe-modal-targets-count" data-i18n="aoe_targets_count" data-i18n-params='{"n": 0}'>0 Targets Covered</small>
                 </div>
             </div>
 
             <!-- Alandaki Hedefler Listesi -->
             <div class="aoe-targets-section">
                 <div class="aoe-section-header">
-                    <span class="aoe-section-title">Etkilenecek Hedefler:</span>
-                    <span class="aoe-section-hint">(Tik kaldırarak muaf tutabilirsiniz)</span>
+                    <span class="aoe-section-title" data-i18n="aoe_targets_section">Affected Targets:</span>
+                    <span class="aoe-section-hint" data-i18n="aoe_exempt_hint">(Uncheck to exempt)</span>
                 </div>
                 <div id="aoe-modal-targets-list" class="aoe-targets-list">
                     <!-- Hedefler dinamik JS ile yüklenecek -->
@@ -1981,9 +1927,9 @@
 
             <!-- Hasar Girişi -->
             <div class="aoe-damage-input-section">
-                <label for="aoe-damage-amount" class="aoe-input-label">Uygulanacak Hasar Miktarı:</label>
+                <label for="aoe-damage-amount" class="aoe-input-label" data-i18n="aoe_damage_input_label">Damage Amount to Apply:</label>
                 <div class="aoe-input-row">
-                    <input type="number" id="aoe-damage-amount" min="1" max="9999" placeholder="Örn: 25"
+                    <input type="number" id="aoe-damage-amount" min="1" max="9999" placeholder="e.g.: 25" data-i18n-placeholder="aoe_damage_placeholder"
                         class="input-light aoe-num-input" autocomplete="off" />
                     <div class="aoe-quick-dmg-pills">
                         <button type="button" class="aoe-pill-btn" data-val="10">+10</button>
@@ -1996,18 +1942,17 @@
 
             <!-- Butonlar -->
             <div class="aoe-modal-footer">
-                <button type="button" class="btn secondary action-btn" id="btn-aoe-reselect">🔄 Yeniden Seç</button>
+                <button type="button" class="btn secondary action-btn" id="btn-aoe-reselect" data-i18n="aoe_reselect_btn">🔄 Reselect</button>
                 <div class="aoe-footer-right">
-                    <button type="button" class="btn back-btn action-btn" id="btn-cancel-aoe">İptal</button>
-                    <button type="button" class="btn danger action-btn aoe-submit-btn" id="btn-submit-aoe-damage">🔥
-                        Hasarı Uygula</button>
+                    <button type="button" class="btn back-btn action-btn" id="btn-cancel-aoe" data-i18n="cancel">Cancel</button>
+                    <button type="button" class="btn danger action-btn aoe-submit-btn" id="btn-submit-aoe-damage" data-i18n="aoe_submit_btn">🔥 Apply Damage</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Mobil Sidebar Toggle -->
-    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Paneli Aç/Kapat">☰</button>
+    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle Panel" data-i18n-aria="toggle_panel_aria">☰</button>
     <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
     <!-- Socket.io istemci scripti -->
